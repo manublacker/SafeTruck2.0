@@ -1,0 +1,257 @@
+{
+    "municipio": "lanus",
+    "calles": [
+      {
+        "nombre": "Avenida Remedios de Escalada de San Martín",
+        "desde_calle": "Puente Ezequiel Demonty",
+        "hasta_calle": "Avenida Hipólito Yrigoyen",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Viamonte",
+        "desde_calle": "Orán",
+        "hasta_calle": "Rincón",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Rincón",
+        "desde_calle": "Viamonte",
+        "hasta_calle": "Coronel Sayos",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Coronel Sayos",
+        "desde_calle": "Rincón",
+        "hasta_calle": "Coronel Osorio",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Avenida 25 de Mayo",
+        "desde_calle": "Coronel Osorio",
+        "hasta_calle": "Avenida San Martín",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Marco Avellaneda",
+        "desde_calle": "Enrique Fernández",
+        "hasta_calle": "Presidente Julio Argentino Roca",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Caferata",
+        "desde_calle": "Presidente Julio Argentino Roca",
+        "hasta_calle": "Avenida Presbítero Pedro F. Uriarte",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "General Hornos",
+        "desde_calle": "Carlos Pellegrini",
+        "hasta_calle": "Ramón Franco",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Avenida Presbítero Pedro F. Uriarte",
+        "desde_calle": "Ramón Franco",
+        "hasta_calle": "Vías del Ferrocarril General Roca",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Avenida Hipólito Yrigoyen",
+        "desde_calle": "Avenida Presbítero Pedro F. Uriarte",
+        "hasta_calle": "Avenida Teodoro Sánchez de Bustamante",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Presbítero José Malabia",
+        "desde_calle": "Vías del Ferrocarril General Roca",
+        "hasta_calle": "Aconcagua",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Aconcagua",
+        "desde_calle": "Avenida Centenario Uruguayo",
+        "hasta_calle": "Granaderos",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Granaderos",
+        "desde_calle": "Aconcagua",
+        "hasta_calle": "Roma",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Roma",
+        "desde_calle": "Granaderos",
+        "hasta_calle": "Coronel Lynch",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Coronel Lynch",
+        "desde_calle": "Roma",
+        "hasta_calle": "Camino General Manuel Belgrano",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Camino General Belgrano",
+        "desde_calle": "General Martín Paulino Lacarra",
+        "hasta_calle": "Coronel Lynch",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "General Madariaga",
+        "desde_calle": "Avenida Presidente Raúl Alfonsín",
+        "hasta_calle": "Camino General Belgrano",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Avenida San Martín",
+        "desde_calle": "Avenida General Hornos",
+        "hasta_calle": "Brasil",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Avenida Presidente Bernardino Rivadavia",
+        "desde_calle": "Brasil",
+        "hasta_calle": "Avenida 25 de Mayo",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "General Olazábal",
+        "desde_calle": "Carlos Pellegrini",
+        "hasta_calle": "Enrique Fernández",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Enrique Fernández",
+        "desde_calle": "General Olazábal",
+        "hasta_calle": "Marco Avellaneda",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Avenida Presidente Raúl Alfonsín",
+        "desde_calle": "Avenida Hipólito Yrigoyen",
+        "hasta_calle": "Avenida Centenario Uruguayo",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Avenida Centenario Uruguayo",
+        "desde_calle": "Aconcagua",
+        "hasta_calle": "Camino General Belgrano",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Coronel Osorio",
+        "desde_calle": "Carlos Pellegrini",
+        "hasta_calle": "Avenida Remedios de Escalada de San Martín",
+        "tipo": "primaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Choele Choel",
+        "desde_calle": "Coronel Osorio",
+        "hasta_calle": "Avenida Remedios de Escalada de San Martín",
+        "tipo": "secundaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Viamonte",
+        "desde_calle": "Coronel Osorio",
+        "hasta_calle": "Avenida San Martín",
+        "tipo": "secundaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Diputado M. Pedrera",
+        "desde_calle": "Avenida Presidente Bernardino Rivadavia",
+        "hasta_calle": "Enrique Fernández",
+        "tipo": "secundaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Avenida Manuel Quindimil",
+        "desde_calle": "Enrique Fernández",
+        "hasta_calle": "Avenida Hipólito Yrigoyen",
+        "tipo": "secundaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Avenida General Donato Álvarez",
+        "desde_calle": "Camino General Belgrano",
+        "hasta_calle": "Coronel Lynch",
+        "tipo": "secundaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Villa de Luján",
+        "desde_calle": "29 de Septiembre",
+        "hasta_calle": "Avenida Presidente Raúl Alfonsín",
+        "tipo": "secundaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "29 de Septiembre",
+        "desde_calle": "Malabia",
+        "hasta_calle": "Villa de Luján",
+        "tipo": "secundaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "General Deheza",
+        "desde_calle": "Presbítero José Malabia",
+        "hasta_calle": "Allende",
+        "tipo": "secundaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "General Deheza",
+        "desde_calle": "Ramón Cabrero",
+        "hasta_calle": "Avenida Presidente Raúl Alfonsín",
+        "tipo": "secundaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Allende",
+        "desde_calle": "General Deheza",
+        "hasta_calle": "Villa de Luján",
+        "tipo": "secundaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Eva Perón",
+        "desde_calle": "Oncativo",
+        "hasta_calle": "General Pinto",
+        "tipo": "secundaria",
+        "restricciones": null
+      },
+      {
+        "nombre": "Ramón Cabrero",
+        "desde_calle": "Coronel Lynch",
+        "hasta_calle": "29 de Septiembre",
+        "tipo": "secundaria",
+        "restricciones": null
+      }
+    ]
+  }
