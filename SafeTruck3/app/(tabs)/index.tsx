@@ -5,7 +5,7 @@ import * as Location from 'expo-location'
 import { useStore } from '../../src/store/useStore'
 import { supabase } from '../../src/services/supabase'
 
-const BACKEND = 'http://192.168.1.17:3001'
+const BACKEND = 'http://192.168.1.24:3001'
 
 const INCIDENT_TYPES = [
   { key: 'fine', label: '💸 Multa a camión', creates_block: true },
@@ -515,6 +515,7 @@ const s = StyleSheet.create({
   searchResultTexts: { flex: 1 },
   searchResultName: { color: '#fff', fontSize: 14, fontWeight: '500' },
   searchResultAddr: { color: '#8E8E93', fontSize: 12, marginTop: 1 },
+  searchResultText: { color: '#8E8E93', fontSize: 13, marginLeft: 8 },
   reportBtn: { backgroundColor: '#FF9500', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
   reportBtnActive: { backgroundColor: '#FF3B30' },
   reportBtnText: { color: '#fff', fontSize: 15 },
