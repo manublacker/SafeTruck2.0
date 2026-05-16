@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
@@ -34,7 +34,7 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={s.inner}>
-        <Text style={s.logo}>🚛</Text>
+        <Image source={require('../../camion_padding.png')} style={s.logo} resizeMode="contain" />
         <Text style={s.title}>Crear cuenta</Text>
         <TextInput style={s.input} placeholder="Nombre completo *" placeholderTextColor="#8E8E93" value={fullName} onChangeText={setFullName} />
         <TextInput style={s.input} placeholder="Email *" placeholderTextColor="#8E8E93" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
@@ -53,7 +53,7 @@ export default function RegisterScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1C1C1E' },
   inner: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 60 },
-  logo: { fontSize: 56, textAlign: 'center', marginBottom: 8 },
+  logo: { width: 180, height: 150, alignSelf: 'center', marginBottom: 8 },
   title: { fontSize: 28, fontWeight: '700', color: '#fff', textAlign: 'center', marginBottom: 32 },
   input: { backgroundColor: '#2C2C2E', color: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, fontSize: 16, borderWidth: 1, borderColor: '#3A3A3C' },
   btn: { backgroundColor: '#FF6B35', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },

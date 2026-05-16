@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Modal, ScrollView } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Modal, ScrollView, Image } from 'react-native'
 import { WebView } from 'react-native-webview'
 import * as Location from 'expo-location'
 import { useStore } from '../../src/store/useStore'
 import { supabase } from '../../src/services/supabase'
 
-const BACKEND = 'http://192.168.0.254:3001'
+const BACKEND = 'http://192.168.0.233:3001'
 
 const INCIDENT_TYPES = [
   { key: 'fine', label: '💸 Multa a camión', creates_block: true },
@@ -28,6 +28,7 @@ export default function MapScreen() {
   const [reportMode, setReportMode] = useState(false)
   const [incidentLocation, setIncidentLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [reportingIncident, setReportingIncident] = useState(false)
+  const [routeCardHeight, setRouteCardHeight] = useState(0)
 
   useEffect(() => {
     (async () => {
@@ -58,16 +59,23 @@ export default function MapScreen() {
     if (!activeVehicle) return Alert.alert('Sin vehículo', 'Configurá tu camión en Perfil')
     setLoading(true)
     try {
-      const res = await fetch(`${BACKEND}/route`, {
-        method: 'POST',
-        signal: AbortSignal.timeout(30000),
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          origin: location,
-          destination: { lat: destLat, lng: destLng },
-          vehicle: { weight_kg: activeVehicle.weight_kg, height_m: activeVehicle.height_m, width_m: activeVehicle.width_m },
-        }),
-      })
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
+      let res: Response
+      try {
+        res = await fetch(`${BACKEND}/route`, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            origin: location,
+            destination: { lat: destLat, lng: destLng },
+            vehicle: { weight_kg: activeVehicle.weight_kg, height_m: activeVehicle.height_m, width_m: activeVehicle.width_m },
+          }),
+        })
+      } finally {
+        clearTimeout(timeoutId)
+      }
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setCurrentRoute(data.route)
@@ -217,19 +225,20 @@ export default function MapScreen() {
       <WebView ref={webRef} style={s.map} source={{html:mapHtml}} onMessage={onMessage} javaScriptEnabled domStorageEnabled originWhitelist={['*']} />
 
       <View style={s.header}>
-        <Text style={s.headerText}>🚛 SafeTruck</Text>
+        <Image source={require('../../camion_padding.png')} style={s.headerLogo} resizeMode="contain" />
+        <Text style={s.headerText}>SafeTruck</Text>
         {currentRoute && <TouchableOpacity style={s.clearBtn} onPress={clearRoute}><Text style={s.clearBtnText}>✕</Text></TouchableOpacity>}
       </View>
 
-      {/* Botón reportar incidente */}
+      {/* FAB reportar incidente */}
       <TouchableOpacity
-        style={[s.reportBtn, reportMode && s.reportBtnActive]}
+        style={[s.reportBtn, reportMode && s.reportBtnActive, { bottom: (showInfo && currentRoute ? routeCardHeight : 0) + 16 }]}
         onPress={() => {
           setReportMode(!reportMode)
           if (!reportMode) Alert.alert('Modo reporte', 'Tocá el lugar en el mapa donde ocurrió el incidente')
         }}
       >
-        <Text style={s.reportBtnText}>{reportMode ? '✕ Cancelar' : '⚠️ Reportar'}</Text>
+        <Text style={s.reportBtnText}>{reportMode ? '✕' : '⚠️'}</Text>
       </TouchableOpacity>
 
       {!activeVehicle && (
@@ -254,7 +263,7 @@ export default function MapScreen() {
       )}
 
       {showInfo && currentRoute && (
-        <View style={s.routeCard}>
+        <View style={s.routeCard} onLayout={e => setRouteCardHeight(e.nativeEvent.layout.height)}>
           <View style={s.routeCardHeader}>
             <Text style={s.routeCardTitle}>Ruta calculada</Text>
             <TouchableOpacity onPress={() => setShowInfo(false)}><Text style={s.routeCardClose}>▼</Text></TouchableOpacity>
@@ -303,19 +312,20 @@ export default function MapScreen() {
 const s = StyleSheet.create({
   container:{flex:1}, map:{flex:1},
   header:{position:'absolute',top:52,left:16,right:16,flexDirection:'row',alignItems:'center',justifyContent:'space-between',backgroundColor:'#2C2C2E',borderRadius:12,paddingHorizontal:16,paddingVertical:12,shadowColor:'#000',shadowOpacity:0.3,shadowRadius:8,elevation:5},
+  headerLogo:{width:28,height:28,marginRight:8},
   headerText:{color:'#fff',fontSize:16,fontWeight:'700'},
   clearBtn:{backgroundColor:'#FF3B30',borderRadius:8,paddingHorizontal:10,paddingVertical:4},
   clearBtnText:{color:'#fff',fontSize:13},
-  reportBtn:{position:'absolute',bottom:160,right:16,backgroundColor:'#2C2C2E',borderRadius:12,paddingHorizontal:14,paddingVertical:10,shadowColor:'#000',shadowOpacity:0.3,shadowRadius:6,elevation:4},
+  reportBtn:{position:'absolute',right:16,backgroundColor:'#2C2C2E',width:52,height:52,borderRadius:26,alignItems:'center',justifyContent:'center',shadowColor:'#000',shadowOpacity:0.4,shadowRadius:8,elevation:6},
   reportBtnActive:{backgroundColor:'#FF3B30'},
-  reportBtnText:{color:'#fff',fontSize:13,fontWeight:'600'},
+  reportBtnText:{fontSize:22},
   banner:{position:'absolute',top:116,left:16,right:100,backgroundColor:'#FF9500',borderRadius:10,padding:12},
   bannerText:{color:'#fff',fontSize:13,textAlign:'center',fontWeight:'600'},
   hint:{position:'absolute',top:116,left:16,right:100,backgroundColor:'rgba(44,44,46,0.9)',borderRadius:10,padding:12},
   hintText:{color:'#8E8E93',fontSize:13,textAlign:'center'},
   loadingOverlay:{position:'absolute',top:0,left:0,right:0,bottom:0,backgroundColor:'rgba(0,0,0,0.6)',alignItems:'center',justifyContent:'center'},
   loadingText:{color:'#fff',marginTop:12,fontSize:16},
-  routeCard:{position:'absolute',bottom:80,left:0,right:0,backgroundColor:'#2C2C2E',borderTopLeftRadius:20,borderTopRightRadius:20,padding:20},
+  routeCard:{position:'absolute',bottom:0,left:0,right:0,backgroundColor:'#2C2C2E',borderTopLeftRadius:20,borderTopRightRadius:20,padding:20},
   routeCardHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:16},
   routeCardTitle:{color:'#fff',fontSize:16,fontWeight:'700'},
   routeCardClose:{color:'#8E8E93',fontSize:18},
