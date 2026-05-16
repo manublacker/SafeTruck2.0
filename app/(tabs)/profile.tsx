@@ -7,8 +7,9 @@ export default function ProfileScreen() {
   const { profile, setProfile, activeVehicle, setActiveVehicle, vehicles, setVehicles } = useStore()
   const [loading, setLoading] = useState(false)
   const [showAddVehicle, setShowAddVehicle] = useState(false)
+  const [editingVehicle, setEditingVehicle] = useState<any>(null)
 
-  // Form nuevo vehículo
+  // Form nuevo/editar vehículo
   const [plate, setPlate] = useState('')
   const [name, setName] = useState('')
   const [weight, setWeight] = useState('')
@@ -32,32 +33,69 @@ export default function ProfileScreen() {
     }
   }
 
+  const openEdit = (vehicle: any) => {
+    setEditingVehicle(vehicle)
+    setPlate(vehicle.plate)
+    setName(vehicle.name || '')
+    setWeight(String(vehicle.weight_kg))
+    setHeight(String(vehicle.height_m))
+    setWidth(String(vehicle.width_m))
+    setLength(String(vehicle.length_m || ''))
+    setShowAddVehicle(false)
+  }
+
+  const cancelEdit = () => {
+    setEditingVehicle(null)
+    setPlate(''); setName(''); setWeight(''); setHeight(''); setWidth(''); setLength('')
+  }
+
   const saveVehicle = async () => {
     if (!plate || !weight || !height || !width) return Alert.alert('Error', 'Patente, peso, altura y ancho son obligatorios')
     if (!profile) return
     setLoading(true)
     try {
-      const isFirst = vehicles.length === 0
-      const { data, error } = await supabase
-        .from('st_vehicles')
-        .insert({
-          user_id: profile.id,
-          plate: plate.toUpperCase(),
-          name: name || plate.toUpperCase(),
-          weight_kg: parseFloat(weight),
-          height_m: parseFloat(height),
-          width_m: parseFloat(width),
-          length_m: parseFloat(length) || 12,
-          is_default: isFirst,
-        })
-        .select()
-        .single()
-      if (error) throw error
-      setActiveVehicle(data)
-      setVehicles([data, ...vehicles])
-      setShowAddVehicle(false)
+      if (editingVehicle) {
+        const { data, error } = await supabase
+          .from('st_vehicles')
+          .update({
+            plate: plate.toUpperCase(),
+            name: name || plate.toUpperCase(),
+            weight_kg: parseFloat(weight),
+            height_m: parseFloat(height),
+            width_m: parseFloat(width),
+            length_m: parseFloat(length) || 12,
+          })
+          .eq('id', editingVehicle.id)
+          .select()
+          .single()
+        if (error) throw error
+        setVehicles(vehicles.map(v => v.id === editingVehicle.id ? data : v))
+        if (activeVehicle?.id === editingVehicle.id) setActiveVehicle(data)
+        setEditingVehicle(null)
+        Alert.alert('✅', 'Vehículo actualizado')
+      } else {
+        const isFirst = vehicles.length === 0
+        const { data, error } = await supabase
+          .from('st_vehicles')
+          .insert({
+            user_id: profile.id,
+            plate: plate.toUpperCase(),
+            name: name || plate.toUpperCase(),
+            weight_kg: parseFloat(weight),
+            height_m: parseFloat(height),
+            width_m: parseFloat(width),
+            length_m: parseFloat(length) || 12,
+            is_default: isFirst,
+          })
+          .select()
+          .single()
+        if (error) throw error
+        setActiveVehicle(data)
+        setVehicles([data, ...vehicles])
+        setShowAddVehicle(false)
+        Alert.alert('✅', 'Vehículo guardado')
+      }
       setPlate(''); setName(''); setWeight(''); setHeight(''); setWidth(''); setLength('')
-      Alert.alert('✅', 'Vehículo guardado')
     } catch (e: any) {
       Alert.alert('Error', e.message)
     } finally {
@@ -98,15 +136,42 @@ export default function ProfileScreen() {
       {activeVehicle && (
         <View style={s.section}>
           <Text style={s.sectionTitle}>🚛 Vehículo activo</Text>
-          <View style={s.vehicleCard}>
-            <Text style={s.vehicleName}>{activeVehicle.name || activeVehicle.plate}</Text>
-            <Text style={s.vehiclePlate}>{activeVehicle.plate}</Text>
-            <View style={s.vehicleSpecs}>
-              <View style={s.spec}><Text style={s.specVal}>{activeVehicle.weight_kg} kg</Text><Text style={s.specLbl}>Peso</Text></View>
-              <View style={s.spec}><Text style={s.specVal}>{activeVehicle.height_m} m</Text><Text style={s.specLbl}>Altura</Text></View>
-              <View style={s.spec}><Text style={s.specVal}>{activeVehicle.width_m} m</Text><Text style={s.specLbl}>Ancho</Text></View>
+          {editingVehicle?.id === activeVehicle.id ? (
+            <View style={s.form}>
+              <Text style={s.formTitle}>Editar vehículo</Text>
+              <TextInput style={s.input} placeholder="Patente *" placeholderTextColor="#8E8E93" value={plate} onChangeText={setPlate} autoCapitalize="characters" />
+              <TextInput style={s.input} placeholder="Nombre (ej: Mercedes Actros)" placeholderTextColor="#8E8E93" value={name} onChangeText={setName} />
+              <View style={s.row}>
+                <TextInput style={[s.input, s.inputHalf]} placeholder="Peso total (kg) *" placeholderTextColor="#8E8E93" value={weight} onChangeText={setWeight} keyboardType="numeric" />
+                <TextInput style={[s.input, s.inputHalf]} placeholder="Altura (m) *" placeholderTextColor="#8E8E93" value={height} onChangeText={setHeight} keyboardType="numeric" />
+              </View>
+              <View style={s.row}>
+                <TextInput style={[s.input, s.inputHalf]} placeholder="Ancho (m) *" placeholderTextColor="#8E8E93" value={width} onChangeText={setWidth} keyboardType="numeric" />
+                <TextInput style={[s.input, s.inputHalf]} placeholder="Largo (m)" placeholderTextColor="#8E8E93" value={length} onChangeText={setLength} keyboardType="numeric" />
+              </View>
+              <View style={s.row}>
+                <TouchableOpacity style={[s.saveBtn, { flex: 1 }, loading && s.saveBtnDisabled]} onPress={saveVehicle} disabled={loading}>
+                  {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>Guardar</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.cancelBtn, { flex: 1 }]} onPress={cancelEdit}>
+                  <Text style={s.cancelBtnText}>Cancelar</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          ) : (
+            <View style={s.vehicleCard}>
+              <TouchableOpacity style={s.editBtn} onPress={() => openEdit(activeVehicle)}>
+                <Text style={s.editBtnText}>✏️</Text>
+              </TouchableOpacity>
+              <Text style={s.vehicleName}>{activeVehicle.name || activeVehicle.plate}</Text>
+              <Text style={s.vehiclePlate}>{activeVehicle.plate}</Text>
+              <View style={s.vehicleSpecs}>
+                <View style={s.spec}><Text style={s.specVal}>{activeVehicle.weight_kg} kg</Text><Text style={s.specLbl}>Peso</Text></View>
+                <View style={s.spec}><Text style={s.specVal}>{activeVehicle.height_m} m</Text><Text style={s.specLbl}>Altura</Text></View>
+                <View style={s.spec}><Text style={s.specVal}>{activeVehicle.width_m} m</Text><Text style={s.specLbl}>Ancho</Text></View>
+              </View>
+            </View>
+          )}
         </View>
       )}
 
@@ -155,7 +220,7 @@ export default function ProfileScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1C1C1E' },
-  content: { padding: 16, paddingBottom: 100 },
+  content: { padding: 16, paddingTop: 60, paddingBottom: 100 },
   profileCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2C2C2E', borderRadius: 16, padding: 16, marginBottom: 20 },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FF6B35', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   avatarText: { color: '#fff', fontSize: 20, fontWeight: '700' },
@@ -166,7 +231,9 @@ const s = StyleSheet.create({
   logoutText: { color: '#FF3B30', fontSize: 13, fontWeight: '600' },
   section: { marginBottom: 20 },
   sectionTitle: { color: '#8E8E93', fontSize: 13, fontWeight: '600', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
-  vehicleCard: { backgroundColor: '#2C2C2E', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#FF6B35' },
+  vehicleCard: { backgroundColor: '#2C2C2E', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#FF6B35', position: 'relative' },
+  editBtn: { position: 'absolute', top: 12, right: 12, padding: 6 },
+  editBtnText: { fontSize: 18 },
   vehicleName: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 2 },
   vehiclePlate: { color: '#8E8E93', fontSize: 13, marginBottom: 12 },
   vehicleSpecs: { flexDirection: 'row' },
@@ -188,4 +255,6 @@ const s = StyleSheet.create({
   saveBtn: { backgroundColor: '#FF6B35', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 6 },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  cancelBtn: { backgroundColor: '#3A3A3C', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 6, marginLeft: 10 },
+  cancelBtnText: { color: '#8E8E93', fontSize: 16, fontWeight: '600' },
 })
