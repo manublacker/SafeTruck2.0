@@ -1,8 +1,24 @@
+export type SubscriptionPlan = 'starter' | 'pro' | 'enterprise'
+
 export interface Profile {
   id: string
   full_name: string
   phone?: string
   license_number?: string
+  company_id?: string | null
+  company_name?: string | null
+  cuit?: string | null
+  plan?: SubscriptionPlan | null
+  created_at: string
+}
+
+export interface Company {
+  id: string
+  name: string
+  cuit: string
+  rubro: string
+  plan: SubscriptionPlan
+  truck_count: string
   created_at: string
 }
 
