@@ -6,7 +6,9 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
+    "scheme": "safetruck",
+    "plugins": ["expo-router"],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",

@@ -5,7 +5,7 @@ import * as Location from 'expo-location'
 import { useStore } from '../../src/store/useStore'
 import { supabase } from '../../src/services/supabase'
 
-const BACKEND = 'http://192.168.1.24:3001'
+const BACKEND = 'http://192.168.0.254:3001'
 
 const INCIDENT_TYPES = [
   { key: 'fine', label: '💸 Multa a camión', creates_block: true },
@@ -248,7 +248,7 @@ export default function MapScreen() {
 
       {loading && (
         <View style={s.loadingOverlay}>
-          <ActivityIndicator size="large" color="#FF6B35" />
+          <ActivityIndicator size={36} color="#FF6B35" />
           <Text style={s.loadingText}>Calculando ruta para camiones...</Text>
         </View>
       )}
