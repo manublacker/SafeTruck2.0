@@ -1,260 +1,224 @@
-import { useState, useEffect } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, ScrollView } from 'react-native'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'expo-router'
+import { LogOut } from 'lucide-react'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
+import type { SubscriptionPlan } from '../../src/types'
+
+const FIELDS_PERSONAL: Array<{ key: string; label: string }> = [
+  { key: 'full_name', label: 'Nombre / Razón social' },
+  { key: 'email',     label: 'Email' },
+]
+
+const FIELDS_COMPANY: Array<{ key: string; label: string }> = [
+  { key: 'company_name', label: 'Empresa' },
+  { key: 'cuit',         label: 'CUIT' },
+  { key: 'industry',     label: 'Rubro' },
+  { key: 'fleet_size',   label: 'Tamaño de flota' },
+  { key: 'country',      label: 'País' },
+  { key: 'province',     label: 'Provincia' },
+]
+
+type PlanDef = {
+  id: SubscriptionPlan
+  name: string
+  price: string
+  features: string[]
+}
+
+const PLANS: PlanDef[] = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    price: '$29',
+    features: ['Hasta 5 camiones', 'Tracking en tiempo real', 'Historial 7 días', 'Soporte por email'],
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: '$79',
+    features: ['Hasta 20 camiones', 'Historial 30 días', 'Alertas personalizadas', 'Panel multi-usuario (3 admins)', 'Soporte prioritario'],
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    price: '$199',
+    features: ['Camiones ilimitados', 'Historial 1 año', 'API de integración', 'Reportes avanzados', 'Manager dedicado'],
+  },
+]
+
+type Prefs = {
+  email_notifications: boolean
+  push_alerts: boolean
+}
+
+const PREFS_STORAGE_KEY = 'safetruck_prefs'
+
+function loadPrefs(): Prefs {
+  if (typeof window === 'undefined') return { email_notifications: true, push_alerts: true }
+  try {
+    const raw = localStorage.getItem(PREFS_STORAGE_KEY)
+    if (!raw) return { email_notifications: true, push_alerts: true }
+    return JSON.parse(raw)
+  } catch {
+    return { email_notifications: true, push_alerts: true }
+  }
+}
 
 export default function ProfileScreen() {
-  const { profile, setProfile, activeVehicle, setActiveVehicle, vehicles, setVehicles } = useStore()
-  const [loading, setLoading] = useState(false)
-  const [showAddVehicle, setShowAddVehicle] = useState(false)
-  const [editingVehicle, setEditingVehicle] = useState<any>(null)
+  const profile = useStore(s => s.profile)
+  const setProfile = useStore(s => s.setProfile)
+  const router = useRouter()
 
-  // Form nuevo/editar vehículo
-  const [plate, setPlate] = useState('')
-  const [name, setName] = useState('')
-  const [weight, setWeight] = useState('')
-  const [height, setHeight] = useState('')
-  const [width, setWidth] = useState('')
-  const [length, setLength] = useState('')
+  const [changingPlan, setChangingPlan] = useState<SubscriptionPlan | null>(null)
+  const [planMsg, setPlanMsg] = useState<string | null>(null)
+  const [prefs, setPrefs] = useState<Prefs>({ email_notifications: true, push_alerts: true })
+  const [loggingOut, setLoggingOut] = useState(false)
 
-  useEffect(() => { loadVehicles() }, [])
+  useEffect(() => { setPrefs(loadPrefs()) }, [])
 
-  const loadVehicles = async () => {
-    if (!profile) return
-    const { data } = await supabase
-      .from('st_vehicles')
-      .select('*')
-      .eq('user_id', profile.id)
-      .order('created_at', { ascending: false })
-    if (data) {
-      setVehicles(data)
-      const def = data.find(v => v.is_default) || data[0]
-      if (def) setActiveVehicle(def)
+  if (!profile) return null
+
+  const currentPlan = (profile.plan || null) as SubscriptionPlan | null
+
+  const renderValue = (val: any) =>
+    val ? <div className="dash-field__value">{val}</div>
+        : <div className="dash-field__value dash-field__value--muted">No especificado</div>
+
+  const changePlan = async (planId: SubscriptionPlan) => {
+    if (planId === currentPlan) return
+    setChangingPlan(planId)
+    setPlanMsg(null)
+    const { error } = await supabase.from('st_profiles').update({ plan: planId }).eq('id', profile.id)
+    if (error) {
+      setPlanMsg(`Error: ${error.message}`)
+    } else {
+      setProfile({ ...profile, plan: planId })
+      setPlanMsg(`Plan actualizado a ${PLANS.find(p => p.id === planId)?.name}.`)
+      setTimeout(() => setPlanMsg(null), 4000)
     }
+    setChangingPlan(null)
   }
 
-  const openEdit = (vehicle: any) => {
-    setEditingVehicle(vehicle)
-    setPlate(vehicle.plate)
-    setName(vehicle.name || '')
-    setWeight(String(vehicle.weight_kg))
-    setHeight(String(vehicle.height_m))
-    setWidth(String(vehicle.width_m))
-    setLength(String(vehicle.length_m || ''))
-    setShowAddVehicle(false)
-  }
-
-  const cancelEdit = () => {
-    setEditingVehicle(null)
-    setPlate(''); setName(''); setWeight(''); setHeight(''); setWidth(''); setLength('')
-  }
-
-  const saveVehicle = async () => {
-    if (!plate || !weight || !height || !width) return Alert.alert('Error', 'Patente, peso, altura y ancho son obligatorios')
-    if (!profile) return
-    setLoading(true)
-    try {
-      if (editingVehicle) {
-        const { data, error } = await supabase
-          .from('st_vehicles')
-          .update({
-            plate: plate.toUpperCase(),
-            name: name || plate.toUpperCase(),
-            weight_kg: parseFloat(weight),
-            height_m: parseFloat(height),
-            width_m: parseFloat(width),
-            length_m: parseFloat(length) || 12,
-          })
-          .eq('id', editingVehicle.id)
-          .select()
-          .single()
-        if (error) throw error
-        setVehicles(vehicles.map(v => v.id === editingVehicle.id ? data : v))
-        if (activeVehicle?.id === editingVehicle.id) setActiveVehicle(data)
-        setEditingVehicle(null)
-        Alert.alert('✅', 'Vehículo actualizado')
-      } else {
-        const isFirst = vehicles.length === 0
-        const { data, error } = await supabase
-          .from('st_vehicles')
-          .insert({
-            user_id: profile.id,
-            plate: plate.toUpperCase(),
-            name: name || plate.toUpperCase(),
-            weight_kg: parseFloat(weight),
-            height_m: parseFloat(height),
-            width_m: parseFloat(width),
-            length_m: parseFloat(length) || 12,
-            is_default: isFirst,
-          })
-          .select()
-          .single()
-        if (error) throw error
-        setActiveVehicle(data)
-        setVehicles([data, ...vehicles])
-        setShowAddVehicle(false)
-        Alert.alert('✅', 'Vehículo guardado')
-      }
-      setPlate(''); setName(''); setWeight(''); setHeight(''); setWidth(''); setLength('')
-    } catch (e: any) {
-      Alert.alert('Error', e.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const setDefault = async (vehicle: any) => {
-    if (!profile) return
-    await supabase.from('st_vehicles').update({ is_default: false }).eq('user_id', profile.id)
-    await supabase.from('st_vehicles').update({ is_default: true }).eq('id', vehicle.id)
-    setActiveVehicle(vehicle)
-    loadVehicles()
+  const togglePref = (key: keyof Prefs) => {
+    const next = { ...prefs, [key]: !prefs[key] }
+    setPrefs(next)
+    try { localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(next)) } catch {}
   }
 
   const logout = async () => {
+    setLoggingOut(true)
     await supabase.auth.signOut()
     setProfile(null)
+    router.replace('/landing')
   }
 
   return (
-    <ScrollView style={s.container} contentContainerStyle={s.content}>
-      {/* Header perfil */}
-      <View style={s.profileCard}>
-        <View style={s.avatar}>
-          <Text style={s.avatarText}>{profile?.full_name?.[0]?.toUpperCase() || '?'}</Text>
-        </View>
-        <View style={s.profileInfo}>
-          <Text style={s.profileName}>{profile?.full_name}</Text>
-          <Text style={s.profileSub}>Conductor registrado</Text>
-        </View>
-        <TouchableOpacity style={s.logoutBtn} onPress={logout}>
-          <Text style={s.logoutText}>Salir</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Vehículo activo */}
-      {activeVehicle && (
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>🚛 Vehículo activo</Text>
-          {editingVehicle?.id === activeVehicle.id ? (
-            <View style={s.form}>
-              <Text style={s.formTitle}>Editar vehículo</Text>
-              <TextInput style={s.input} placeholder="Patente *" placeholderTextColor="#8E8E93" value={plate} onChangeText={setPlate} autoCapitalize="characters" />
-              <TextInput style={s.input} placeholder="Nombre (ej: Mercedes Actros)" placeholderTextColor="#8E8E93" value={name} onChangeText={setName} />
-              <View style={s.row}>
-                <TextInput style={[s.input, s.inputHalf]} placeholder="Peso total (kg) *" placeholderTextColor="#8E8E93" value={weight} onChangeText={setWeight} keyboardType="numeric" />
-                <TextInput style={[s.input, s.inputHalf]} placeholder="Altura (m) *" placeholderTextColor="#8E8E93" value={height} onChangeText={setHeight} keyboardType="numeric" />
-              </View>
-              <View style={s.row}>
-                <TextInput style={[s.input, s.inputHalf]} placeholder="Ancho (m) *" placeholderTextColor="#8E8E93" value={width} onChangeText={setWidth} keyboardType="numeric" />
-                <TextInput style={[s.input, s.inputHalf]} placeholder="Largo (m)" placeholderTextColor="#8E8E93" value={length} onChangeText={setLength} keyboardType="numeric" />
-              </View>
-              <View style={s.row}>
-                <TouchableOpacity style={[s.saveBtn, { flex: 1 }, loading && s.saveBtnDisabled]} onPress={saveVehicle} disabled={loading}>
-                  {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>Guardar</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity style={[s.cancelBtn, { flex: 1 }]} onPress={cancelEdit}>
-                  <Text style={s.cancelBtnText}>Cancelar</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={s.vehicleCard}>
-              <TouchableOpacity style={s.editBtn} onPress={() => openEdit(activeVehicle)}>
-                <Text style={s.editBtnText}>✏️</Text>
-              </TouchableOpacity>
-              <Text style={s.vehicleName}>{activeVehicle.name || activeVehicle.plate}</Text>
-              <Text style={s.vehiclePlate}>{activeVehicle.plate}</Text>
-              <View style={s.vehicleSpecs}>
-                <View style={s.spec}><Text style={s.specVal}>{activeVehicle.weight_kg} kg</Text><Text style={s.specLbl}>Peso</Text></View>
-                <View style={s.spec}><Text style={s.specVal}>{activeVehicle.height_m} m</Text><Text style={s.specLbl}>Altura</Text></View>
-                <View style={s.spec}><Text style={s.specVal}>{activeVehicle.width_m} m</Text><Text style={s.specLbl}>Ancho</Text></View>
-              </View>
-            </View>
-          )}
-        </View>
-      )}
-
-      {/* Lista de vehículos */}
-      {vehicles.length > 1 && (
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Mis vehículos</Text>
-          {vehicles.map(v => (
-            <TouchableOpacity key={v.id} style={[s.vehicleItem, activeVehicle?.id === v.id && s.vehicleItemActive]} onPress={() => setDefault(v)}>
-              <View>
-                <Text style={s.vehicleItemName}>{v.name || v.plate}</Text>
-                <Text style={s.vehicleItemPlate}>{v.plate} · {v.weight_kg}kg · {v.height_m}m alt</Text>
-              </View>
-              {activeVehicle?.id === v.id && <Text style={s.vehicleItemCheck}>✓</Text>}
-            </TouchableOpacity>
+    <>
+      <div className="dash-card">
+        <h2 className="dash-card__title">Datos personales</h2>
+        <p className="dash-card__subtitle">Información de tu cuenta.</p>
+        <div className="dash-grid-2">
+          {FIELDS_PERSONAL.map(f => (
+            <div key={f.key} className="dash-field">
+              <div className="dash-field__label">{f.label}</div>
+              {renderValue((profile as any)[f.key])}
+            </div>
           ))}
-        </View>
-      )}
+        </div>
+      </div>
 
-      {/* Agregar vehículo */}
-      <TouchableOpacity style={s.addBtn} onPress={() => setShowAddVehicle(!showAddVehicle)}>
-        <Text style={s.addBtnText}>{showAddVehicle ? '✕ Cancelar' : '+ Agregar vehículo'}</Text>
-      </TouchableOpacity>
+      <div className="dash-card">
+        <h2 className="dash-card__title">Empresa</h2>
+        <p className="dash-card__subtitle">Datos cargados durante el registro.</p>
+        <div className="dash-grid-2">
+          {FIELDS_COMPANY.map(f => (
+            <div key={f.key} className="dash-field">
+              <div className="dash-field__label">{f.label}</div>
+              {renderValue((profile as any)[f.key])}
+            </div>
+          ))}
+        </div>
+      </div>
 
-      {showAddVehicle && (
-        <View style={s.form}>
-          <Text style={s.formTitle}>Nuevo vehículo</Text>
-          <TextInput style={s.input} placeholder="Patente *" placeholderTextColor="#8E8E93" value={plate} onChangeText={setPlate} autoCapitalize="characters" />
-          <TextInput style={s.input} placeholder="Nombre (ej: Mercedes Actros)" placeholderTextColor="#8E8E93" value={name} onChangeText={setName} />
-          <View style={s.row}>
-            <TextInput style={[s.input, s.inputHalf]} placeholder="Peso total (kg) *" placeholderTextColor="#8E8E93" value={weight} onChangeText={setWeight} keyboardType="numeric" />
-            <TextInput style={[s.input, s.inputHalf]} placeholder="Altura (m) *" placeholderTextColor="#8E8E93" value={height} onChangeText={setHeight} keyboardType="numeric" />
-          </View>
-          <View style={s.row}>
-            <TextInput style={[s.input, s.inputHalf]} placeholder="Ancho (m) *" placeholderTextColor="#8E8E93" value={width} onChangeText={setWidth} keyboardType="numeric" />
-            <TextInput style={[s.input, s.inputHalf]} placeholder="Largo (m)" placeholderTextColor="#8E8E93" value={length} onChangeText={setLength} keyboardType="numeric" />
-          </View>
-          <TouchableOpacity style={[s.saveBtn, loading && s.saveBtnDisabled]} onPress={saveVehicle} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>Guardar vehículo</Text>}
-          </TouchableOpacity>
-        </View>
-      )}
-    </ScrollView>
+      <div className="dash-card">
+        <h2 className="dash-card__title">Plan</h2>
+        <p className="dash-card__subtitle">
+          {currentPlan
+            ? `Estás suscripto al plan ${PLANS.find(p => p.id === currentPlan)?.name}.`
+            : 'Todavía no elegiste un plan.'}
+        </p>
+        {planMsg && <div className="dash-banner-success">{planMsg}</div>}
+        <div className="dash-plans">
+          {PLANS.map(plan => {
+            const isCurrent = plan.id === currentPlan
+            return (
+              <div key={plan.id} className={`dash-plan${isCurrent ? ' dash-plan--current' : ''}`}>
+                {isCurrent && <span className="dash-plan__current-badge">Plan actual</span>}
+                <div className="dash-plan__name">{plan.name}</div>
+                <div>
+                  <span className="dash-plan__price">{plan.price}</span>
+                  <span className="dash-plan__price-suffix">USD/mes</span>
+                </div>
+                <ul className="dash-plan__features">
+                  {plan.features.map(f => (
+                    <li key={f} className="dash-plan__feature">{f}</li>
+                  ))}
+                </ul>
+                <button
+                  className={`dash-plan__btn ${isCurrent ? 'dash-plan__btn--ghost' : 'dash-plan__btn--primary'}`}
+                  onClick={() => changePlan(plan.id)}
+                  disabled={isCurrent || changingPlan !== null}
+                >
+                  {isCurrent
+                    ? 'Plan actual'
+                    : changingPlan === plan.id
+                      ? 'Cambiando…'
+                      : `Cambiar a ${plan.name}`}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="dash-card">
+        <h2 className="dash-card__title">Preferencias</h2>
+        <p className="dash-card__subtitle">Configuración de notificaciones.</p>
+        <div className="dash-toggle-row">
+          <div className="dash-toggle-row__info">
+            <span className="dash-toggle-row__label">Notificaciones por email</span>
+            <span className="dash-toggle-row__hint">Recibir resúmenes diarios de incidentes y viajes.</span>
+          </div>
+          <button
+            type="button"
+            aria-pressed={prefs.email_notifications}
+            className={`dash-toggle${prefs.email_notifications ? ' dash-toggle--on' : ''}`}
+            onClick={() => togglePref('email_notifications')}
+          />
+        </div>
+        <div className="dash-toggle-row">
+          <div className="dash-toggle-row__info">
+            <span className="dash-toggle-row__label">Alertas en tiempo real</span>
+            <span className="dash-toggle-row__hint">Mostrar notificaciones cuando se reporten incidentes.</span>
+          </div>
+          <button
+            type="button"
+            aria-pressed={prefs.push_alerts}
+            className={`dash-toggle${prefs.push_alerts ? ' dash-toggle--on' : ''}`}
+            onClick={() => togglePref('push_alerts')}
+          />
+        </div>
+      </div>
+
+      <div className="dash-card">
+        <h2 className="dash-card__title">Sesión</h2>
+        <p className="dash-card__subtitle">Cerrá sesión en este dispositivo.</p>
+        <button className="dash-btn dash-btn--danger" onClick={logout} disabled={loggingOut}>
+          <LogOut size={16} />
+          {loggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
+        </button>
+      </div>
+    </>
   )
 }
-
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1C1C1E' },
-  content: { padding: 16, paddingTop: 60, paddingBottom: 100 },
-  profileCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2C2C2E', borderRadius: 16, padding: 16, marginBottom: 20 },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FF6B35', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  avatarText: { color: '#fff', fontSize: 20, fontWeight: '700' },
-  profileInfo: { flex: 1 },
-  profileName: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  profileSub: { color: '#8E8E93', fontSize: 13, marginTop: 2 },
-  logoutBtn: { backgroundColor: '#3A3A3C', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
-  logoutText: { color: '#FF3B30', fontSize: 13, fontWeight: '600' },
-  section: { marginBottom: 20 },
-  sectionTitle: { color: '#8E8E93', fontSize: 13, fontWeight: '600', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
-  vehicleCard: { backgroundColor: '#2C2C2E', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#FF6B35', position: 'relative' },
-  editBtn: { position: 'absolute', top: 12, right: 12, padding: 6 },
-  editBtnText: { fontSize: 18 },
-  vehicleName: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 2 },
-  vehiclePlate: { color: '#8E8E93', fontSize: 13, marginBottom: 12 },
-  vehicleSpecs: { flexDirection: 'row' },
-  spec: { flex: 1, alignItems: 'center' },
-  specVal: { color: '#FF6B35', fontSize: 18, fontWeight: '700' },
-  specLbl: { color: '#8E8E93', fontSize: 11, marginTop: 2 },
-  vehicleItem: { backgroundColor: '#2C2C2E', borderRadius: 12, padding: 14, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  vehicleItemActive: { borderWidth: 1, borderColor: '#FF6B35' },
-  vehicleItemName: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  vehicleItemPlate: { color: '#8E8E93', fontSize: 12, marginTop: 2 },
-  vehicleItemCheck: { color: '#FF6B35', fontSize: 20 },
-  addBtn: { backgroundColor: '#2C2C2E', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#3A3A3C', borderStyle: 'dashed' },
-  addBtnText: { color: '#FF6B35', fontSize: 15, fontWeight: '600' },
-  form: { backgroundColor: '#2C2C2E', borderRadius: 16, padding: 16 },
-  formTitle: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 16 },
-  input: { backgroundColor: '#3A3A3C', color: '#fff', borderRadius: 10, padding: 14, marginBottom: 10, fontSize: 15 },
-  row: { flexDirection: 'row', gap: 10 },
-  inputHalf: { flex: 1 },
-  saveBtn: { backgroundColor: '#FF6B35', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 6 },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  cancelBtn: { backgroundColor: '#3A3A3C', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 6, marginLeft: 10 },
-  cancelBtnText: { color: '#8E8E93', fontSize: 16, fontWeight: '600' },
-})

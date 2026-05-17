@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
 import { useRouter } from 'expo-router'
-import { Check, Mail, CheckCircle2, ArrowLeft } from 'lucide-react'
+import { Check, Mail, CheckCircle2, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
 import '../../src/styles/auth.css'
@@ -27,7 +27,7 @@ const initialData: FormData = {
   email: '', password: '', confirmPassword: '', terms: false,
   companyName: '', cuit: '', legalName: '', industry: '',
   fleetSize: '', country: 'Argentina', province: '',
-  code: ['', '', '', '', '', ''], plan: '',
+  code: ['', '', '', '', '', '', '', ''], plan: '',
 }
 
 const provinces = [
@@ -106,6 +106,8 @@ export default function RegisterWeb() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [resendIn, setResendIn] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   useEffect(() => {
     if (resendIn <= 0) return
@@ -142,7 +144,7 @@ export default function RegisterWeb() {
 
   const validateStep3 = () => {
     const e: Record<string, string> = {}
-    if (data.code.some(c => !c)) e.code = 'Ingresá los 6 dígitos'
+    if (data.code.some(c => !c)) e.code = `Ingresá los ${data.code.length} dígitos`
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -223,7 +225,7 @@ export default function RegisterWeb() {
     const code = [...data.code]
     code[i] = digit
     update('code', code)
-    if (digit && i < 5) {
+    if (digit && i < data.code.length - 1) {
       (document.getElementById(`code-${i + 1}`) as HTMLInputElement | null)?.focus()
     }
   }
@@ -279,11 +281,45 @@ export default function RegisterWeb() {
                       {errors.email && <p className="auth-error">{errors.email}</p>}
                     </div>
                     <div className="auth-field">
-                      <input type="password" placeholder="Contraseña" value={data.password} onChange={e => update('password', e.target.value)} className="auth-input" />
+                      <div className="auth-password-wrap">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="Contraseña"
+                          value={data.password}
+                          onChange={e => update('password', e.target.value)}
+                          className="auth-input"
+                        />
+                        <button
+                          type="button"
+                          className="auth-password-toggle"
+                          onClick={() => setShowPassword(s => !s)}
+                          aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                          title={showPassword ? 'Ocultar' : 'Mostrar'}
+                        >
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                       {errors.password && <p className="auth-error">{errors.password}</p>}
                     </div>
                     <div className="auth-field">
-                      <input type="password" placeholder="Repetí tu contraseña" value={data.confirmPassword} onChange={e => update('confirmPassword', e.target.value)} className="auth-input" />
+                      <div className="auth-password-wrap">
+                        <input
+                          type={showConfirm ? 'text' : 'password'}
+                          placeholder="Repetí tu contraseña"
+                          value={data.confirmPassword}
+                          onChange={e => update('confirmPassword', e.target.value)}
+                          className="auth-input"
+                        />
+                        <button
+                          type="button"
+                          className="auth-password-toggle"
+                          onClick={() => setShowConfirm(s => !s)}
+                          aria-label={showConfirm ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                          title={showConfirm ? 'Ocultar' : 'Mostrar'}
+                        >
+                          {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                       {errors.confirmPassword && <p className="auth-error">{errors.confirmPassword}</p>}
                     </div>
                     <div className="auth-field">
@@ -371,7 +407,7 @@ export default function RegisterWeb() {
                 <div>
                   <h1 className="auth-title">Verificá tu email</h1>
                   <p className="auth-subtitle">
-                    Te enviamos un código de 6 dígitos a <strong>{data.email || 'tu email'}</strong>.
+                    Te enviamos un código de {data.code.length} dígitos a <strong>{data.email || 'tu email'}</strong>.
                   </p>
                   <div className="auth-mail-icon">
                     <Mail size={56} />
