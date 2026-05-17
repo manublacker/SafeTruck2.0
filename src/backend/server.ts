@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import express from 'express'
+import express, { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
 import { calculateRoute } from './router'
 import { supabase } from '../services/supabase'
@@ -7,6 +7,10 @@ import { supabase } from '../services/supabase'
 const app = express()
 app.use(cors())
 app.use(express.json())
+
+// ────────────────────────────────────────────────────────────────────────────
+// Routing (existente)
+// ────────────────────────────────────────────────────────────────────────────
 
 app.post('/route', async (req, res) => {
   res.setTimeout(60000)
@@ -52,6 +56,135 @@ app.post('/trips', async (req, res) => {
 })
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }))
+
+// ────────────────────────────────────────────────────────────────────────────
+// Admin endpoints: crear/eliminar conductores con credenciales auto-generadas
+// (requieren service_role key — solo backend)
+// ────────────────────────────────────────────────────────────────────────────
+
+interface AuthedRequest extends Request {
+  adminId?: string
+}
+
+function generatePassword(length = 12): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
+  let s = ''
+  for (let i = 0; i < length; i++) s += chars[Math.floor(Math.random() * chars.length)]
+  return s
+}
+
+function randomLocalEmail(): string {
+  const slug = Math.random().toString(36).slice(2, 10)
+  return `driver-${slug}@safetruck.local`
+}
+
+async function authAdmin(req: AuthedRequest, res: Response, next: NextFunction) {
+  const auth = req.headers.authorization || ''
+  const token = auth.replace(/^Bearer\s+/i, '')
+  if (!token) return res.status(401).json({ error: 'Falta token de autenticación' })
+  const { data, error } = await supabase.auth.getUser(token)
+  if (error || !data.user) return res.status(401).json({ error: 'Token inválido' })
+  req.adminId = data.user.id
+  next()
+}
+
+// NOTA: las credenciales se generan y se guardan en st_drivers.password como texto
+// plano. NO crean un usuario de Supabase Auth — sirven como "credenciales pendientes"
+// que se van a activar cuando la app mobile esté lista y migre estos rows a auth.users.
+
+app.post('/admin/drivers', authAdmin, async (req: AuthedRequest, res) => {
+  const adminId = req.adminId!
+  try {
+    const { full_name, email, phone, license_number } = req.body
+    if (!full_name || !String(full_name).trim()) {
+      return res.status(400).json({ error: 'El nombre es obligatorio.' })
+    }
+
+    const driverEmail = (email && String(email).trim())
+      ? String(email).trim().toLowerCase()
+      : randomLocalEmail()
+    const password = generatePassword()
+
+    const { data: driver, error: drvErr } = await supabase
+      .from('st_drivers')
+      .insert({
+        admin_id: adminId,
+        full_name: String(full_name).trim(),
+        email: driverEmail,
+        password,
+        phone: phone || null,
+        license_number: license_number || null,
+      })
+      .select()
+      .single()
+    if (drvErr) {
+      console.error('[/admin/drivers] insert driver:', drvErr.message)
+      return res.status(500).json({ error: drvErr.message })
+    }
+
+    res.json({
+      success: true,
+      driver,
+      credentials: { email: driverEmail, password },
+    })
+  } catch (err: any) {
+    console.error('[/admin/drivers]', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/admin/drivers/:id/reset-password', authAdmin, async (req: AuthedRequest, res) => {
+  const adminId = req.adminId!
+  try {
+    const { data: driver, error: drvErr } = await supabase
+      .from('st_drivers')
+      .select('*')
+      .eq('id', req.params.id)
+      .single()
+    if (drvErr || !driver) return res.status(404).json({ error: 'Conductor no encontrado' })
+    if (driver.admin_id !== adminId) return res.status(403).json({ error: 'No tenés permiso para este conductor' })
+
+    const password = generatePassword()
+    const { error: updErr } = await supabase
+      .from('st_drivers')
+      .update({ password })
+      .eq('id', driver.id)
+    if (updErr) return res.status(500).json({ error: updErr.message })
+
+    res.json({ success: true, credentials: { email: driver.email, password } })
+  } catch (err: any) {
+    console.error('[/admin/drivers/:id/reset-password]', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/admin/drivers/:id', authAdmin, async (req: AuthedRequest, res) => {
+  const adminId = req.adminId!
+  try {
+    const { data: driver, error: drvErr } = await supabase
+      .from('st_drivers')
+      .select('*')
+      .eq('id', req.params.id)
+      .single()
+    if (drvErr || !driver) return res.status(404).json({ error: 'Conductor no encontrado' })
+    if (driver.admin_id !== adminId) return res.status(403).json({ error: 'No tenés permiso para este conductor' })
+
+    // Compatibilidad: si este driver tiene un auth user "viejo" (de la versión anterior
+    // donde sí creábamos cuentas), lo limpiamos también
+    if (driver.user_id) {
+      await supabase.auth.admin.deleteUser(driver.user_id).catch(e => {
+        console.error('[/admin/drivers/:id] deleteAuthUser:', e?.message)
+      })
+    }
+    const { error: delErr } = await supabase.from('st_drivers').delete().eq('id', req.params.id)
+    if (delErr) return res.status(500).json({ error: delErr.message })
+
+    res.json({ success: true })
+  } catch (err: any) {
+    console.error('[/admin/drivers/:id]', err)
+    res.status(500).json({ error: err.message })
+  }
+})
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => console.log(`SafeTruck backend en puerto ${PORT}`))
