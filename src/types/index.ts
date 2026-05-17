@@ -3,11 +3,16 @@ export type SubscriptionPlan = 'starter' | 'pro' | 'enterprise'
 export interface Profile {
   id: string
   full_name: string
+  email?: string | null
   phone?: string
   license_number?: string
   company_id?: string | null
   company_name?: string | null
   cuit?: string | null
+  industry?: string | null
+  fleet_size?: string | null
+  country?: string | null
+  province?: string | null
   plan?: SubscriptionPlan | null
   created_at: string
 }
@@ -79,14 +84,29 @@ export interface Route {
 
 export interface Trip {
   id: string
-  user_id: string
-  vehicle_id: string
-  origin_address?: string
-  destination_address?: string
-  distance_km?: number
-  duration_min?: number
-  status: 'planned' | 'active' | 'completed' | 'cancelled'
+  user_id?: string | null
+  admin_id?: string | null
+  driver_id?: string | null
+  vehicle_id?: string | null
+  origin_address?: string | null
+  destination_address?: string | null
+  distance_km?: number | null
+  duration_min?: number | null
+  scheduled_at?: string | null
+  status: 'pending' | 'planned' | 'active' | 'in_progress' | 'completed' | 'cancelled'
   created_at: string
+}
+
+export interface Driver {
+  id: string
+  admin_id: string
+  full_name: string
+  email?: string | null
+  phone?: string | null
+  license_number?: string | null
+  status: 'active' | 'inactive'
+  created_at: string
+  updated_at?: string
 }
 
 export interface Coordinates {

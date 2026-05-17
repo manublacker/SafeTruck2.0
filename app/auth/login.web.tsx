@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useRouter } from 'expo-router'
+import { Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
 import '../../src/styles/auth.css'
@@ -21,6 +22,7 @@ export default function LoginWeb() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({})
   const [forgotMode, setForgotMode] = useState(false)
   const [forgotSent, setForgotSent] = useState(false)
@@ -139,7 +141,25 @@ export default function LoginWeb() {
                   </div>
                   <div className="auth-field">
                     <label className="auth-field__label">Contraseña</label>
-                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Tu contraseña" maxLength={128} className="auth-input" />
+                    <div className="auth-password-wrap">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        placeholder="Tu contraseña"
+                        maxLength={128}
+                        className="auth-input"
+                      />
+                      <button
+                        type="button"
+                        className="auth-password-toggle"
+                        onClick={() => setShowPassword(s => !s)}
+                        aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        title={showPassword ? 'Ocultar' : 'Mostrar'}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                     {errors.password && <p className="auth-error">{errors.password}</p>}
                   </div>
                   <div className="auth-field" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
