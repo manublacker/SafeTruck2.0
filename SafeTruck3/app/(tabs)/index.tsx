@@ -5,7 +5,7 @@ import * as Location from 'expo-location'
 import { useStore } from '../../src/store/useStore'
 import { supabase } from '../../src/services/supabase'
 
-const BACKEND = 'http://192.168.1.24:3001'
+const BACKEND = 'https://safetruck-backend-production.up.railway.app'
 
 const INCIDENT_TYPES = [
   { key: 'fine', label: '💸 Multa a camión', creates_block: true },
