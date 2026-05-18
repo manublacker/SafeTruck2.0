@@ -12,13 +12,13 @@
   },
   "include": [
     "src/backend/**/*",
-    "src/services/**/*",
     "src/types/**/*",
     "src/constants/**/*"
   ],
   "exclude": [
     "node_modules",
     "SafeTruck3",
-    "**/__tests__/**"
+    "**/__tests__/**",
+    "src/services/**/*"
   ]
 }
