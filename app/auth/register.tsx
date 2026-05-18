@@ -548,7 +548,7 @@ function PlanCard({
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1C1C1E' },
   scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 48 },
-  logo: { width: 140, height: 110, alignSelf: 'center', marginBottom: 8 },
+  logo: { width: 180, height: 150, alignSelf: 'center', marginBottom: 8 },
   title: { fontSize: 26, fontWeight: '700', color: '#fff', marginBottom: 6 },
   subtitle: { fontSize: 14, color: '#8E8E93', marginBottom: 24 },
   textCentered: { textAlign: 'center' },
