@@ -8,10 +8,17 @@ interface Vehicle {
   width_m: number
 }
 
-const pool = new Pool({
-  connectionString: process.env.AIVEN_DATABASE_URL || process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-})
+let pool: Pool | null = null
+
+function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.AIVEN_DATABASE_URL || process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    })
+  }
+  return pool
+}
 
 export async function calculateRoute(
   origin: Coordinates,
@@ -20,7 +27,7 @@ export async function calculateRoute(
 ): Promise<Route> {
   console.log(`[Router] (${origin.lat},${origin.lng}) → (${destination.lat},${destination.lng})`)
 
-  const client = await pool.connect()
+  const client = await getPool().connect()
   try {
     await client.query("SET statement_timeout = '120s'")
     const result = await client.query(
