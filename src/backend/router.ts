@@ -101,3 +101,4 @@ function parseGeom(geom: any): { lat: number; lng: number }[] {
   }
   return []
 }
+
