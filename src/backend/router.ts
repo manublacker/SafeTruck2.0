@@ -89,20 +89,15 @@ export async function calculateRoute(
 function parseGeom(geom: any): { lat: number; lng: number }[] {
   if (!geom) return []
   try {
-    if (typeof geom === 'object' && geom.coordinates) {
-      if (geom.type === 'LineString') {
-        return geom.coordinates.map((c: number[]) => ({ lat: c[1], lng: c[0] }))
-      }
-    }
+    let obj = geom
     if (typeof geom === 'string') {
-      const match = geom.match(/LINESTRING\s*\(([^)]+)\)/i)
-      if (match) {
-        return match[1].split(',').map(pt => {
-          const [lng, lat] = pt.trim().split(/\s+/).map(Number)
-          return { lat, lng }
-        })
-      }
+      obj = JSON.parse(geom)
     }
-  } catch {}
+    if (obj && obj.type === 'LineString' && Array.isArray(obj.coordinates)) {
+      return obj.coordinates.map((c: number[]) => ({ lat: c[1], lng: c[0] }))
+    }
+  } catch (e) {
+    console.log('parseGeom error:', e)
+  }
   return []
 }
