@@ -38,6 +38,7 @@ export async function calculateRoute(
 
     if (!data || data.length === 0) throw new Error('No se encontró ruta entre los puntos')
 
+    console.log("geom sample:", JSON.stringify(data[1]?.geom));
     const validRows = data.filter((r: any) => r.edge_id > 0)
     if (validRows.length === 0) throw new Error('Ruta vacía')
 
