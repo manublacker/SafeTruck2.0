@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Modal, ScrollView, TextInput, FlatList, Keyboard } from 'react-native'
 import { WebView } from 'react-native-webview'
 import * as Location from 'expo-location'
@@ -17,6 +17,103 @@ const INCIDENT_TYPES = [
   { key: 'weight_check', label: '⚖️ Control de peso', creates_block: false },
 ]
 
+const MAP_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>* { margin:0;padding:0;box-sizing:border-box; } html,body,#map { width:100%;height:100%; }</style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+  var map = L.map('map',{zoomControl:true}).setView([-34.6037,-58.3816],13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM',maxZoom:19}).addTo(map);
+  var userMarker=null, destMarker=null, routeLayers=[], incidentMarkers=[];
+
+  map.on('click', function(e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'mapClick', lat: e.latlng.lat, lng: e.latlng.lng
+    }));
+    if (destMarker) map.removeLayer(destMarker);
+    destMarker = L.marker([e.latlng.lat, e.latlng.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="background:#FF6B35;width:16px;height:16px;border-radius:50%;border:3px solid white"></div>'
+      })
+    }).addTo(map);
+  });
+
+  function setUserLocation(lat, lng) {
+    if (userMarker) map.removeLayer(userMarker);
+    userMarker = L.circleMarker([lat, lng], {
+      radius: 8, fillColor: '#007AFF', color: 'white', weight: 2, fillOpacity: 1
+    }).addTo(map);
+    map.setView([lat, lng], 14);
+  }
+
+  function drawRoute(segments) {
+    clearRoute();
+    var colors = { ok: '#34C759', unauthorized: '#FF3B30', unknown: '#FF9500' };
+    var bounds = [];
+    segments.forEach(function(seg) {
+      if (!seg.coordinates || seg.coordinates.length < 2) return;
+      var latlngs = seg.coordinates.map(function(c) { return [c.lat, c.lng]; });
+      var line = L.polyline(latlngs, {
+        color: colors[seg.status] || colors.unknown,
+        weight: 6, opacity: 0.9,
+        dashArray: seg.status === 'unauthorized' ? '10,6' : null
+      }).addTo(map);
+      routeLayers.push(line);
+      bounds = bounds.concat(latlngs);
+    });
+    if (bounds.length > 0) map.fitBounds(bounds, { padding: [80, 40] });
+  }
+
+  function clearRoute() {
+    routeLayers.forEach(function(l) { map.removeLayer(l); });
+    routeLayers = [];
+    if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
+  }
+
+  var ICONS = {
+    fine:'💸', police_check:'👮', accident:'🚨',
+    road_work:'🚧', low_bridge:'🌉', road_closed:'🚫',
+    weight_check:'⚖️', other:'⚠️'
+  };
+
+  function addIncidentMarker(lat, lng, type) {
+    var marker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="font-size:24px;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.5))">' + (ICONS[type] || '⚠️') + '</div>',
+        iconAnchor: [12, 12]
+      })
+    }).addTo(map);
+    incidentMarkers.push(marker);
+  }
+
+  function loadIncidents(incidents) {
+    incidentMarkers.forEach(function(m) { map.removeLayer(m); });
+    incidentMarkers = [];
+    incidents.forEach(function(inc) {
+      if (!inc.location) return;
+      var lat, lng;
+      if (typeof inc.location === 'string') {
+        var m = inc.location.match(/POINT\\(([\\d.-]+) ([\\d.-]+)\\)/);
+        if (m) { lng = parseFloat(m[1]); lat = parseFloat(m[2]); }
+      } else if (inc.location.coordinates) {
+        lng = inc.location.coordinates[0]; lat = inc.location.coordinates[1];
+      }
+      if (lat && lng) addIncidentMarker(lat, lng, inc.incident_type);
+    });
+  }
+</script>
+</body>
+</html>`
+
 export default function MapScreen() {
   const webRef = useRef<WebView>(null)
   const reportModeRef = useRef(false)
@@ -24,6 +121,8 @@ export default function MapScreen() {
 
   const { activeVehicle, currentRoute, setCurrentRoute, setOrigin, setDestination } = useStore()
   const profile = useStore(s => s.profile)
+
+  const mapSource = useMemo(() => ({ html: MAP_HTML }), [])
 
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [loading, setLoading] = useState(false)
@@ -107,8 +206,12 @@ export default function MapScreen() {
   }
 
   const calculateRoute = async (destLat: number, destLng: number) => {
+    if (loading) return
     if (!location) return Alert.alert('Error', 'Esperando GPS...')
     if (!activeVehicle) return Alert.alert('Sin vehículo', 'Configurá tu camión en Perfil')
+    webRef.current?.injectJavaScript(`clearRoute(); true;`)
+    setCurrentRoute(null)
+    setShowInfo(false)
     setLoading(true)
     try {
       const res = await fetch(`${BACKEND}/route`, {
@@ -210,109 +313,12 @@ export default function MapScreen() {
     } catch {}
   }
 
-  const mapHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>* { margin:0;padding:0;box-sizing:border-box; } html,body,#map { width:100%;height:100%; }</style>
-</head>
-<body>
-<div id="map"></div>
-<script>
-  var map = L.map('map',{zoomControl:true}).setView([-34.6037,-58.3816],13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM',maxZoom:19}).addTo(map);
-  var userMarker=null, destMarker=null, routeLayers=[], incidentMarkers=[];
-
-  map.on('click', function(e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'mapClick', lat: e.latlng.lat, lng: e.latlng.lng
-    }));
-    if (destMarker) map.removeLayer(destMarker);
-    destMarker = L.marker([e.latlng.lat, e.latlng.lng], {
-      icon: L.divIcon({
-        className: '',
-        html: '<div style="background:#FF6B35;width:16px;height:16px;border-radius:50%;border:3px solid white"></div>'
-      })
-    }).addTo(map);
-  });
-
-  function setUserLocation(lat, lng) {
-    if (userMarker) map.removeLayer(userMarker);
-    userMarker = L.circleMarker([lat, lng], {
-      radius: 8, fillColor: '#007AFF', color: 'white', weight: 2, fillOpacity: 1
-    }).addTo(map);
-    map.setView([lat, lng], 14);
-  }
-
-  function drawRoute(segments) {
-    clearRoute();
-    var colors = { ok: '#34C759', unauthorized: '#FF3B30', unknown: '#FF9500' };
-    var bounds = [];
-    segments.forEach(function(seg) {
-      if (!seg.coordinates || seg.coordinates.length < 2) return;
-      var latlngs = seg.coordinates.map(function(c) { return [c.lat, c.lng]; });
-      var line = L.polyline(latlngs, {
-        color: colors[seg.status] || colors.unknown,
-        weight: 6, opacity: 0.9,
-        dashArray: seg.status === 'unauthorized' ? '10,6' : null
-      }).addTo(map);
-      routeLayers.push(line);
-      bounds = bounds.concat(latlngs);
-    });
-    if (bounds.length > 0) map.fitBounds(bounds, { padding: [80, 40] });
-  }
-
-  function clearRoute() {
-    routeLayers.forEach(function(l) { map.removeLayer(l); });
-    routeLayers = [];
-    if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
-  }
-
-  var ICONS = {
-    fine:'💸', police_check:'👮', accident:'🚨',
-    road_work:'🚧', low_bridge:'🌉', road_closed:'🚫',
-    weight_check:'⚖️', other:'⚠️'
-  };
-
-  function addIncidentMarker(lat, lng, type) {
-    var marker = L.marker([lat, lng], {
-      icon: L.divIcon({
-        className: '',
-        html: '<div style="font-size:24px;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.5))">' + (ICONS[type] || '⚠️') + '</div>',
-        iconAnchor: [12, 12]
-      })
-    }).addTo(map);
-    incidentMarkers.push(marker);
-  }
-
-  function loadIncidents(incidents) {
-    incidentMarkers.forEach(function(m) { map.removeLayer(m); });
-    incidentMarkers = [];
-    incidents.forEach(function(inc) {
-      if (!inc.location) return;
-      var lat, lng;
-      if (typeof inc.location === 'string') {
-        var m = inc.location.match(/POINT\\(([\\d.-]+) ([\\d.-]+)\\)/);
-        if (m) { lng = parseFloat(m[1]); lat = parseFloat(m[2]); }
-      } else if (inc.location.coordinates) {
-        lng = inc.location.coordinates[0]; lat = inc.location.coordinates[1];
-      }
-      if (lat && lng) addIncidentMarker(lat, lng, inc.incident_type);
-    });
-  }
-</script>
-</body>
-</html>`
-
   return (
     <View style={s.container}>
       <WebView
         ref={webRef}
         style={s.map}
-        source={{ html: mapHtml }}
+        source={mapSource}
         onMessage={onMessage}
         javaScriptEnabled
         domStorageEnabled
