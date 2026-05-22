@@ -1,0 +1,499 @@
+/* =============================================================
+   admin.css — Dashboard de administrador SafeTruck
+   Paleta: blanco/gris claro + sidebar oscuro + acento rojo
+   ============================================================= */
+
+/* Layout principal */
+.admin-shell {
+  display: flex;
+  height: 100vh;
+  min-height: 100vh;
+  background: #ffffff;
+  font-family: 'Inter', 'Manrope', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.admin-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.st-sidebar {
+  background: linear-gradient(180deg, #1a2332 0%, #141c28 100%);
+  transition: width 0.25s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.st-sidebar.collapsed .label-fade {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.st-sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.st-sidebar-logo-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #f24437;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+  overflow: hidden;
+  padding: 4px;
+}
+
+.st-sidebar-brand-sub {
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.st-sidebar-brand-name {
+  font-weight: 800;
+  font-size: 1rem;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.st-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 500;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.15s ease, color 0.15s ease;
+  font-size: 0.92rem;
+  user-select: none;
+  list-style: none;
+}
+
+.st-nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.st-nav-item.active {
+  color: #fff;
+  font-weight: 700;
+  background: rgba(229, 57, 53, 0.12);
+  border-left: 3px solid #e53935;
+}
+
+.st-sidebar-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.st-sidebar-user-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
+.st-sidebar-user-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.st-sidebar-user-role {
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.st-sidebar-logout {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.78rem;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  margin-top: 10px;
+  text-align: left;
+  transition: color 0.15s;
+}
+
+.st-sidebar-logout:hover {
+  color: #fff;
+}
+
+/* ── Top Bar ── */
+.st-topbar {
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+  height: 56px;
+  padding: 0 24px 0 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.st-topbar-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0d0d0d;
+  margin: 0;
+}
+
+.st-toggle-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  color: #0d0d0d;
+  opacity: 0.6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.st-toggle-btn:hover {
+  opacity: 1;
+  background: rgba(13, 13, 13, 0.04);
+}
+
+/* ── Inputs y botones ── */
+.st-input,
+.st-select {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 14px;
+  color: #0d0d0d;
+  font-size: 0.92rem;
+  width: 100%;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.st-input::placeholder {
+  color: #9ca3af;
+}
+
+.st-input:focus,
+.st-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.16);
+  border-color: #e53935;
+}
+
+.st-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 38px;
+}
+
+.st-select.placeholder {
+  color: #9ca3af;
+}
+
+.st-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0d0d0d;
+  letter-spacing: 0.01em;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.st-btn-primary {
+  background: #e53935;
+  color: #fff;
+  font-weight: 800;
+  border-radius: 10px;
+  padding: 16px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+  font-size: 0.92rem;
+  letter-spacing: 0.005em;
+  box-shadow: 0 2px 6px rgba(229, 57, 53, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.st-btn-primary:hover {
+  background: #c62828;
+  box-shadow: 0 4px 14px rgba(229, 57, 53, 0.32);
+}
+
+.st-btn-primary:active {
+  transform: translateY(1px);
+}
+
+.st-btn-secondary {
+  background: #fff;
+  color: #0d0d0d;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.88rem;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.st-btn-secondary:hover {
+  background: #fafafa;
+  border-color: #0d0d0d;
+}
+
+/* ── Tabla ── */
+.st-table {
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.st-table thead th {
+  background: #fafafa;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+  text-align: left;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.st-table tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  color: #0d0d0d;
+  font-size: 0.92rem;
+}
+
+.st-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.st-table tbody tr {
+  transition: background 0.12s ease;
+}
+
+.st-table tbody tr:hover {
+  background: #fafafa;
+}
+
+/* ── Badges ── */
+.st-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.st-badge-encurso   { background: rgba(229, 57, 53, 0.1);  color: #e53935; }
+.st-badge-completado{ background: rgba(34, 197, 94, 0.12); color: #16a34a; }
+.st-badge-cancelado { background: rgba(13, 13, 13, 0.06);  color: #4b5563; }
+.st-badge-activo    { background: rgba(34, 197, 94, 0.12); color: #16a34a; }
+.st-badge-inactivo  { background: rgba(13, 13, 13, 0.06);  color: #6b7280; }
+
+/* ── Modal ── */
+.st-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 13, 13, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.st-modal {
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(13, 13, 13, 0.24);
+  width: 100%;
+  max-width: 520px;
+  padding: 24px;
+}
+
+/* ── Mapa ── */
+.st-map-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  border: 1px solid #f0f0f0;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  position: relative;
+}
+
+.st-fleet-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px 16px;
+  z-index: 500;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  min-width: 200px;
+}
+
+.st-fleet-badge-title {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #9ca3af;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+/* ── Truck markers ── */
+.truck-marker {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  color: #fff;
+}
+
+.truck-marker.ok  { background: #e53935; }
+.truck-marker.err { background: #f97316; }
+.truck-marker.off { background: #9ca3af; }
+
+.truck-marker__pulse {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 2px solid #e53935;
+  animation: st-pulse 1.8s ease-out infinite;
+  pointer-events: none;
+  opacity: 0.6;
+  top: 0;
+  left: 0;
+}
+
+.truck-marker .pulse {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  animation: st-pulse 1.8s ease-out infinite;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+@keyframes st-pulse {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  100% { transform: scale(2.2); opacity: 0;   }
+}
+
+/* ── Misc ── */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.st-action-btn {
+  background: transparent;
+  border: 1px solid #e0e0e0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.st-action-btn:hover {
+  border-color: #0d0d0d;
+  color: #0d0d0d;
+}
+
+.st-action-btn.danger:hover {
+  border-color: #e53935;
+  color: #e53935;
+}
+
+.st-section-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #e53935;
+  text-transform: uppercase;
+}
+
+.st-section-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0d0d0d;
+  margin: 4px 0 0;
+}
+
+.st-flash-ok {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #16a34a;
+}
