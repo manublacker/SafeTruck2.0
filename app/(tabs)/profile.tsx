@@ -141,7 +141,7 @@ export default function ProfileScreen() {
       {/* Vehículo activo */}
       {activeVehicle && (
         <View style={s.section}>
-          <Text style={s.sectionLabel}>🚛 VEHÍCULO ACTIVO</Text>
+          <Text style={s.sectionLabel}> VEHÍCULO ACTIVO</Text>
 
           {editingVehicle?.id === activeVehicle.id ? (
             <View style={s.card}>
@@ -194,7 +194,7 @@ export default function ProfileScreen() {
       {/* Lista de vehículos */}
       {vehicles.length > 1 && (
         <View style={s.section}>
-          <Text style={s.sectionLabel}>MIS VEHÍCULOS</Text>
+          <Text style={s.sectionLabel}> MIS VEHÍCULOS</Text>
           {vehicles.map(v => (
             <TouchableOpacity
               key={v.id}

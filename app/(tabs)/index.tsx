@@ -8,6 +8,7 @@ import * as Location from 'expo-location'
 import { useStore } from '../../src/store/useStore'
 import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme } from '../../src/theme'
+import { Ionicons } from '@expo/vector-icons'
 
 const BACKEND = 'https://safetruck-backend-production.up.railway.app'
 
@@ -67,7 +68,7 @@ html,body,#map { width:100%;height:100%; }
   function setUserLocation(lat, lng) {
     if (userMarker) map.removeLayer(userMarker);
     userMarker = L.circleMarker([lat, lng], {
-      radius: 7, fillColor: '#007AFF', color: 'white', weight: 2, fillOpacity: 1
+      radius: 7, fillColor: '#FF6B35', color: 'white', weight: 2, fillOpacity: 1
     }).addTo(map);
     map.setView([lat, lng], 14);
   }
@@ -351,11 +352,11 @@ export default function MapScreen() {
         {/* Barra de búsqueda */}
         <View style={s.searchRow}>
           <View style={s.searchBox}>
-            <Text style={s.searchIcon}>🔍</Text>
+            <Ionicons name="search-outline" size={16} color={t.text} />
             <TextInput
               style={s.searchInput}
               placeholder="Buscar destino..."
-              placeholderTextColor={t.textSoft}
+              placeholderTextColor={t.textMuted}
               value={searchText}
               onChangeText={onSearchChange}
               onFocus={() => setShowSearch(true)}
@@ -370,19 +371,16 @@ export default function MapScreen() {
           </View>
 
           <TouchableOpacity style={s.iconBtn} onPress={toggleTheme}>
-            <Text style={s.iconBtnText}>{isDark ? '☀️' : '🌙'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[s.iconBtn, reportMode && s.iconBtnDanger]}
-            onPress={toggleReportMode}
-          >
-            <Text style={s.iconBtnText}>{reportMode ? '✕' : '⚠️'}</Text>
+            <Ionicons
+              name={isDark ? 'sunny-outline' : 'moon-outline'}
+              size={18}
+              color={t.text}
+            />
           </TouchableOpacity>
 
           {currentRoute && (
             <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute}>
-              <Text style={s.iconBtnText}>✕</Text>
+              <Ionicons name="close-outline" size={18} color={t.danger} />
             </TouchableOpacity>
           )}
         </View>
@@ -402,15 +400,9 @@ export default function MapScreen() {
                 style={[s.searchResultItem, idx < searchResults.length - 1 && s.searchResultBorder]}
                 onPress={() => selectResult(result)}
               >
-                <Text style={s.searchResultIcon}>📍</Text>
-                <View style={s.searchResultTexts}>
-                  <Text style={s.searchResultName} numberOfLines={1}>
-                    {result.display_name.split(',')[0]}
-                  </Text>
-                  <Text style={s.searchResultAddr} numberOfLines={1}>
-                    {result.display_name.split(',').slice(1, 3).join(',')}
-                  </Text>
-                </View>
+                <Text style={s.searchResultName} numberOfLines={1}>
+                  {result.display_name.split(',')[0]}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -494,6 +486,19 @@ export default function MapScreen() {
         </View>
       )}
 
+      {/* FAB de reporte */}
+      <TouchableOpacity
+        style={[s.fab, reportMode && s.fabActive]}
+        onPress={toggleReportMode}
+        activeOpacity={0.85}
+      >
+        <Ionicons
+          name={reportMode ? 'close' : 'warning'}
+          size={32}
+          color="#fff"
+        />
+      </TouchableOpacity>
+
       {/* Modal de incidente */}
       <Modal visible={showIncidentModal} transparent animationType="slide">
         <View style={s.modalOverlay}>
@@ -551,7 +556,7 @@ function makeStyles(t: Theme) {
       shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
     },
     searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-    searchIcon: { fontSize: 14, color: t.textMuted },
+
     searchInput: { flex: 1, color: t.text, fontSize: 15, height: 36 },
     searchClear: { color: t.textMuted, fontSize: 14, paddingHorizontal: 4 },
 
@@ -561,7 +566,17 @@ function makeStyles(t: Theme) {
       paddingHorizontal: 10, paddingVertical: 7,
     },
     iconBtnDanger: { backgroundColor: t.dangerSoft },
-    iconBtnText: { fontSize: 15 },
+
+    // FAB de reporte (bottom right)
+    fab: {
+      position: 'absolute', bottom: 24, right: 16,
+      width: 62, height: 62, borderRadius: 31,
+      backgroundColor: t.accent,
+      alignItems: 'center', justifyContent: 'center',
+      shadowColor: '#000', shadowOpacity: 0.25,
+      shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 7,
+    },
+    fabActive: { backgroundColor: t.danger, shadowColor: t.danger },
 
     // Dropdown de resultados
     searchResults: {
@@ -598,7 +613,7 @@ function makeStyles(t: Theme) {
       borderWidth: 1, borderColor: t.border,
       paddingHorizontal: 16, paddingVertical: 10,
     },
-    hintPillText: { color: t.textMuted, fontSize: 13, textAlign: 'center', fontWeight: '500' },
+    hintPillText: { color: t.text, fontSize: 13, textAlign: 'center', fontWeight: '500' },
 
     // Loading overlay
     loadingOverlay: {

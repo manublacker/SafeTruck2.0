@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
+import { StatusBar } from 'expo-status-bar'
 import { supabase } from '../src/services/supabase'
 import { useStore } from '../src/store/useStore'
 
 export default function RootLayout() {
   const setProfile = useStore(s => s.setProfile)
+  const isDark = useStore(s => s.isDark)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -26,9 +28,12 @@ export default function RootLayout() {
   if (!ready) return null
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="auth" />
-    </Stack>
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="auth" />
+      </Stack>
+    </>
   )
 }
