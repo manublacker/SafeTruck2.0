@@ -1,0 +1,1368 @@
+/* =======================================================
+   main.css — SafeTruck Logistics Design System
+   Paleta: Charcoal / Blue (cool) / Humo / Ceniza / Pasteles
+   ======================================================= */
+
+:root {
+  color-scheme: light;
+  font-family: "Inter", "Manrope", system-ui, -apple-system, sans-serif;
+
+  /* ── Neutros ── */
+  --st-charcoal-dk: #1A2226;
+  --st-charcoal:    #263238;
+  --st-charcoal-90: rgba(38, 50, 56, 0.90);
+  --st-charcoal-12: rgba(38, 50, 56, 0.12);
+  --st-charcoal-06: rgba(38, 50, 56, 0.06);
+  --st-humo:        #F5F5F7;
+  --st-ceniza:      #9E9E9E;
+  --st-ceniza-dark: #616161;
+  --st-white:       #FFFFFF;
+
+  /* ── Acento azul frío ── */
+  --st-blue:        #0A84FF;   /* CTA fuerte */
+  --st-blue-soft:   #5AC8FA;   /* hover/glow */
+  --st-blue-dark:   #1E3A5F;   /* profundidad */
+
+  /* ── Pasteles complementarios ── */
+  --st-celeste:     #A8D8F0;
+  --st-menta:       #C9E4DE;
+  --st-lavanda:     #E8DFF5;
+
+  /* ── Estados ── */
+  --st-verde-ok:    #2E7D32;
+  --st-danger:      #C62828;
+
+  /* ── Aliases semánticos ── */
+  --bg:             #FAFAFC;
+  --surface:        #FFFFFF;
+  --surface-strong: #FFFFFF;
+  --text:           var(--st-charcoal);
+  --muted:          var(--st-ceniza-dark);
+  --primary:        var(--st-charcoal);
+  --primary-dark:   var(--st-charcoal-dk);
+  --accent:         var(--st-blue);
+  --accent-soft:    var(--st-blue-soft);
+  --line:           var(--st-charcoal-12);
+  --route:          var(--st-blue);
+  --shadow:         0 6px 20px rgba(38, 50, 56, 0.10);
+  --shadow-lg:      0 12px 32px rgba(38, 50, 56, 0.16);
+
+  /* ── Compat (a desaparecer cuando migremos los selectores) ── */
+  --st-amber:       var(--st-blue);
+  --st-amber-dark:  var(--st-blue-dark);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--st-charcoal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, p, ul {
+  margin: 0;
+}
+
+button,
+input,
+summary {
+  font: inherit;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+}
+
+/* ── Map ───────────────────────────────────────────────────── */
+
+.map-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+#route-map {
+  width: 100%;
+  height: 100%;
+}
+
+.map-overlay {
+  display: none;
+}
+
+.map-legend {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 490;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--st-white);
+  color: var(--st-charcoal);
+  border: 1px solid var(--st-charcoal-12);
+  box-shadow: var(--shadow);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-route {
+  background: var(--route);
+}
+
+.leaflet-container {
+  font: inherit;
+}
+
+/* ── Search panel (desktop) ────────────────────────────────── */
+
+.search-panel {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 500;
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--st-humo);
+  border: 1px solid var(--st-charcoal-12);
+  box-shadow: var(--shadow-lg);
+}
+
+.search-panel::-webkit-scrollbar {
+  display: none;
+}
+
+.search-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.search-panel-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--st-charcoal);
+  letter-spacing: -0.01em;
+}
+
+.status-pill-mini {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--st-ceniza-dark);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--st-charcoal-06);
+}
+
+.status-pill-mini[data-status="loading"] {
+  color: var(--st-amber-dark);
+  background: rgba(255, 179, 0, 0.12);
+}
+
+.status-pill-mini[data-status="found"] {
+  color: var(--st-verde-ok);
+  background: rgba(46, 125, 50, 0.10);
+}
+
+/* ── Combined origin/destination widget ──────────────────── */
+
+.search-widget {
+  background: var(--st-white);
+  border: 1px solid var(--st-charcoal-12);
+  border-radius: 12px;
+  padding: 4px 12px;
+  margin-bottom: 12px;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.search-row-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--st-charcoal);
+}
+
+.search-row-icon--origin::before {
+  content: "";
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--st-charcoal);
+}
+
+.search-row-icon--destination::before {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 10px solid var(--st-charcoal);
+}
+
+.search-row-input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--st-charcoal);
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0;
+}
+
+.search-row-input::placeholder {
+  color: var(--st-ceniza);
+  font-weight: 400;
+}
+
+.search-row-divider {
+  height: 1px;
+  background: var(--st-charcoal-12);
+  margin-left: 28px;
+}
+
+.search-status-line {
+  font-size: 0.75rem;
+  color: var(--st-ceniza-dark);
+  line-height: 1.4;
+  margin: 6px 4px 12px;
+  min-height: 16px;
+}
+
+/* Suggestions dropdown for combined widget */
+.search-widget .suggestions-list {
+  position: absolute;
+  z-index: 520;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--st-white);
+  border: 1px solid var(--st-charcoal-12);
+  box-shadow: var(--shadow);
+  width: calc(100% - 24px);
+}
+
+.search-widget .suggestions-list li + li {
+  margin-top: 2px;
+}
+
+.search-widget .suggestions-list button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--st-charcoal);
+  text-align: left;
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.search-widget .suggestions-list button:hover {
+  background: var(--st-humo);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Wrappers for absolute-positioned suggestions */
+.search-row-wrap {
+  position: relative;
+}
+
+/* ── Truck profile (collapsible) ──────────────────────────── */
+
+.truck-details {
+  border: 1px solid var(--st-charcoal-12);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--st-white);
+  margin-bottom: 14px;
+}
+
+.truck-details[open] {
+  padding-bottom: 14px;
+}
+
+.truck-details summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--st-charcoal);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.truck-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.truck-details summary::after {
+  content: "+";
+  color: var(--st-ceniza);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.truck-details[open] summary::after {
+  content: "−";
+}
+
+.truck-selector {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  margin-bottom: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.truck-selector::-webkit-scrollbar {
+  display: none;
+}
+
+.truck-card {
+  flex: 0 0 auto;
+  width: 130px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--st-humo);
+  border: 1px solid var(--st-charcoal-12);
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.truck-card:hover {
+  background: var(--st-white);
+  border-color: var(--st-charcoal);
+  transform: none;
+  box-shadow: none;
+}
+
+.truck-card.active {
+  background: var(--st-white);
+  border-color: var(--st-charcoal);
+  border-width: 2px;
+  box-shadow: none;
+}
+
+.truck-card-name {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--st-charcoal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.truck-card-spec {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--st-ceniza-dark);
+  line-height: 1.4;
+}
+
+.truck-card-new .truck-card-name {
+  color: var(--st-charcoal);
+}
+
+.truck-card-new {
+  border-style: dashed;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--st-charcoal);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.toggle input[type="checkbox"] {
+  accent-color: var(--st-charcoal);
+}
+
+/* ── Generic field (used in login + truck popup) ──────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--st-charcoal);
+  letter-spacing: 0.01em;
+}
+
+.field input {
+  width: 100%;
+  border: 1px solid var(--st-charcoal-12);
+  border-radius: 8px;
+  padding: 14px 14px;
+  background: var(--st-white);
+  color: var(--st-charcoal);
+  font-size: 0.95rem;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.field input::placeholder {
+  color: var(--st-ceniza);
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--st-charcoal);
+  box-shadow: 0 0 0 3px var(--st-charcoal-12);
+}
+
+/* ── Buttons ──────────────────────────────────────────────── */
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  background: var(--st-charcoal);
+  color: var(--st-white);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+button:hover {
+  background: var(--st-charcoal-90);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: progress;
+  background: var(--st-ceniza);
+}
+
+/* PRIMARY CTA — usar UNA sola por pantalla */
+.cta-primary {
+  width: 100%;
+  background: var(--st-amber);
+  color: var(--st-charcoal);
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+  padding: 16px;
+  min-height: 52px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(255, 179, 0, 0.28);
+}
+
+.cta-primary:hover {
+  background: var(--st-amber-dark);
+  transform: none;
+}
+
+.cta-primary:disabled {
+  background: var(--st-ceniza);
+  color: var(--st-white);
+  box-shadow: none;
+  opacity: 1;
+}
+
+.secondary-button {
+  width: 100%;
+  background: var(--st-humo);
+  color: var(--st-charcoal);
+  border: 1px solid var(--st-charcoal-12);
+  font-weight: 700;
+  padding: 14px;
+  min-height: 48px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.secondary-button:hover {
+  background: var(--st-white);
+  border-color: var(--st-charcoal);
+}
+
+.secondary-button:disabled {
+  background: var(--st-humo);
+  color: var(--st-ceniza);
+  cursor: not-allowed;
+  border-color: var(--st-charcoal-12);
+}
+
+/* Submit del SearchPanel form (sin clase explícita) */
+#submit-button {
+  width: 100%;
+  background: var(--st-amber);
+  color: var(--st-charcoal);
+  font-weight: 800;
+  font-size: 1rem;
+  padding: 16px;
+  min-height: 52px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(255, 179, 0, 0.28);
+}
+
+#submit-button:hover {
+  background: var(--st-amber-dark);
+}
+
+#submit-button:disabled {
+  background: var(--st-ceniza);
+  color: var(--st-white);
+  box-shadow: none;
+}
+
+/* ── Route sheet (bottom) ─────────────────────────────────── */
+
+.route-sheet {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 500;
+  width: min(420px, calc(100vw - 32px));
+  padding: 16px 18px 18px;
+  border-radius: 14px;
+  background: var(--st-humo);
+  border: 1px solid var(--st-charcoal-12);
+  box-shadow: var(--shadow-lg);
+}
+
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--st-ceniza);
+  margin: 0 auto 14px;
+  opacity: 0.5;
+}
+
+.sheet-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--st-ceniza-dark);
+}
+
+#route-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--st-charcoal);
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.route-summary {
+  margin-top: 8px;
+  color: var(--st-ceniza-dark);
+  line-height: 1.5;
+  font-size: 0.85rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Hero metrics row (ETA / Distance) */
+.metrics-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px;
+  background: var(--st-white);
+  border-radius: 10px;
+  border: 1px solid var(--st-charcoal-12);
+}
+
+.metric {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.metric + .metric {
+  border-left: 1px solid var(--st-charcoal-12);
+  padding-left: 12px;
+}
+
+.metric-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--st-charcoal);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.metric-unit {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--st-ceniza-dark);
+  margin-left: 2px;
+}
+
+.metric-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--st-ceniza-dark);
+  margin-top: 2px;
+}
+
+.route-actions {
+  margin-top: 14px;
+}
+
+.route-steps {
+  margin-top: 14px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.route-steps li {
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--st-charcoal-12);
+  color: var(--st-charcoal);
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.route-steps li:last-child {
+  border-bottom: 0;
+}
+
+.route-steps li strong {
+  display: inline-block;
+  width: 22px;
+  font-weight: 800;
+  color: var(--st-ceniza-dark);
+}
+
+.route-steps li small {
+  display: block;
+  margin-top: 2px;
+  margin-left: 22px;
+  color: var(--st-ceniza-dark);
+  font-size: 0.78rem;
+}
+
+.warning-item {
+  background: rgba(46, 125, 50, 0.06) !important;
+  border-bottom-color: rgba(46, 125, 50, 0.18) !important;
+  color: var(--st-verde-ok) !important;
+  font-weight: 600;
+}
+
+.route-popup {
+  font-size: 0.88rem;
+  color: var(--st-charcoal);
+}
+
+/* ── Auth forms (login + register share these) ────────────── */
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-form button[type="submit"] {
+  margin-top: 6px;
+  width: 100%;
+}
+
+.auth-error {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  color: #c62828;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.auth-optional {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--st-ceniza);
+  font-size: 0.8em;
+}
+
+/* Tabs (used by Login + AuthModal) */
+.auth-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--st-charcoal-12);
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 12px 8px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--st-ceniza-dark);
+  font-size: 0.88rem;
+  font-weight: 700;
+  box-shadow: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.auth-tab:hover {
+  background: transparent;
+  color: var(--st-charcoal);
+  transform: none;
+  box-shadow: none;
+}
+
+.auth-tab.active {
+  background: transparent;
+  color: var(--st-charcoal);
+  border-bottom-color: var(--st-amber);
+  box-shadow: none;
+}
+
+/* ── Login page ───────────────────────────────────────────── */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0;
+  background: var(--st-white);
+}
+
+.login-bg-decoration {
+  display: none;
+}
+
+.login-card {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  padding: 48px 28px 32px;
+  border-radius: 0;
+  background: var(--st-white);
+  border: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Split layout (desktop only, ≥ 900px) ─────────────────── */
+
+.login-page.login-page--split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  background: var(--st-white);
+}
+
+.login-pane-3d {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 179, 0, 0.10), transparent 45%),
+    linear-gradient(160deg, #2C383F 0%, #1A2226 100%);
+  color: var(--st-white);
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+.login-3d-canvas {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  position: relative;
+}
+
+.login-3d-copy {
+  padding: 32px 48px 56px;
+  position: relative;
+  z-index: 1;
+}
+
+.login-3d-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--st-amber);
+  margin-bottom: 14px;
+}
+
+.login-3d-headline {
+  font-size: 1.85rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  color: var(--st-white);
+  margin-bottom: 14px;
+  max-width: 22ch;
+}
+
+.login-3d-sub {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.68);
+  max-width: 36ch;
+}
+
+.login-page--split .login-card {
+  margin: auto;
+  padding: 56px 48px;
+  max-width: 440px;
+  width: 100%;
+  align-self: center;
+  background: var(--st-white);
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.login-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--st-charcoal);
+  color: var(--st-white);
+  flex-shrink: 0;
+}
+
+.login-logo svg {
+  width: 26px;
+  height: 26px;
+}
+
+.login-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--st-ceniza-dark);
+  margin-bottom: 4px;
+}
+
+.login-title {
+  font-size: 1.6rem;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--st-charcoal);
+  margin-top: 0;
+  font-weight: 800;
+}
+
+.login-subtitle {
+  color: var(--st-ceniza-dark);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin-bottom: 28px;
+}
+
+.login-tabs {
+  margin-bottom: 24px;
+}
+
+.login-submit-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 16px;
+  font-size: 1rem;
+  background: var(--st-amber);
+  color: var(--st-charcoal);
+  font-weight: 800;
+  min-height: 52px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(255, 179, 0, 0.28);
+}
+
+.login-submit-btn:hover {
+  background: var(--st-amber-dark);
+  transform: none;
+}
+
+.login-submit-btn:disabled {
+  background: var(--st-ceniza);
+  color: var(--st-white);
+  box-shadow: none;
+}
+
+@media (min-width: 600px) {
+  .login-page {
+    align-items: center;
+    background: var(--st-humo);
+  }
+  .login-card {
+    margin: 24px 0;
+    padding: 40px 36px 36px;
+    border-radius: 14px;
+    background: var(--st-white);
+    border: 1px solid var(--st-charcoal-12);
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+/* ── Truck toggle row (register form) ─────────────────────── */
+
+.truck-toggle-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.truck-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--st-humo);
+  border: 1px solid var(--st-charcoal-12);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.truck-toggle-label:hover {
+  background: var(--st-white);
+  border-color: var(--st-charcoal);
+}
+
+.truck-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--st-charcoal);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.truck-toggle-text {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--st-charcoal);
+  flex: 1;
+}
+
+.truck-toggle-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--st-charcoal);
+  color: var(--st-white);
+  font-size: 0.72rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.truck-popup {
+  width: 100%;
+  margin-top: 10px;
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--st-humo);
+  border: 1px solid var(--st-charcoal-12);
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.truck-popup-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--st-ceniza-dark);
+}
+
+.truck-popup-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* ── User button (top-right) — tokens only, layout intact ── */
+
+.user-btn-wrapper {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 600;
+}
+
+.user-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.user-btn--guest {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 600;
+  background: var(--st-white);
+  color: var(--st-charcoal);
+  border: 1px solid var(--st-charcoal-12);
+  box-shadow: var(--shadow);
+}
+
+.user-btn--guest:hover {
+  background: var(--st-humo);
+  transform: none;
+}
+
+.user-btn--avatar {
+  background: var(--st-charcoal);
+  color: var(--st-white);
+  border: none;
+  box-shadow: var(--shadow);
+}
+
+.user-btn--avatar:hover {
+  background: var(--st-charcoal-90);
+  transform: none;
+}
+
+.user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.user-name-short {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── User dropdown ────────────────────────────────────────── */
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 280px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--st-white);
+  border: 1px solid var(--st-charcoal-12);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: dropIn 0.18s ease;
+}
+
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.user-drop-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-drop-avatar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--st-charcoal);
+  color: var(--st-white);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.user-drop-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--st-charcoal);
+}
+
+.user-drop-email,
+.user-drop-company {
+  font-size: 0.82rem;
+  color: var(--st-ceniza-dark);
+  margin-top: 2px;
+}
+
+.user-drop-section {
+  border-top: 1px solid var(--st-charcoal-12);
+  padding-top: 12px;
+}
+
+.user-drop-section-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--st-ceniza-dark);
+  margin-bottom: 8px;
+}
+
+.user-truck-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-truck-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--st-humo);
+  border: 1px solid var(--st-charcoal-12);
+}
+
+.user-truck-name {
+  display: block;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--st-charcoal);
+}
+
+.user-truck-specs {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--st-ceniza-dark);
+}
+
+.user-drop-no-trucks {
+  font-size: 0.85rem;
+  color: var(--st-ceniza-dark);
+  border-top: 1px solid var(--st-charcoal-12);
+  padding-top: 12px;
+}
+
+.user-drop-logout {
+  width: 100%;
+  padding: 11px 16px;
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.08);
+  color: #c62828;
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  font-size: 0.85rem;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.user-drop-logout:hover {
+  background: rgba(220, 38, 38, 0.14);
+  box-shadow: none;
+}
+
+/* ── Auth modal (kept compatible) ────────────────────────── */
+
+.auth-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  background: rgba(38, 50, 56, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.auth-modal {
+  width: min(420px, 100%);
+  padding: 28px;
+  border-radius: 14px;
+  background: var(--st-white);
+  border: 1px solid var(--st-charcoal-12);
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Legacy fallbacks (mantienen compatibilidad si quedan) ─ */
+
+.brand-row {
+  display: none;
+}
+
+.eyebrow,
+.status-pill {
+  display: none;
+}
+
+.location-field {
+  position: relative;
+}
+
+.field-status {
+  margin-top: 6px;
+  color: var(--st-ceniza-dark);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.suggestions-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 520;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 10px;
+  background: var(--st-white);
+  border: 1px solid var(--st-charcoal-12);
+  box-shadow: var(--shadow);
+}
+
+.suggestions-list li + li {
+  margin-top: 2px;
+}
+
+.suggestions-list button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--st-charcoal);
+  text-align: left;
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.suggestions-list button:hover {
+  background: var(--st-humo);
+  transform: none;
+  box-shadow: none;
+}
