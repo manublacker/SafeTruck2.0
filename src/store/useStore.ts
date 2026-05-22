@@ -1,7 +1,12 @@
 import { create } from 'zustand'
+import { Appearance } from 'react-native'
 import { Profile, Vehicle, Route, Coordinates, Incident } from '../types'
 
 interface AppState {
+  // Theme
+  isDark: boolean
+  toggleTheme: () => void
+
   // Auth
   profile: Profile | null
   setProfile: (profile: Profile | null) => void
@@ -35,6 +40,10 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set) => ({
+  // Theme
+  isDark: Appearance.getColorScheme() !== 'light',
+  toggleTheme: () => set((state) => ({ isDark: !state.isDark })),
+
   // Auth
   profile: null,
   setProfile: (profile) => set({ profile }),
