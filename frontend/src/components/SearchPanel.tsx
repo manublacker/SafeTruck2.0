@@ -203,7 +203,7 @@ export default function SearchPanel({ onSearch, isLoading, statusLabel }: Props)
   return (
     <section className="search-panel">
       <header className="search-panel-header">
-        <h1 className="search-panel-title">Ruta</h1>
+        <h1 className="search-panel-title">Planificá tu ruta</h1>
         <span className="status-pill-mini" data-status={pillStatus}>
           {statusLabel}
         </span>
