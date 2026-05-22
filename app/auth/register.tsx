@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
+import { getTheme, Theme } from '../../src/theme'
 import { supabase } from '../../src/services/supabase'
 import {
   formatCuit,
@@ -63,6 +64,8 @@ const INITIAL_FORM: FormData = {
 
 type FieldErrors = Partial<Record<keyof FormData | 'otp' | 'general', string>>
 
+type S = ReturnType<typeof makeStyles>
+
 export default function RegisterScreen() {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState<FormData>(INITIAL_FORM)
@@ -70,7 +73,11 @@ export default function RegisterScreen() {
   const [otpDigits, setOtpDigits] = useState<string[]>(() => Array(OTP_LENGTH).fill(''))
   const [resendIn, setResendIn] = useState(0)
   const [loading, setLoading] = useState(false)
-  const setProfile = useStore(s => s.setProfile)
+
+  const setProfile = useStore(st => st.setProfile)
+  const isDark = useStore(st => st.isDark)
+  const t = getTheme(isDark)
+  const s = useMemo(() => makeStyles(t), [isDark])
   const router = useRouter()
 
   useEffect(() => {
@@ -211,7 +218,7 @@ export default function RegisterScreen() {
           resizeMode="contain"
         />
 
-        <ProgressBar step={step} />
+        <ProgressBar step={step} s={s} />
 
         {step > 1 && step < TOTAL_STEPS && (
           <TouchableOpacity style={s.backLink} onPress={goBack}>
@@ -220,10 +227,10 @@ export default function RegisterScreen() {
         )}
 
         {step === 1 && (
-          <StepAccess form={form} errors={errors} onChange={updateField} />
+          <StepAccess form={form} errors={errors} onChange={updateField} s={s} t={t} />
         )}
         {step === 2 && (
-          <StepCompany form={form} errors={errors} onChange={updateField} />
+          <StepCompany form={form} errors={errors} onChange={updateField} s={s} t={t} />
         )}
         {step === 3 && (
           <StepVerification
@@ -233,9 +240,10 @@ export default function RegisterScreen() {
             resendIn={resendIn}
             onDigitsChange={setOtpDigits}
             onResend={handleResendOtp}
+            s={s}
           />
         )}
-        {step === 4 && <StepPlan onChoose={handleChoosePlan} loading={loading} />}
+        {step === 4 && <StepPlan onChoose={handleChoosePlan} loading={loading} s={s} t={t} />}
 
         {errors.general && <Text style={s.error}>{errors.general}</Text>}
 
@@ -263,7 +271,7 @@ export default function RegisterScreen() {
   )
 }
 
-function ProgressBar({ step }: { step: number }) {
+function ProgressBar({ step, s }: { step: number; s: S }) {
   return (
     <View style={s.progressRow}>
       {REGISTER_STEPS.map((label, index) => {
@@ -293,9 +301,11 @@ interface StepFieldProps {
   form: FormData
   errors: FieldErrors
   onChange: <K extends keyof FormData>(key: K, value: FormData[K]) => void
+  s: S
+  t: Theme
 }
 
-function StepAccess({ form, errors, onChange }: StepFieldProps) {
+function StepAccess({ form, errors, onChange, s, t }: StepFieldProps) {
   return (
     <View>
       <Text style={s.title}>Creá tu cuenta</Text>
@@ -304,7 +314,7 @@ function StepAccess({ form, errors, onChange }: StepFieldProps) {
       <TextInput
         style={s.input}
         placeholder="empresa@mail.com"
-        placeholderTextColor="#8E8E93"
+        placeholderTextColor={t.textSoft}
         value={form.email}
         onChangeText={value => onChange('email', value)}
         autoCapitalize="none"
@@ -315,7 +325,7 @@ function StepAccess({ form, errors, onChange }: StepFieldProps) {
       <TextInput
         style={s.input}
         placeholder="Contraseña"
-        placeholderTextColor="#8E8E93"
+        placeholderTextColor={t.textSoft}
         value={form.password}
         onChangeText={value => onChange('password', value)}
         secureTextEntry
@@ -325,7 +335,7 @@ function StepAccess({ form, errors, onChange }: StepFieldProps) {
       <TextInput
         style={s.input}
         placeholder="Repetí tu contraseña"
-        placeholderTextColor="#8E8E93"
+        placeholderTextColor={t.textSoft}
         value={form.confirmPassword}
         onChangeText={value => onChange('confirmPassword', value)}
         secureTextEntry
@@ -346,7 +356,7 @@ function StepAccess({ form, errors, onChange }: StepFieldProps) {
   )
 }
 
-function StepCompany({ form, errors, onChange }: StepFieldProps) {
+function StepCompany({ form, errors, onChange, s, t }: StepFieldProps) {
   return (
     <View>
       <Text style={s.title}>Tu empresa</Text>
@@ -355,7 +365,7 @@ function StepCompany({ form, errors, onChange }: StepFieldProps) {
       <TextInput
         style={s.input}
         placeholder="Nombre de la empresa"
-        placeholderTextColor="#8E8E93"
+        placeholderTextColor={t.textSoft}
         value={form.companyName}
         onChangeText={value => onChange('companyName', value)}
       />
@@ -364,7 +374,7 @@ function StepCompany({ form, errors, onChange }: StepFieldProps) {
       <TextInput
         style={s.input}
         placeholder="CUIT — XX-XXXXXXXX-X"
-        placeholderTextColor="#8E8E93"
+        placeholderTextColor={t.textSoft}
         value={form.cuit}
         onChangeText={value => onChange('cuit', formatCuit(value))}
         keyboardType="number-pad"
@@ -376,6 +386,7 @@ function StepCompany({ form, errors, onChange }: StepFieldProps) {
         options={INDUSTRY_OPTIONS}
         selected={form.rubro}
         onSelect={value => onChange('rubro', value)}
+        s={s}
       />
       {errors.rubro && <Text style={s.error}>{errors.rubro}</Text>}
 
@@ -384,6 +395,7 @@ function StepCompany({ form, errors, onChange }: StepFieldProps) {
         options={FLEET_SIZE_OPTIONS}
         selected={form.truckCount}
         onSelect={value => onChange('truckCount', value)}
+        s={s}
       />
       {errors.truckCount && <Text style={s.error}>{errors.truckCount}</Text>}
     </View>
@@ -394,10 +406,12 @@ function OptionChips({
   options,
   selected,
   onSelect,
+  s,
 }: {
   options: readonly string[]
   selected: string
   onSelect: (value: string) => void
+  s: S
 }) {
   return (
     <View style={s.chipsRow}>
@@ -424,6 +438,7 @@ function StepVerification({
   resendIn,
   onDigitsChange,
   onResend,
+  s,
 }: {
   email: string
   digits: string[]
@@ -431,6 +446,7 @@ function StepVerification({
   resendIn: number
   onDigitsChange: (digits: string[]) => void
   onResend: () => void
+  s: S
 }) {
   const inputRefs = useRef<Array<TextInput | null>>([])
 
@@ -476,11 +492,7 @@ function StepVerification({
       </View>
       {error && <Text style={[s.error, s.errorCentered]}>{error}</Text>}
 
-      <TouchableOpacity
-        style={s.resendRow}
-        onPress={onResend}
-        disabled={resendIn > 0}
-      >
+      <TouchableOpacity style={s.resendRow} onPress={onResend} disabled={resendIn > 0}>
         <Text style={[s.linkText, resendIn > 0 && s.resendDisabled]}>
           {resendIn > 0 ? `Reenviar en ${resendIn}s` : 'Reenviar código'}
         </Text>
@@ -492,9 +504,13 @@ function StepVerification({
 function StepPlan({
   onChoose,
   loading,
+  s,
+  t,
 }: {
   onChoose: (plan: SubscriptionPlan) => void
   loading: boolean
+  s: S
+  t: Theme
 }) {
   return (
     <View>
@@ -502,7 +518,7 @@ function StepPlan({
       <Text style={[s.subtitle, s.textCentered]}>Comenzá a trackear tu flota hoy.</Text>
 
       {PLAN_OPTIONS.map(plan => (
-        <PlanCard key={plan.slug} plan={plan} loading={loading} onChoose={onChoose} />
+        <PlanCard key={plan.slug} plan={plan} loading={loading} onChoose={onChoose} s={s} />
       ))}
     </View>
   )
@@ -512,10 +528,12 @@ function PlanCard({
   plan,
   loading,
   onChoose,
+  s,
 }: {
   plan: PlanOption
   loading: boolean
   onChoose: (plan: SubscriptionPlan) => void
+  s: S
 }) {
   return (
     <View style={[s.planCard, plan.highlighted && s.planCardHighlighted]}>
@@ -545,123 +563,125 @@ function PlanCard({
   )
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1C1C1E' },
-  scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 48 },
-  logo: { width: 180, height: 150, alignSelf: 'center', marginBottom: 8 },
-  title: { fontSize: 26, fontWeight: '700', color: '#fff', marginBottom: 6 },
-  subtitle: { fontSize: 14, color: '#8E8E93', marginBottom: 24 },
-  textCentered: { textAlign: 'center' },
+function makeStyles(t: Theme) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 48 },
+    logo: { width: 180, height: 150, alignSelf: 'center', marginBottom: 8 },
+    title: { fontSize: 26, fontWeight: '700', color: t.text, marginBottom: 6 },
+    subtitle: { fontSize: 14, color: t.textMuted, marginBottom: 24 },
+    textCentered: { textAlign: 'center' },
 
-  progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
-  progressItem: { flex: 1, alignItems: 'center' },
-  progressCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#2C2C2E',
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  progressCircleActive: { borderColor: '#FF6B35' },
-  progressCircleDone: { backgroundColor: '#FF6B35', borderColor: '#FF6B35' },
-  progressCircleText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  progressLabel: { color: '#8E8E93', fontSize: 11 },
-  progressLabelActive: { color: '#fff', fontWeight: '600' },
+    progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+    progressItem: { flex: 1, alignItems: 'center' },
+    progressCircle: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: t.card,
+      borderWidth: 1,
+      borderColor: t.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 6,
+    },
+    progressCircleActive: { borderColor: t.accent },
+    progressCircleDone: { backgroundColor: t.accent, borderColor: t.accent },
+    progressCircleText: { color: t.text, fontSize: 13, fontWeight: '600' },
+    progressLabel: { color: t.textMuted, fontSize: 11 },
+    progressLabelActive: { color: t.text, fontWeight: '600' },
 
-  backLink: { marginBottom: 12 },
-  backText: { color: '#FF6B35', fontSize: 14 },
+    backLink: { marginBottom: 12 },
+    backText: { color: t.accent, fontSize: 14 },
 
-  input: {
-    backgroundColor: '#2C2C2E',
-    color: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-  },
-  fieldLabel: { color: '#8E8E93', fontSize: 13, marginTop: 12, marginBottom: 8 },
-  error: { color: '#FF453A', fontSize: 13, marginBottom: 8 },
-  errorCentered: { textAlign: 'center' },
+    input: {
+      backgroundColor: t.card,
+      color: t.text,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 8,
+      fontSize: 16,
+      borderWidth: 1,
+      borderColor: t.border,
+    },
+    fieldLabel: { color: t.textMuted, fontSize: 13, marginTop: 12, marginBottom: 8 },
+    error: { color: t.danger, fontSize: 13, marginBottom: 8 },
+    errorCentered: { textAlign: 'center' },
 
-  checkboxRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-    backgroundColor: '#2C2C2E',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  checkboxChecked: { backgroundColor: '#FF6B35', borderColor: '#FF6B35' },
-  checkboxMark: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  checkboxLabel: { color: '#fff', fontSize: 13, flex: 1 },
+    checkboxRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+    checkboxChecked: { backgroundColor: t.accent, borderColor: t.accent },
+    checkboxMark: { color: '#fff', fontSize: 13, fontWeight: '700' },
+    checkboxLabel: { color: t.text, fontSize: 13, flex: 1 },
 
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: '#2C2C2E',
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-  },
-  chipActive: { backgroundColor: '#FF6B35', borderColor: '#FF6B35' },
-  chipText: { color: '#8E8E93', fontSize: 13 },
-  chipTextActive: { color: '#fff', fontWeight: '600' },
+    chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    chip: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: t.card,
+      borderWidth: 1,
+      borderColor: t.border,
+    },
+    chipActive: { backgroundColor: t.accent, borderColor: t.accent },
+    chipText: { color: t.textMuted, fontSize: 13 },
+    chipTextActive: { color: '#fff', fontWeight: '600' },
 
-  otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  otpInput: {
-    width: 48,
-    height: 56,
-    backgroundColor: '#2C2C2E',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  otpInputFilled: { borderColor: '#FF6B35' },
-  resendRow: { marginTop: 12, alignItems: 'center' },
-  resendDisabled: { color: '#8E8E93' },
+    otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    otpInput: {
+      width: 48,
+      height: 56,
+      backgroundColor: t.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      color: t.text,
+      fontSize: 22,
+      fontWeight: '700',
+    },
+    otpInputFilled: { borderColor: t.accent },
+    resendRow: { marginTop: 12, alignItems: 'center' },
+    resendDisabled: { color: t.textMuted },
 
-  planCard: {
-    backgroundColor: '#2C2C2E',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-    padding: 20,
-    marginBottom: 16,
-  },
-  planCardHighlighted: { borderColor: '#FF6B35' },
-  planBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FF6B35',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 8,
-  },
-  planBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  planName: { color: '#fff', fontSize: 20, fontWeight: '700' },
-  planPriceRow: { flexDirection: 'row', alignItems: 'flex-end', marginVertical: 8 },
-  planPrice: { color: '#fff', fontSize: 28, fontWeight: '700' },
-  planPeriod: { color: '#8E8E93', fontSize: 13, marginLeft: 6, marginBottom: 4 },
-  planFeature: { color: '#fff', fontSize: 13, marginBottom: 4 },
-  planBtn: { marginTop: 12 },
+    planCard: {
+      backgroundColor: t.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      padding: 20,
+      marginBottom: 16,
+    },
+    planCardHighlighted: { borderColor: t.accent },
+    planBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: t.accent,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      marginBottom: 8,
+    },
+    planBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+    planName: { color: t.text, fontSize: 20, fontWeight: '700' },
+    planPriceRow: { flexDirection: 'row', alignItems: 'flex-end', marginVertical: 8 },
+    planPrice: { color: t.text, fontSize: 28, fontWeight: '700' },
+    planPeriod: { color: t.textMuted, fontSize: 13, marginLeft: 6, marginBottom: 4 },
+    planFeature: { color: t.text, fontSize: 13, marginBottom: 4 },
+    planBtn: { marginTop: 12 },
 
-  btn: { backgroundColor: '#FF6B35', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 16 },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  link: { marginTop: 20, alignItems: 'center' },
-  linkText: { color: '#FF6B35', fontSize: 14 },
-})
+    btn: { backgroundColor: t.accent, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 16 },
+    btnDisabled: { opacity: 0.6 },
+    btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+    link: { marginTop: 20, alignItems: 'center' },
+    linkText: { color: t.accent, fontSize: 14 },
+  })
+}
