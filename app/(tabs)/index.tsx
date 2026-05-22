@@ -342,6 +342,7 @@ export default function MapScreen() {
         style={s.map}
         source={mapSource}
         onMessage={onMessage}
+        onLoadEnd={() => webRef.current?.injectJavaScript(`setMapTheme(${isDark}); true;`)}
         javaScriptEnabled
         domStorageEnabled
         originWhitelist={['*']}
@@ -488,7 +489,7 @@ export default function MapScreen() {
 
       {/* FAB de reporte */}
       <TouchableOpacity
-        style={[s.fab, reportMode && s.fabActive]}
+        style={[s.fab, reportMode && s.fabActive, showInfo && currentRoute && s.fabRaised]}
         onPress={toggleReportMode}
         activeOpacity={0.85}
       >
@@ -577,6 +578,7 @@ function makeStyles(t: Theme) {
       shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 7,
     },
     fabActive: { backgroundColor: t.danger, shadowColor: t.danger },
+    fabRaised: { bottom: 210 },
 
     // Dropdown de resultados
     searchResults: {
