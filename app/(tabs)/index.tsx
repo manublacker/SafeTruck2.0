@@ -301,7 +301,7 @@ export default function MapScreen() {
       setShowIncidentModal(false)
       setReportMode(false)
       reportModeRef.current = false
-      Alert.alert('✅ Reporte enviado', 'Gracias por contribuir a SafeTruck')
+      Alert.alert('Reporte enviado', 'Gracias por contribuir a SafeTruck')
       loadIncidents()
       webRef.current?.injectJavaScript(
         `addIncidentMarker(${incidentLocation.lat}, ${incidentLocation.lng}, '${type}'); true;`
