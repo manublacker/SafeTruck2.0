@@ -214,7 +214,7 @@ export default function LiveMapView() {
 
         {/* Formulario */}
         <div style={{ flex: "0 0 55%", padding: "20px 20px 20px 24px", overflowY: "auto", borderRight: "1px solid #f0f0f0" }}>
-          <h2 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0d0d0d", margin: "0 0 16px" }}>Calcular ruta</h2>
+          <h2 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0d0d0d", margin: "0 0 16px" }}>Planificá tu ruta</h2>
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Origen */}
