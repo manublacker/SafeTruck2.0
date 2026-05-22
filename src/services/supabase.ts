@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import ws from 'ws'
+const ws = require('ws')
 
 const supabaseUrl =
   process.env.EXPO_PUBLIC_SUPABASE_URL ||
