@@ -100,7 +100,7 @@ export default function ProfileScreen() {
         setShowAddVehicle(false)
       }
       setPlate(''); setName(''); setWeight(''); setHeight(''); setWidth(''); setLength('')
-      Alert.alert('✅', 'Vehículo guardado')
+      Alert.alert('Vehículo guardado')
     } catch (e: any) {
       Alert.alert('Error', e.message)
     } finally {
