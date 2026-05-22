@@ -38,7 +38,7 @@ const initialData: FormData = {
   fleetSize: "",
   country: "Argentina",
   province: "",
-  code: ["", "", "", "", "", ""],
+  code: ["", "", "", "", "", "", "", ""],
   plan: "",
 };
 
@@ -155,7 +155,7 @@ const Register = () => {
 
   const validateStep3 = () => {
     const e: Record<string, string> = {};
-    if (data.code.some((c) => !c)) e.code = "Ingresá los 6 dígitos";
+    if (data.code.some((c) => !c)) e.code = "Ingresá los 8 dígitos";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -220,7 +220,7 @@ const Register = () => {
     const code = [...data.code];
     code[i] = digit;
     update("code", code);
-    if (digit && i < 5) {
+    if (digit && i < 7) {
       (document.getElementById(`code-${i + 1}`) as HTMLInputElement | null)?.focus();
     }
   };
@@ -431,7 +431,7 @@ const Register = () => {
                 <div>
                   <h1 className="auth-title">Verificá tu email</h1>
                   <p className="auth-subtitle">
-                    Te enviamos un código de 6 dígitos a{" "}
+                    Te enviamos un código de 8 dígitos a{" "}
                     <strong>{data.email || "tu email"}</strong>.
                   </p>
 
