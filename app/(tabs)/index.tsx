@@ -10,7 +10,7 @@ import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 
-const BACKEND = 'https://safetruck-backend-production.up.railway.app'
+const BACKEND = "https://safetruck20-production.up.railway.app";
 
 const INCIDENT_TYPES = [
   { key: 'fine',         label: '💸 Multa a camión',    creates_block: true  },
