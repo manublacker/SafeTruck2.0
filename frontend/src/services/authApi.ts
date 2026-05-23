@@ -65,7 +65,7 @@ export interface SignUpStartPayload {
   emailRedirectTo?: string;
 }
 
-export async function signUpStart(payload: SignUpStartPayload): Promise<{ needsVerification: boolean }> {
+export async function signUpStart(payload: SignUpStartPayload): Promise<{ needsVerification: boolean; accessToken: string | null }> {
   const { data, error } = await supabase.auth.signUp({
     email: payload.email,
     password: payload.password,
@@ -75,7 +75,7 @@ export async function signUpStart(payload: SignUpStartPayload): Promise<{ needsV
     },
   });
   if (error) throw new Error(error.message);
-  return { needsVerification: !data.session };
+  return { needsVerification: !data.session, accessToken: data.session?.access_token ?? null };
 }
 
 export async function resendSignupConfirmation(email: string, emailRedirectTo?: string): Promise<void> {
