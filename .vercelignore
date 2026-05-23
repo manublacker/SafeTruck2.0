@@ -1,0 +1,5 @@
+cache/
+venv/
+*.sql
+SafeTruck3/
+src/data/*.geojson
