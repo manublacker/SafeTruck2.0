@@ -9,6 +9,7 @@ import { useStore } from '../../src/store/useStore'
 import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
+import React from 'react';
 
 const BACKEND = "https://safetruck20-production.up.railway.app";
 
