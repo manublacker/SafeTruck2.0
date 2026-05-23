@@ -7,3 +7,9 @@ dist/
 .env
 .vercel
 safetruck_backup.sql
+.env*.local
+cache/
+venv/
+*.sql
+SafeTruck3/node_modules/
+src/data/*.geojson
