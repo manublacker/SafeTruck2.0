@@ -257,7 +257,7 @@ const Register = () => {
 
   const choosePlan = (plan: string) => {
     update("plan", plan);
-    setTimeout(() => navigate("/"), 200);
+    setTimeout(() => navigate("/dashboard"), 200);
   };
 
   return (

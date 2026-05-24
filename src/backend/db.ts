@@ -9,10 +9,12 @@
 
 import { Pool } from "pg";
 
+const useSsl = process.env.PGSSL !== "false";
+
 const pool = process.env.DATABASE_URL
   ? new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
+      ssl: useSsl ? { rejectUnauthorized: false } : false,
     })
   : new Pool({
       host:     process.env.PGHOST     ?? "localhost",
@@ -20,7 +22,7 @@ const pool = process.env.DATABASE_URL
       database: process.env.PGDATABASE ?? "safetruck",
       user:     process.env.PGUSER     ?? "postgres",
       password: process.env.PGPASSWORD ?? "postgres",
-      ssl: { rejectUnauthorized: false },
+      ssl: useSsl ? { rejectUnauthorized: false } : false,
     });
 
 export default pool;
