@@ -64,17 +64,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // El backend devuelve trucks en /profile sin el campo `driver` y no
       // devuelve drivers — los traemos por separado vía /api/trucks y
       // /api/drivers para que el contexto exponga la relación completa.
-      let driversList: Driver[] = [];
-      try {
-        driversList = await fetchDrivers();
-      } catch (err) {
-        console.error("Error al obtener conductores:", err);
+      const [driversResult, trucksResult] = await Promise.allSettled([
+        fetchDrivers(),
+        fetchTrucks(),
+      ]);
+      const driversList =
+        driversResult.status === "fulfilled" ? driversResult.value : [];
+      if (driversResult.status === "rejected") {
+        console.error("Error al obtener conductores:", driversResult.reason);
       }
-      let trucksList = res.user.trucks;
-      try {
-        trucksList = await fetchTrucks();
-      } catch (err) {
-        console.error("Error al obtener camiones:", err);
+      const trucksList =
+        trucksResult.status === "fulfilled" ? trucksResult.value : res.user.trucks;
+      if (trucksResult.status === "rejected") {
+        console.error("Error al obtener camiones:", trucksResult.reason);
       }
       setUser({ ...res.user, trucks: trucksList, drivers: driversList });
       setDrivers(driversList);
