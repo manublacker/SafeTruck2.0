@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { TRIPS } from "./mockData";
-import { useAvailability } from "./useAvailability";
+import { useAvailability, type Trip } from "./useAvailability";
 import MapDisplay from "./MapDisplay";
 import EmptyStateManager from "./EmptyStateManager";
 import TripCreator from "./TripCreator";
@@ -22,10 +21,11 @@ export default function LiveMapContainer({ onNavigate }: Props) {
   const { user, drivers } = useAuth();
   const trucks = user?.trucks ?? [];
 
+  const trips: Trip[] = [];
   const { availableTrucks, availableDrivers } = useAvailability(
     trucks,
     drivers,
-    TRIPS,
+    trips,
   );
 
   const [routeResult, setRouteResult] = useState<RouteResponse | null>(null);

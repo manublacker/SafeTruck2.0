@@ -1,7 +1,9 @@
 import { useState, useMemo } from "react";
-import { TRIPS } from "./mockData";
 import { Icons } from "./DashboardIcons";
 import { useAuth } from "@/contexts/AuthContext";
+import type { Trip } from "./useAvailability";
+
+const TRIPS: Trip[] = [];
 
 function badgeClass(status: string) {
   if (status === "En curso")   return "st-badge st-badge-encurso";
