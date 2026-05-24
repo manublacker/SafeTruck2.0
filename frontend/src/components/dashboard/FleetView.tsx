@@ -80,9 +80,8 @@ function Tabs({ current, onChange }: { current: FleetTab; onChange: (t: FleetTab
 
 function TrucksTab() {
   const { user, drivers, refreshTrucks } = useAuth();
-  const initialTrucks = user?.trucks ?? [];
-  const [trucks, setTrucks] = useState<Truck[]>(initialTrucks);
-  const [loading, setLoading] = useState(initialTrucks.length === 0);
+  const [trucks, setTrucks] = useState<Truck[]>(user?.trucks ?? []);
+  const [loading, setLoading] = useState(user === null);
   const [error, setError] = useState("");
 
   const [editing, setEditing]   = useState<Truck | null>(null);
