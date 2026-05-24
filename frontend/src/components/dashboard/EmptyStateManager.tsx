@@ -154,7 +154,7 @@ function Card({
         borderRadius: 14,
         padding: 24,
         maxWidth: 520,
-        margin: "32px auto",
+        margin: "0 auto",
         display: "flex",
         flexDirection: "column",
         gap: 12,
