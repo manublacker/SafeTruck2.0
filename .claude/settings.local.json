@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"c:\\\\\\\\Users\\\\\\\\Santiago\\\\\\\\Desktop\\\\\\\\Ingeniería de Software\\\\\\\\SafeTruck2.0\\\\\\\\src\\\\\\\\backend\\\\\\\\\")",
+      "Bash(where psql *)",
+      "Bash(where node *)",
+      "Bash(nslookup db.bxhduayxffanioaclzrd.supabase.co)",
+      "Bash(nslookup bxhduayxffanioaclzrd.supabase.co)",
+      "Bash(git checkout *)",
+      "Bash(mkdir -p \"c:/Users/Santiago/Desktop/Ingeniería de Software/SafeTruck2.0/db/migrations\" \"c:/Users/Santiago/Desktop/Ingeniería de Software/SafeTruck2.0/scripts\" 2>&1)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Santiago\\Desktop\\Ingeniería de Software\\SafeTruck2.0\\db"
+    ]
+  }
+}
