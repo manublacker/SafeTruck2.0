@@ -165,7 +165,7 @@ const Register = () => {
     if (step === 2) {
       if (!validateStep2()) return;
       try {
-        await signUpStart({
+        const result = await signUpStart({
           email: data.email,
           password: data.password,
           emailRedirectTo: `${window.location.origin}/register?verified=1`,
@@ -179,6 +179,19 @@ const Register = () => {
             province: data.province,
           },
         });
+        if (!result.needsVerification && result.accessToken) {
+          const res = await fetchUserProfile(result.accessToken, {
+            full_name: data.legalName,
+            company: data.companyName,
+            cuit: data.cuit,
+            industry: data.industry,
+            fleet_size: data.fleetSize,
+            country: data.country,
+            province: data.province,
+          });
+          login(res.token, res.user);
+          return;
+        }
       } catch (err) {
         setErrors({ general: err instanceof Error ? err.message : "Error al crear la cuenta." });
         return;
@@ -244,7 +257,7 @@ const Register = () => {
 
   const choosePlan = (plan: string) => {
     update("plan", plan);
-    setTimeout(() => navigate("/"), 200);
+    setTimeout(() => navigate("/dashboard"), 200);
   };
 
   return (
