@@ -6,7 +6,7 @@ import type { SubscriptionPlan } from '../types'
 export const MIN_PASSWORD_LENGTH = 8
 
 /** Cantidad de dígitos del código OTP de verificación de email. */
-export const OTP_LENGTH = 6
+export const OTP_LENGTH = 8
 
 /** Path al que Supabase redirige tras un flujo de recuperación de contraseña. */
 const RESET_PASSWORD_PATH = 'auth/reset-password'
