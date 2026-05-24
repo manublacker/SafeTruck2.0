@@ -1165,6 +1165,10 @@
     padding: 1.5rem;
     background: #ffffff;
     border: 1px solid #e5e7eb;
+    flex: 1 1 240px;
+    max-width: 280px;
+    display: flex;
+    flex-direction: column;
   }
 
   .plan-card--highlighted {
@@ -1220,6 +1224,7 @@
     flex-direction: column;
     gap: 0.5rem;
     margin-bottom: 1.5rem;
+    flex: 1;
   }
 
   .plan-card__feature {

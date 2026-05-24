@@ -268,7 +268,7 @@ const Register = () => {
           <img src={safeTruckLogo} alt="Safe Truck" className="auth-logo__img" />
         </Link>
 
-        <div className="auth-card">
+        <div className="auth-card" style={step === 4 ? { maxWidth: "960px" } : undefined}>
           <div className="auth-card__inner">
             <ProgressIndicator step={step} />
 
@@ -499,7 +499,7 @@ const Register = () => {
                     Comenzá a trackear tu flota hoy.
                   </p>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                  <div style={{ display: "flex", flexDirection: "row", flexWrap: "wrap", gap: "1.5rem", justifyContent: "center", alignItems: "stretch" }}>
                     <PlanCard
                       name="Starter"
                       price="$29"
