@@ -123,7 +123,8 @@ const Register = () => {
   }, [resendIn]);
 
   useEffect(() => {
-    if (user && step <= 3) setStep(4);
+    const verified = new URLSearchParams(window.location.search).get("verified") === "1";
+    if (verified && user && step <= 3) setStep(4);
   }, [user, step]);
 
   const update = <K extends keyof FormData>(k: K, v: FormData[K]) => {
