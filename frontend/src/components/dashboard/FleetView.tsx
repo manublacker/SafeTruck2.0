@@ -79,9 +79,9 @@ function Tabs({ current, onChange }: { current: FleetTab; onChange: (t: FleetTab
 // ── Tab: Camiones ──────────────────────────────────────────────────────────
 
 function TrucksTab() {
-  const { drivers, refreshTrucks } = useAuth();
-  const [trucks, setTrucks] = useState<Truck[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user, drivers, refreshTrucks } = useAuth();
+  const [trucks, setTrucks] = useState<Truck[]>(user?.trucks ?? []);
+  const [loading, setLoading] = useState(user === null);
   const [error, setError] = useState("");
 
   const [editing, setEditing]   = useState<Truck | null>(null);
@@ -89,7 +89,6 @@ function TrucksTab() {
   const [assigning, setAssigning] = useState<Truck | null>(null);
 
   const loadTrucks = useCallback(async () => {
-    setLoading(true);
     setError("");
     try {
       const list = await fetchTrucks();
