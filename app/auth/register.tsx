@@ -37,6 +37,7 @@ import {
   TOTAL_STEPS,
   type PlanOption,
 } from '../../src/constants/register'
+import { startMobileCheckout } from '../../src/services/billing'
 import type { SubscriptionPlan } from '../../src/types'
 
 interface FormData {
@@ -186,6 +187,7 @@ export default function RegisterScreen() {
       const userId = sessionData.user?.id
       if (!userId) throw new Error('Sesión no encontrada. Volvé a verificar tu email.')
 
+      // 1. Guardar perfil con datos de empresa (el plan se confirma vía webhook de Stripe)
       await upsertProfile({
         userId,
         fullName: form.companyName,
@@ -195,13 +197,26 @@ export default function RegisterScreen() {
         fleetSize: PLAN_FLEET_SIZE[plan],
       })
 
+      // Cargar perfil en el store para que el tab ya esté disponible
       const { data: profile } = await supabase
         .from('st_profiles')
         .select('*')
         .eq('id', userId)
         .single()
-
       if (profile) setProfile(profile)
+
+      // 2. Abrir Stripe Checkout en el browser del sistema
+      try {
+        await startMobileCheckout(plan)
+      } catch (stripeErr: any) {
+        // Si el checkout falla, igual dejar pasar al usuario (el perfil ya fue creado)
+        Alert.alert(
+          'Pago no completado',
+          stripeErr.message ?? 'No se pudo iniciar el pago. Podés intentarlo desde tu perfil.',
+        )
+      }
+
+      // 3. Ir a la app (con o sin pago completado)
       router.replace('/(tabs)/')
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'No se pudo guardar el plan')
