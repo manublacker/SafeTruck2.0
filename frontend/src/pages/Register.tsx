@@ -7,6 +7,7 @@ import {
   resendSignupConfirmation,
   fetchUserProfile,
 } from "@/services/authApi";
+import { startCheckout } from "@/services/api";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -257,21 +258,21 @@ const Register = () => {
 
   const allCodeFilled = data.code.every((c) => c);
 
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError]     = useState<string | null>(null);
+
   const choosePlan = async (plan: string) => {
     update("plan", plan);
+    setCheckoutError(null);
+    setCheckoutLoading(plan);
     try {
-      const { data: { user: sbUser } } = await supabase.auth.getUser();
-      if (sbUser) {
-        await supabase.from("st_profiles").upsert({
-          id: sbUser.id,
-          plan,
-          fleet_size: PLAN_FLEET_SIZE[plan] ?? "1 a 5",
-        });
-      }
+      const url = await startCheckout(plan);
+      window.location.href = url;
     } catch (err) {
-      console.error("Error guardando plan:", err);
+      console.error("Error iniciando checkout:", err);
+      setCheckoutError(err instanceof Error ? err.message : "Error al iniciar el pago.");
+      setCheckoutLoading(null);
     }
-    navigate("/dashboard");
   };
 
   return (
@@ -509,7 +510,8 @@ const Register = () => {
                         "Historial 7 días",
                         "Soporte por email",
                       ]}
-                      cta="Elegir Starter"
+                      cta={checkoutLoading === "starter" ? "Redirigiendo…" : "Elegir Starter"}
+                      loading={checkoutLoading === "starter"}
                       onClick={() => choosePlan("starter")}
                     />
                     <PlanCard
@@ -523,8 +525,9 @@ const Register = () => {
                         "Panel multi-usuario (3 admins)",
                         "Soporte prioritario",
                       ]}
-                      cta="Elegir Pro"
+                      cta={checkoutLoading === "pro" ? "Redirigiendo…" : "Elegir Pro"}
                       highlighted
+                      loading={checkoutLoading === "pro"}
                       onClick={() => choosePlan("pro")}
                     />
                     <PlanCard
@@ -539,10 +542,17 @@ const Register = () => {
                         "Manager dedicado",
                         "SLA garantizado",
                       ]}
-                      cta="Contactar ventas"
+                      cta={checkoutLoading === "enterprise" ? "Redirigiendo…" : "Elegir Enterprise"}
+                      loading={checkoutLoading === "enterprise"}
                       onClick={() => choosePlan("enterprise")}
                     />
                   </div>
+
+                  {checkoutError && (
+                    <p className="auth-error" style={{ textAlign: "center", marginTop: "1rem" }}>
+                      {checkoutError}
+                    </p>
+                  )}
 
                   <button
                     onClick={() => setStep(3)}
@@ -567,6 +577,7 @@ const PlanCard = ({
   features,
   cta,
   highlighted,
+  loading,
   onClick,
 }: {
   name: string;
@@ -574,6 +585,7 @@ const PlanCard = ({
   features: string[];
   cta: string;
   highlighted?: boolean;
+  loading?: boolean;
   onClick: () => void;
 }) => (
   <div className={["plan-card", highlighted && "plan-card--highlighted"].filter(Boolean).join(" ")}>
@@ -593,9 +605,11 @@ const PlanCard = ({
     </ul>
     <button
       onClick={onClick}
+      disabled={!!loading}
       className={[
         "plan-card__cta",
         highlighted ? "plan-card__cta--primary" : "plan-card__cta--outline",
+        loading ? "plan-card__cta--loading" : "",
       ].join(" ")}
     >
       {cta}
