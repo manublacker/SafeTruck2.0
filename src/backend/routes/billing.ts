@@ -16,7 +16,7 @@ const PRICE_IDS: Record<string, string> = {
   enterprise: process.env.STRIPE_PRICE_ENTERPRISE!,
 }
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://safe-truck-76h3.vercel.app'
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://safetruck20.vercel.app'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/billing/checkout
