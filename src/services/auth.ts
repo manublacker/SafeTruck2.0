@@ -127,6 +127,7 @@ export interface CreateProfileParams {
   companyName: string
   cuit: string
   plan: SubscriptionPlan
+  fleetSize: string
 }
 
 /** Crea (o reemplaza) la fila del usuario en `st_profiles` al cerrar el registro. */
@@ -137,6 +138,7 @@ export async function upsertProfile(params: CreateProfileParams): Promise<void> 
     company_name: params.companyName,
     cuit: params.cuit,
     plan: params.plan,
+    fleet_size: params.fleetSize,
   })
   if (error) throw new Error(error.message)
 }
