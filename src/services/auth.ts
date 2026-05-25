@@ -56,8 +56,12 @@ export interface SignUpParams {
 }
 
 /**
- * Inicia el registro. Supabase envía un código OTP de 6 dígitos al email
- * cuando la confirmación está habilitada en el proyecto.
+ * Inicia el registro. Supabase envía un código OTP al email cuando la
+ * confirmación está habilitada en el proyecto.
+ *
+ * Si el email ya fue registrado pero todavía no verificado (ej: el usuario
+ * cerró la app antes de completar el flujo), en vez de fallar se reenvía el
+ * OTP para que pueda continuar normalmente.
  */
 export async function signUpWithEmail(params: SignUpParams): Promise<void> {
   const { error } = await supabase.auth.signUp({
@@ -65,7 +69,21 @@ export async function signUpWithEmail(params: SignUpParams): Promise<void> {
     password: params.password,
     options: { data: { full_name: params.fullName } },
   })
-  if (error) throw new Error(error.message)
+  if (error) {
+    // Supabase devuelve este error cuando el mail ya existe en auth.users
+    // pero todavía no fue confirmado. Reenviamos el OTP en vez de fallar
+    // para que el usuario pueda completar la verificación sin tener que
+    // contactar soporte ni borrar su cuenta manualmente.
+    if (error.message.toLowerCase().includes('already registered')) {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: params.email.trim(),
+      })
+      if (resendError) throw new Error(resendError.message)
+      return
+    }
+    throw new Error(error.message)
+  }
 }
 
 /**
