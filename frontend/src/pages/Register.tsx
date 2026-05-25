@@ -19,7 +19,6 @@ type FormData = {
   cuit: string;
   legalName: string;
   industry: string;
-  fleetSize: string;
   country: string;
   province: string;
   code: string[];
@@ -35,11 +34,17 @@ const initialData: FormData = {
   cuit: "",
   legalName: "",
   industry: "",
-  fleetSize: "",
   country: "Argentina",
   province: "",
   code: ["", "", "", "", "", "", "", ""],
   plan: "",
+};
+
+/** Tamaño de flota derivado del plan elegido. */
+const PLAN_FLEET_SIZE: Record<string, string> = {
+  starter: "1 a 5",
+  pro: "6 a 20",
+  enterprise: "Más de 50",
 };
 
 const provinces = [
@@ -148,7 +153,6 @@ const Register = () => {
     if (!/^\d{2}-\d{8}-\d{1}$/.test(data.cuit)) e.cuit = "Formato XX-XXXXXXXX-X";
     if (!data.legalName.trim()) e.legalName = "Requerido";
     if (!data.industry) e.industry = "Requerido";
-    if (!data.fleetSize) e.fleetSize = "Requerido";
     if (!data.province) e.province = "Requerido";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -175,7 +179,6 @@ const Register = () => {
             company: data.companyName,
             cuit: data.cuit,
             industry: data.industry,
-            fleet_size: data.fleetSize,
             country: data.country,
             province: data.province,
           },
@@ -186,7 +189,6 @@ const Register = () => {
             company: data.companyName,
             cuit: data.cuit,
             industry: data.industry,
-            fleet_size: data.fleetSize,
             country: data.country,
             province: data.province,
           });
@@ -215,7 +217,6 @@ const Register = () => {
           company: data.companyName,
           cuit: data.cuit,
           industry: data.industry,
-          fleet_size: data.fleetSize,
           country: data.country,
           province: data.province,
         });
@@ -256,9 +257,21 @@ const Register = () => {
 
   const allCodeFilled = data.code.every((c) => c);
 
-  const choosePlan = (plan: string) => {
+  const choosePlan = async (plan: string) => {
     update("plan", plan);
-    setTimeout(() => navigate("/dashboard"), 200);
+    try {
+      const { data: { user: sbUser } } = await supabase.auth.getUser();
+      if (sbUser) {
+        await supabase.from("st_profiles").upsert({
+          id: sbUser.id,
+          plan,
+          fleet_size: PLAN_FLEET_SIZE[plan] ?? "1 a 5",
+        });
+      }
+    } catch (err) {
+      console.error("Error guardando plan:", err);
+    }
+    navigate("/dashboard");
   };
 
   return (
@@ -393,20 +406,6 @@ const Register = () => {
                         <option>Otros</option>
                       </select>
                       {errors.industry && <p className="auth-error">{errors.industry}</p>}
-                    </div>
-                    <div className="auth-field">
-                      <select
-                        value={data.fleetSize}
-                        onChange={(e) => update("fleetSize", e.target.value)}
-                        className="auth-input"
-                      >
-                        <option value="">Cantidad de camiones</option>
-                        <option>1 a 5</option>
-                        <option>6 a 20</option>
-                        <option>21 a 50</option>
-                        <option>Más de 50</option>
-                      </select>
-                      {errors.fleetSize && <p className="auth-error">{errors.fleetSize}</p>}
                     </div>
                     <div className="auth-field">
                       <select
