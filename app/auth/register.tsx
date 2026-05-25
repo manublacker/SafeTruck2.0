@@ -30,7 +30,6 @@ import {
   OTP_LENGTH,
 } from '../../src/services/auth'
 import {
-  FLEET_SIZE_OPTIONS,
   INDUSTRY_OPTIONS,
   OTP_RESEND_COOLDOWN_SECONDS,
   PLAN_OPTIONS,
@@ -48,7 +47,6 @@ interface FormData {
   companyName: string
   cuit: string
   rubro: string
-  truckCount: string
 }
 
 const INITIAL_FORM: FormData = {
@@ -59,7 +57,6 @@ const INITIAL_FORM: FormData = {
   companyName: '',
   cuit: '',
   rubro: '',
-  truckCount: '',
 }
 
 type FieldErrors = Partial<Record<keyof FormData | 'otp' | 'general', string>>
@@ -110,7 +107,6 @@ export default function RegisterScreen() {
     if (!form.companyName.trim()) next.companyName = 'Requerido'
     if (!isValidCuit(form.cuit)) next.cuit = 'Formato XX-XXXXXXXX-X'
     if (!form.rubro) next.rubro = 'Requerido'
-    if (!form.truckCount) next.truckCount = 'Requerido'
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -176,6 +172,13 @@ export default function RegisterScreen() {
     }
   }
 
+  /** Tamaño de flota implícito según el plan elegido. */
+  const PLAN_FLEET_SIZE: Record<SubscriptionPlan, string> = {
+    starter: '1 a 5',
+    pro: '6 a 20',
+    enterprise: 'Más de 50',
+  }
+
   const handleChoosePlan = async (plan: SubscriptionPlan) => {
     setLoading(true)
     try {
@@ -189,6 +192,7 @@ export default function RegisterScreen() {
         companyName: form.companyName,
         cuit: form.cuit,
         plan,
+        fleetSize: PLAN_FLEET_SIZE[plan],
       })
 
       const { data: profile } = await supabase
@@ -390,14 +394,6 @@ function StepCompany({ form, errors, onChange, s, t }: StepFieldProps) {
       />
       {errors.rubro && <Text style={s.error}>{errors.rubro}</Text>}
 
-      <Text style={s.fieldLabel}>Cantidad de camiones</Text>
-      <OptionChips
-        options={FLEET_SIZE_OPTIONS}
-        selected={form.truckCount}
-        onSelect={value => onChange('truckCount', value)}
-        s={s}
-      />
-      {errors.truckCount && <Text style={s.error}>{errors.truckCount}</Text>}
     </View>
   )
 }

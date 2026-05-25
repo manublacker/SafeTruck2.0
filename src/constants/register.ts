@@ -16,7 +16,6 @@ export const INDUSTRY_OPTIONS = [
   'Otros',
 ] as const
 
-export const FLEET_SIZE_OPTIONS = ['1 a 5', '6 a 20', '21 a 50', 'Más de 50'] as const
 
 export interface PlanOption {
   slug: SubscriptionPlan
