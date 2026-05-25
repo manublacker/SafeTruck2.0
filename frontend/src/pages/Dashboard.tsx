@@ -4,13 +4,15 @@ import AdminTopBar from "@/components/dashboard/AdminTopBar";
 import LiveMapContainer from "@/components/dashboard/LiveMapContainer";
 import FleetView from "@/components/dashboard/FleetView";
 import TripHistoryView from "@/components/dashboard/TripHistoryView";
+import AccountView from "@/components/dashboard/AccountView";
 
 import "@/styles/admin.css";
 
 const TITLE: Record<AdminPage, string> = {
-  map:   "Live Map",
-  fleet: "Flota",
-  trips: "Historial de viajes",
+  map:     "Live Map",
+  fleet:   "Flota",
+  trips:   "Historial de viajes",
+  account: "Mi cuenta",
 };
 
 export default function Dashboard() {
@@ -23,9 +25,10 @@ export default function Dashboard() {
       <main className="admin-main">
         <AdminTopBar title={TITLE[page]} onToggleSidebar={() => setCollapsed((c) => !c)} />
         <div className="admin-content">
-          {page === "map"   && <LiveMapContainer onNavigate={setPage} />}
-          {page === "fleet" && <FleetView />}
-          {page === "trips" && <TripHistoryView />}
+          {page === "map"     && <LiveMapContainer onNavigate={setPage} />}
+          {page === "fleet"   && <FleetView />}
+          {page === "trips"   && <TripHistoryView />}
+          {page === "account" && <AccountView />}
         </div>
       </main>
     </div>
