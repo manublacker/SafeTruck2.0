@@ -197,8 +197,6 @@ app.delete('/admin/drivers/:id', authAdmin, async (req: AuthedRequest, res) => {
     if (drvErr || !driver) return res.status(404).json({ error: 'Conductor no encontrado' })
     if (driver.admin_id !== adminId) return res.status(403).json({ error: 'No tenés permiso para este conductor' })
 
-    // Compatibilidad: si este driver tiene un auth user "viejo" (de la versión anterior
-    // donde sí creábamos cuentas), lo limpiamos también
     if (driver.user_id) {
       await supabase.auth.admin.deleteUser(driver.user_id).catch(e => {
         console.error('[/admin/drivers/:id] deleteAuthUser:', e?.message)
@@ -216,3 +214,42 @@ app.delete('/admin/drivers/:id', authAdmin, async (req: AuthedRequest, res) => {
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => console.log(`SafeTruck backend en puerto ${PORT}`))
+
+// ────────────────────────────────────────────────────────────────────────────
+// Asignación de viajes desde la web
+// ────────────────────────────────────────────────────────────────────────────
+
+app.post('/trips/assign', async (req, res) => {
+  try {
+    const {
+      user_id, vehicle_id,
+      origin_lat, origin_lng, origin_address,
+      dest_lat, dest_lng, dest_address,
+      notes
+    } = req.body
+
+    if (!user_id || !dest_lat || !dest_lng)
+      return res.status(400).json({ error: 'user_id y destino son requeridos' })
+
+    const { data, error } = await supabase
+      .from('st_trips')
+      .insert({
+        user_id,
+        vehicle_id: vehicle_id || null,
+        origin: `SRID=4326;POINT(${origin_lng || 0} ${origin_lat || 0})`,
+        destination: `SRID=4326;POINT(${dest_lng} ${dest_lat})`,
+        origin_address: origin_address || '',
+        destination_address: dest_address || '',
+        notes: notes || null,
+        status: 'pending',
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    res.json({ success: true, trip: data })
+  } catch (err: any) {
+    console.error('[/trips/assign]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
