@@ -6,6 +6,14 @@
  *******************************************************/
 import { Router, Request, Response } from "express";
 import pool from "../db";
+import { supabase } from "../supabaseClient";
+
+/** Máximo de camiones permitidos por plan. */
+const PLAN_TRUCK_LIMITS: Record<string, number> = {
+  starter: 5,
+  pro: 20,
+  enterprise: Infinity,
+};
 
 const router = Router();
 
@@ -162,6 +170,31 @@ router.post("/", async (req: Request, res: Response) => {
   }
 
   try {
+    // ── Validar límite de flota según plan ──────────────────────────────────
+    const { data: profile } = await supabase
+      .from("st_profiles")
+      .select("plan")
+      .eq("id", userId)
+      .single();
+
+    const plan = (profile?.plan as string | null | undefined) ?? "starter";
+    const limit = PLAN_TRUCK_LIMITS[plan] ?? 5;
+
+    const countResult = await pool.query<{ count: string }>(
+      "SELECT COUNT(*) FROM trucks WHERE user_id = $1 AND is_active = true",
+      [userId]
+    );
+    const currentCount = parseInt(countResult.rows[0].count, 10);
+
+    if (currentCount >= limit) {
+      const limitLabel = Number.isFinite(limit) ? String(limit) : "ilimitados";
+      res.status(403).json({
+        error: `Tu plan ${plan} permite hasta ${limitLabel} camión${limit === 1 ? "" : "es"}. Actualizá tu plan para agregar más.`,
+      });
+      return;
+    }
+    // ───────────────────────────────────────────────────────────────────────
+
     const insert = await pool.query<{ id: number }>(
       `INSERT INTO trucks (
          user_id, name, max_weight_kg, max_height_m, max_width_m, max_length_m,
