@@ -11,6 +11,13 @@ const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
 const SERVICE_WARN_DAYS = 30;
 const LICENSE_WARN_DAYS = 30;
 
+/** Límite de camiones por plan. enterprise = sin límite. */
+const PLAN_TRUCK_LIMITS: Record<string, number> = {
+  starter: 5,
+  pro: 20,
+  enterprise: Infinity,
+};
+
 const DRIVER_ESTADO_ACTIVO = "Activo";
 const DRIVER_ESTADO_INACTIVO = "Inactivo";
 
@@ -88,6 +95,12 @@ function TrucksTab() {
   const [creating, setCreating] = useState(false);
   const [assigning, setAssigning] = useState<Truck | null>(null);
 
+  // ── Límite de flota por plan ─────────────────────────────────────────────
+  const plan = user?.plan ?? "starter";
+  const truckLimit = PLAN_TRUCK_LIMITS[plan] ?? 5;
+  const atLimit = Number.isFinite(truckLimit) && trucks.length >= truckLimit;
+  // ─────────────────────────────────────────────────────────────────────────
+
   const loadTrucks = useCallback(async () => {
     setError("");
     try {
@@ -123,7 +136,13 @@ function TrucksTab() {
         title="Camiones"
         actionLabel="Agregar camión"
         onAction={() => setCreating(true)}
+        disabled={atLimit}
       />
+
+      {/* Indicador de uso del plan */}
+      {Number.isFinite(truckLimit) && (
+        <FleetUsageBar current={trucks.length} limit={truckLimit} plan={plan} />
+      )}
 
       {loading && <Hint>Cargando camiones…</Hint>}
       {error && <Hint tone="error">{error}</Hint>}
@@ -133,6 +152,7 @@ function TrucksTab() {
           title="No tenés camiones registrados"
           actionLabel="Agregar camión"
           onAction={() => setCreating(true)}
+          disabled={atLimit}
         />
       )}
 
@@ -422,10 +442,12 @@ function Toolbar({
   title,
   actionLabel,
   onAction,
+  disabled = false,
 }: {
   title: string;
   actionLabel: string;
   onAction: () => void;
+  disabled?: boolean;
 }) {
   return (
     <div
@@ -439,11 +461,56 @@ function Toolbar({
       <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>{title}</h3>
       <button
         className="st-btn-primary"
-        style={{ padding: "10px 16px" }}
-        onClick={onAction}
+        style={{ padding: "10px 16px", opacity: disabled ? 0.45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
+        onClick={disabled ? undefined : onAction}
+        disabled={disabled}
+        title={disabled ? "Alcanzaste el límite de camiones de tu plan" : undefined}
       >
         <Icons.Plus size={14} /> {actionLabel}
       </button>
+    </div>
+  );
+}
+
+function FleetUsageBar({
+  current,
+  limit,
+  plan,
+}: {
+  current: number;
+  limit: number;
+  plan: string;
+}) {
+  const pct = Math.min((current / limit) * 100, 100);
+  const atLimit = current >= limit;
+  const barColor = atLimit ? "#e53935" : pct >= 80 ? "#f59e0b" : "#22c55e";
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: "0.8rem", color: "#6b7280", fontWeight: 600 }}>
+          Plan {plan.charAt(0).toUpperCase() + plan.slice(1)}
+        </span>
+        <span style={{ fontSize: "0.8rem", fontWeight: 700, color: atLimit ? "#e53935" : "#0d0d0d" }}>
+          {current} / {limit} camión{limit === 1 ? "" : "es"}
+        </span>
+      </div>
+      <div style={{ height: 6, borderRadius: 999, background: "#f0f0f0", overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            borderRadius: 999,
+            background: barColor,
+            transition: "width 0.3s ease",
+          }}
+        />
+      </div>
+      {atLimit && (
+        <p style={{ margin: "8px 0 0", fontSize: "0.8rem", color: "#e53935", fontWeight: 600 }}>
+          Límite alcanzado. Actualizá tu plan para agregar más camiones.
+        </p>
+      )}
     </div>
   );
 }
@@ -452,10 +519,12 @@ function EmptyState({
   title,
   actionLabel,
   onAction,
+  disabled = false,
 }: {
   title: string;
   actionLabel: string;
   onAction: () => void;
+  disabled?: boolean;
 }) {
   return (
     <div
@@ -471,7 +540,12 @@ function EmptyState({
       }}
     >
       <p style={{ margin: 0, color: "#6b7280", fontSize: "0.95rem" }}>{title}</p>
-      <button className="st-btn-primary" style={{ padding: "10px 18px" }} onClick={onAction}>
+      <button
+        className="st-btn-primary"
+        style={{ padding: "10px 18px", opacity: disabled ? 0.45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
+        onClick={disabled ? undefined : onAction}
+        disabled={disabled}
+      >
         <Icons.Plus size={14} /> {actionLabel}
       </button>
     </div>
