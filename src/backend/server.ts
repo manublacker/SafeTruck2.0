@@ -12,13 +12,20 @@ import routeRouter from './routes/route'
 import incidentsRouter from './routes/incidents'
 import reportsRouter from './routes/reports'
 import usersRouter from './routes/users'
+import billingRouter from './routes/billing'
 import { authMiddleware } from './middleware/authMiddleware'
 
 const app = express()
 app.use(cors({ maxAge: 86400 }))
+
+// El webhook de Stripe necesita el body crudo (sin parsear) para verificar la firma.
+// IMPORTANTE: esta ruta debe ir ANTES del middleware express.json() global.
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }))
+
 app.use(express.json({ limit: '50mb' }))
 
 app.use('/api/auth', authRouter)
+app.use('/api/billing', billingRouter)
 app.use('/api/routes', routeRouter)
 app.use('/api/search', searchRouter)
 app.use('/api/incidents', incidentsRouter)
