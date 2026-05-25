@@ -1,11 +1,18 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  Alert, ActivityIndicator, ScrollView,
+  Alert, ActivityIndicator, ScrollView, AppState,
 } from 'react-native'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
+import {
+  fetchMobileSubscription,
+  startMobileCheckout,
+  type MobileSubscription,
+} from '../../src/services/billing'
+import { PLAN_OPTIONS } from '../../src/constants/register'
+import type { SubscriptionPlan } from '../../src/types'
 
 export default function ProfileScreen() {
   const { profile, setProfile, activeVehicle, setActiveVehicle, vehicles, setVehicles } = useStore()
@@ -16,6 +23,42 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(false)
   const [showAddVehicle, setShowAddVehicle] = useState(false)
   const [editingVehicle, setEditingVehicle] = useState<any>(null)
+
+  // ── Suscripción ──────────────────────────────────────────────
+  const [subscription, setSubscription]     = useState<MobileSubscription | null>(null)
+  const [subLoading, setSubLoading]         = useState(true)
+  const [upgradingPlan, setUpgradingPlan]   = useState<string | null>(null)
+  const [showPlanOptions, setShowPlanOptions] = useState(false)
+
+  const refreshSubscription = useCallback(async () => {
+    const sub = await fetchMobileSubscription()
+    setSubscription(sub)
+    setSubLoading(false)
+  }, [])
+
+  useEffect(() => { refreshSubscription() }, [refreshSubscription])
+
+  // Refresh when the app comes to the foreground (user returns from Stripe browser)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') refreshSubscription()
+    })
+    return () => sub.remove()
+  }, [refreshSubscription])
+
+  const handleUpgradePlan = async (plan: SubscriptionPlan) => {
+    setUpgradingPlan(plan)
+    try {
+      await startMobileCheckout(plan)
+      // Browser closed — refresh subscription (webhook may have already fired)
+      await refreshSubscription()
+      setShowPlanOptions(false)
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'No se pudo iniciar el pago.')
+    } finally {
+      setUpgradingPlan(null)
+    }
+  }
 
   const [plate, setPlate]   = useState('')
   const [name, setName]     = useState('')
@@ -138,6 +181,101 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* ── Suscripción ──────────────────────────────────────── */}
+      <View style={s.section}>
+        <Text style={s.sectionLabel}> MI SUSCRIPCIÓN</Text>
+        <View style={s.card}>
+          {subLoading ? (
+            <ActivityIndicator color={t.accent} />
+          ) : (
+            <>
+              <View style={s.subRow}>
+                <View>
+                  <Text style={s.subLabel}>PLAN</Text>
+                  <View style={[s.planBadge, { backgroundColor: planColor(subscription?.plan).bg }]}>
+                    <Text style={[s.planBadgeText, { color: planColor(subscription?.plan).text }]}>
+                      {subscription?.plan ? subscription.plan.toUpperCase() : 'SIN PLAN'}
+                    </Text>
+                  </View>
+                </View>
+
+                {subscription?.status && (
+                  <View>
+                    <Text style={s.subLabel}>ESTADO</Text>
+                    <Text style={[s.subValue, { color: statusColor(subscription.status) }]}>
+                      ● {STATUS_LABELS[subscription.status] ?? subscription.status}
+                    </Text>
+                  </View>
+                )}
+
+                {subscription?.current_period_end && (
+                  <View>
+                    <Text style={s.subLabel}>PRÓX. COBRO</Text>
+                    <Text style={s.subValue}>
+                      {new Date(subscription.current_period_end).toLocaleDateString('es-AR', {
+                        day: 'numeric', month: 'short',
+                      })}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={[s.btnPrimary, s.subBtn]}
+                onPress={() => setShowPlanOptions(v => !v)}
+              >
+                <Text style={s.btnPrimaryText}>
+                  {showPlanOptions ? 'Cerrar planes' : subscription?.plan ? 'Cambiar plan' : 'Elegir plan'}
+                </Text>
+              </TouchableOpacity>
+
+              {showPlanOptions && (
+                <View style={{ marginTop: 16, gap: 12 }}>
+                  {PLAN_OPTIONS.map(plan => {
+                    const isCurrent = subscription?.plan === plan.slug
+                    const isLoading = upgradingPlan === plan.slug
+                    return (
+                      <View
+                        key={plan.slug}
+                        style={[s.miniPlanCard, isCurrent && s.miniPlanCardActive]}
+                      >
+                        <View style={s.miniPlanHeader}>
+                          <Text style={s.miniPlanName}>{plan.name}</Text>
+                          <Text style={[s.miniPlanPrice, { color: planColor(plan.slug).text }]}>
+                            {plan.price} <Text style={s.miniPlanPeriod}>USD/mes</Text>
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[
+                            s.miniPlanBtn,
+                            isCurrent && s.miniPlanBtnCurrent,
+                            { borderColor: planColor(plan.slug).text },
+                            !isCurrent && { backgroundColor: planColor(plan.slug).text },
+                          ]}
+                          onPress={() => !isCurrent && handleUpgradePlan(plan.slug)}
+                          disabled={isCurrent || !!upgradingPlan}
+                        >
+                          {isLoading ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                          ) : (
+                            <Text style={[
+                              s.miniPlanBtnText,
+                              isCurrent && { color: planColor(plan.slug).text },
+                            ]}>
+                              {isCurrent ? 'Plan actual' : 'Cambiar'}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )
+                  })}
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      </View>
+
       {/* Vehículo activo */}
       {activeVehicle && (
         <View style={s.section}>
@@ -242,6 +380,33 @@ export default function ProfileScreen() {
       )}
     </ScrollView>
   )
+}
+
+// ── Billing helpers ────────────────────────────────────────────────────────
+
+const STATUS_LABELS: Record<string, string> = {
+  active:     'Activo',
+  trialing:   'Trial',
+  past_due:   'Pago vencido',
+  cancelled:  'Cancelado',
+  incomplete: 'Incompleto',
+}
+
+function planColor(plan?: string | null): { bg: string; text: string } {
+  switch (plan) {
+    case 'pro':        return { bg: '#eff6ff', text: '#2563eb' }
+    case 'enterprise': return { bg: '#fdf4ff', text: '#9333ea' }
+    default:           return { bg: '#f3f4f6', text: '#6b7280' }
+  }
+}
+
+function statusColor(status: string): string {
+  switch (status) {
+    case 'active':   return '#16a34a'
+    case 'trialing': return '#2563eb'
+    case 'past_due': return '#dc2626'
+    default:         return '#6b7280'
+  }
 }
 
 // Sub-componente del formulario para no repetir código
@@ -367,6 +532,44 @@ function makeStyles(t: Theme) {
       padding: 16, alignItems: 'center',
     },
     addBtnText: { color: t.accent, fontSize: 14, fontWeight: '600' },
+
+    // ── Suscripción ──────────────────────────────────────────
+    subRow: {
+      flexDirection: 'row', flexWrap: 'wrap', gap: 20, marginBottom: 16,
+    },
+    subLabel: {
+      fontSize: 10, fontWeight: '700', color: t.textMuted,
+      letterSpacing: 0.6, marginBottom: 4,
+    },
+    subValue: { color: t.text, fontSize: 14, fontWeight: '600' },
+    subBtn: { marginTop: 0 },
+
+    planBadge: {
+      paddingHorizontal: 12, paddingVertical: 5,
+      borderRadius: 999, alignSelf: 'flex-start',
+    },
+    planBadgeText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
+
+    // Mini plan cards (in profile)
+    miniPlanCard: {
+      borderWidth: 1, borderColor: t.border,
+      borderRadius: 12, padding: 14,
+      backgroundColor: t.card,
+    },
+    miniPlanCardActive: { borderColor: t.accent },
+    miniPlanHeader: {
+      flexDirection: 'row', justifyContent: 'space-between',
+      alignItems: 'center', marginBottom: 10,
+    },
+    miniPlanName: { color: t.text, fontSize: 15, fontWeight: '700' },
+    miniPlanPrice: { fontSize: 16, fontWeight: '800' },
+    miniPlanPeriod: { fontSize: 11, fontWeight: '400', color: t.textMuted },
+    miniPlanBtn: {
+      borderRadius: 8, borderWidth: 1.5,
+      paddingVertical: 8, alignItems: 'center',
+    },
+    miniPlanBtnCurrent: { backgroundColor: 'transparent' },
+    miniPlanBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
     // Formulario (--dash-form style)
     field: { marginBottom: 12 },
