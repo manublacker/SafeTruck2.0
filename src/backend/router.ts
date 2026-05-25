@@ -45,8 +45,8 @@ export async function calculateRoute(
       const segments: RouteSegment[] = validRows.map((r: any) => {
         let status: 'ok' | 'unauthorized' | 'unknown' = 'unknown'
         
-        console.log('heavy_vehicle_allowed:', r.heavy_vehicle_allowed, typeof r.heavy_vehicle_allowed)  // ← ACÁ
-        
+        console.log(`[seg] ${r.street_name} | ${r.municipality} | allowed=${r.heavy_vehicle_allowed} | w=${r.max_weight_kg} | h=${r.max_height_m}`)
+                
         if (r.heavy_vehicle_allowed === true) {
         if (r.max_weight_kg && vehicle.weight_kg > r.max_weight_kg) {
           status = 'unauthorized'
