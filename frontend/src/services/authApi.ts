@@ -74,7 +74,24 @@ export async function signUpStart(payload: SignUpStartPayload): Promise<{ needsV
       emailRedirectTo: payload.emailRedirectTo,
     },
   });
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    // Supabase crea el usuario en auth.users antes de que verifique el mail.
+    // Si el usuario cerró la ventana sin verificar y vuelve a intentar
+    // registrarse con el mismo email, recibe "User already registered".
+    // En vez de bloquearlo, reenviamos el OTP para que pueda completar el flujo.
+    if (error.message.toLowerCase().includes("already registered")) {
+      const { error: resendError } = await supabase.auth.resend({
+        type: "signup",
+        email: payload.email,
+        options: payload.emailRedirectTo ? { emailRedirectTo: payload.emailRedirectTo } : undefined,
+      });
+      if (resendError) throw new Error(resendError.message);
+      return { needsVerification: true, accessToken: null };
+    }
+    throw new Error(error.message);
+  }
+
   return { needsVerification: !data.session, accessToken: data.session?.access_token ?? null };
 }
 
