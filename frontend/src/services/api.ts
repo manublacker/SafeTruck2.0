@@ -201,7 +201,9 @@ export async function startCheckout(plan: string): Promise<string> {
   const res = await fetch(`${BASE_URL}/api/billing/checkout`, {
     method:  "POST",
     headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
-    body:    JSON.stringify({ plan }),
+    // returnUrl tells the backend where to redirect after Stripe checkout,
+    // so it works correctly both in local dev and in production.
+    body:    JSON.stringify({ plan, returnUrl: window.location.origin }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
