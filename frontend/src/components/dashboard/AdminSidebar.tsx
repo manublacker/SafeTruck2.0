@@ -20,6 +20,32 @@ function initials(name: string) {
   return name.split(" ").slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
 
+const PLAN_COLORS: Record<string, { bg: string; color: string }> = {
+  starter:    { bg: "#f0f0f0", color: "#6b7280" },
+  pro:        { bg: "#eff6ff", color: "#2563eb" },
+  enterprise: { bg: "#fdf4ff", color: "#9333ea" },
+};
+
+function PlanBadge({ plan }: { plan: string | null }) {
+  if (!plan) return null;
+  const style = PLAN_COLORS[plan] ?? PLAN_COLORS.starter;
+  return (
+    <span style={{
+      display: "inline-block",
+      padding: "2px 8px",
+      borderRadius: 999,
+      fontSize: "0.7rem",
+      fontWeight: 700,
+      letterSpacing: 0.3,
+      background: style.bg,
+      color: style.color,
+      textTransform: "capitalize",
+    }}>
+      {plan}
+    </span>
+  );
+}
+
 export default function AdminSidebar({ page, setPage, collapsed }: Props) {
   const { user, logout } = useAuth();
   const width = collapsed ? 60 : 220;
@@ -102,7 +128,10 @@ export default function AdminSidebar({ page, setPage, collapsed }: Props) {
           {!collapsed && user && (
             <div style={{ lineHeight: 1.3, flex: 1 }}>
               <div className="st-sidebar-user-name">{user.full_name}</div>
-              <div className="st-sidebar-user-role">Admin</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                <span className="st-sidebar-user-role">Admin</span>
+                <PlanBadge plan={user.plan} />
+              </div>
             </div>
           )}
         </div>
