@@ -25,13 +25,17 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'https://safetruck20.vercel.app
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/checkout', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { plan } = req.body as { plan: string }
+    const { plan, returnUrl } = req.body as { plan: string; returnUrl?: string }
     const userId   = req.user!.id
     const email    = req.user!.email
 
     if (!plan || !PRICE_IDS[plan]) {
       return res.status(400).json({ error: 'Plan inválido. Debe ser starter, pro o enterprise.' })
     }
+
+    // Use the origin the request came from so Stripe redirects back to the
+    // correct environment (local dev or production). Falls back to FRONTEND_URL.
+    const baseUrl = (returnUrl || FRONTEND_URL).replace(/\/$/, '')
 
     // Buscar o crear customer en Stripe
     let stripeCustomerId: string | undefined
@@ -57,8 +61,8 @@ router.post('/checkout', authMiddleware, async (req: Request, res: Response) => 
       customer:   stripeCustomerId,
       mode:       'subscription',
       line_items: [{ price: PRICE_IDS[plan], quantity: 1 }],
-      success_url: `${FRONTEND_URL}/dashboard?billing=success&plan=${plan}`,
-      cancel_url:  `${FRONTEND_URL}/?billing=cancelled`,
+      success_url: `${baseUrl}/dashboard?billing=success&plan=${plan}`,
+      cancel_url:  `${baseUrl}/dashboard?billing=cancelled`,
       metadata: {
         supabase_user_id: userId,
         plan,
