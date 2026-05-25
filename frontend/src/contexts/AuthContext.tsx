@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { AuthUser, Driver } from "@/types/auth";
 import { supabase } from "@/lib/supabase";
+import type { Session } from "@supabase/supabase-js";
 import {
   setToken,
   removeToken,
@@ -61,9 +62,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const ensureProfile = useCallback(async (accessToken: string) => {
+  // Builds a minimal AuthUser straight from the Supabase session. Used as a
+  // fallback when the backend /profile call fails on reload — without it,
+  // any transient backend error would leave `user = null` and ProtectedRoute
+  // would kick the user back to /login despite having a valid session.
+  const userFromSession = (session: Session): AuthUser => {
+    const meta = session.user.user_metadata ?? {};
+    return {
+      id:        session.user.id,
+      email:     session.user.email ?? "",
+      full_name: (meta.full_name as string) ?? "",
+      company:   (meta.company as string) ?? null,
+      plan:      null,
+      trucks:    [],
+      drivers:   [],
+    };
+  };
+
+  const ensureProfile = useCallback(async (session: Session) => {
     if (fetchingProfile.current) return;
     fetchingProfile.current = true;
+    const accessToken = session.access_token;
     try {
       const res = await fetchUserProfile(accessToken, {});
       // El backend devuelve trucks en /profile sin el campo `driver` y no
@@ -88,6 +107,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileLoaded.current = true;
     } catch (err) {
       console.error("Error al obtener el perfil:", err);
+      // Fallback: keep the user logged in with whatever the session gives us.
+      // The backend may be momentarily unreachable, but a valid Supabase
+      // session shouldn't be punished with a forced logout.
+      setUser((current) => current ?? userFromSession(session));
     } finally {
       fetchingProfile.current = false;
     }
@@ -112,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session) {
         setToken(session.access_token);
         setTokenState(session.access_token);
-        await ensureProfile(session.access_token);
+        await ensureProfile(session);
       }
       setAuthReady(true);
     })();
@@ -126,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // on every TOKEN_REFRESHED event, which could trigger a spurious
         // 401 → logout cycle.
         if (!profileLoaded.current) {
-          ensureProfile(session.access_token);
+          ensureProfile(session);
         }
       } else {
         removeToken();
