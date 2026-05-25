@@ -190,3 +190,36 @@ export async function unassignDriver(truckId: number): Promise<void> {
     throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
   }
 }
+
+// ── Billing / Stripe ──────────────────────────────────────────
+
+/**
+ * Crea una Stripe Checkout Session para el plan dado y devuelve la URL.
+ * El llamador debe hacer window.location.href = url para redirigir al usuario.
+ */
+export async function startCheckout(plan: string): Promise<string> {
+  const res = await fetch(`${BASE_URL}/api/billing/checkout`, {
+    method:  "POST",
+    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    body:    JSON.stringify({ plan }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
+  return (data as { url: string }).url;
+}
+
+/**
+ * Devuelve la suscripción activa del usuario logueado, o null si no tiene.
+ */
+export async function fetchSubscription(): Promise<{
+  plan: string;
+  status: string;
+  current_period_end: string | null;
+} | null> {
+  const res = await fetch(`${BASE_URL}/api/billing/subscription`, {
+    headers: authHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
+  return (data as { subscription: any }).subscription;
+}
