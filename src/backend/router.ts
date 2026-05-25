@@ -42,9 +42,12 @@ export async function calculateRoute(
     const validRows = data.filter((r: any) => r.edge_id > 0)
     if (validRows.length === 0) throw new Error('Ruta vacía')
 
-    const segments: RouteSegment[] = validRows.map((r: any) => {
-      let status: 'ok' | 'unauthorized' | 'unknown' = 'unknown'
-      if (r.heavy_vehicle_allowed === true) {
+      const segments: RouteSegment[] = validRows.map((r: any) => {
+        let status: 'ok' | 'unauthorized' | 'unknown' = 'unknown'
+        
+        console.log('heavy_vehicle_allowed:', r.heavy_vehicle_allowed, typeof r.heavy_vehicle_allowed)  // ← ACÁ
+        
+        if (r.heavy_vehicle_allowed === true) {
         if (r.max_weight_kg && vehicle.weight_kg > r.max_weight_kg) {
           status = 'unauthorized'
         } else if (r.max_height_m && vehicle.height_m > r.max_height_m) {
