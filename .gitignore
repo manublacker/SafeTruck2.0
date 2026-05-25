@@ -13,3 +13,8 @@ venv/
 *.sql
 SafeTruck3/node_modules/
 src/data/*.geojson
+apply_tramos_lanus.py
+apply_tramos_lanus_final.py
+apply_tramos_lanus_google.py
+fix_lanus.py
+fix_lanus_restrictions.py
