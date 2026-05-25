@@ -32,15 +32,29 @@ router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
   const full_name = (req.body?.full_name ?? meta["full_name"] ?? null) as string | null;
   const company = (req.body?.company ?? meta["company"] ?? null) as string | null;
 
-  // Leer el plan desde st_profiles (no bloqueante: si falla, queda null)
+  // Leer el plan: primero desde st_subscriptions (fuente de verdad de billing),
+  // luego fallback a st_profiles (usuarios mobile), luego null.
   let plan: string | null = null;
   try {
-    const { data: profile } = await supabase
-      .from("st_profiles")
-      .select("plan")
-      .eq("id", user.id)
-      .single();
-    plan = profile?.plan ?? null;
+    const { data: sub } = await supabase
+      .from("st_subscriptions")
+      .select("plan, status")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (sub?.plan) {
+      plan = sub.plan;
+    } else {
+      const { data: profile } = await supabase
+        .from("st_profiles")
+        .select("plan")
+        .eq("id", user.id)
+        .maybeSingle();
+      plan = profile?.plan ?? null;
+    }
   } catch {
     // silencioso — el frontend maneja plan null como "starter"
   }

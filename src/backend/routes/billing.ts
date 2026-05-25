@@ -262,11 +262,10 @@ async function upsertSubscription(p: UpsertSubscriptionParams) {
 
   if (subErr) throw subErr
 
-  // Actualizar el plan en st_profiles
+  // Upsert en st_profiles para que funcione tanto con usuarios web como móvil
   const { error: profileErr } = await supabase
     .from('st_profiles')
-    .update({ plan: p.plan })
-    .eq('id', p.userId)
+    .upsert({ id: p.userId, plan: p.plan }, { onConflict: 'id' })
 
   if (profileErr) throw profileErr
 }
