@@ -6,7 +6,7 @@ import { authMiddleware } from '../middleware/authMiddleware'
 const router = Router()
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-04-30.basil',
+  apiVersion: '2026-04-22.dahlia',
 })
 
 // Mapeo plan → price_id de Stripe (cargados desde .env)
@@ -139,6 +139,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
         // Obtener detalles de la suscripción para las fechas
         const stripeSub = await stripe.subscriptions.retrieve(subId)
+        const item = stripeSub.items.data[0]
 
         await upsertSubscription({
           userId,
@@ -146,9 +147,9 @@ router.post('/webhook', async (req: Request, res: Response) => {
           status:              'active',
           stripeCustomerId:    custId,
           stripeSubscriptionId: subId,
-          stripePriceId:       stripeSub.items.data[0]?.price.id,
-          periodStart:         new Date(stripeSub.current_period_start * 1000).toISOString(),
-          periodEnd:           new Date(stripeSub.current_period_end   * 1000).toISOString(),
+          stripePriceId:       item?.price.id,
+          periodStart:         item ? new Date(item.current_period_start * 1000).toISOString() : null,
+          periodEnd:           item ? new Date(item.current_period_end   * 1000).toISOString() : null,
         })
 
         await logEvent(event.id, event.type, userId, event.data.object)
@@ -163,15 +164,17 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
         if (!userId || !plan) break
 
+        const item = stripeSub.items.data[0]
+
         await upsertSubscription({
           userId,
           plan,
           status:              mapStripeStatus(stripeSub.status),
           stripeCustomerId:    stripeSub.customer as string,
           stripeSubscriptionId: stripeSub.id,
-          stripePriceId:       stripeSub.items.data[0]?.price.id,
-          periodStart:         new Date(stripeSub.current_period_start * 1000).toISOString(),
-          periodEnd:           new Date(stripeSub.current_period_end   * 1000).toISOString(),
+          stripePriceId:       item?.price.id,
+          periodStart:         item ? new Date(item.current_period_start * 1000).toISOString() : null,
+          periodEnd:           item ? new Date(item.current_period_end   * 1000).toISOString() : null,
         })
 
         await logEvent(event.id, event.type, userId, event.data.object)
@@ -203,7 +206,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
       // Pago fallido
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
-        const subId   = invoice.subscription as string | null
+        const subId   = (invoice.parent?.subscription_details?.subscription as string) ?? null
 
         if (subId) {
           await supabase
@@ -238,8 +241,8 @@ interface UpsertSubscriptionParams {
   stripeCustomerId:     string
   stripeSubscriptionId: string
   stripePriceId:        string | undefined
-  periodStart:          string
-  periodEnd:            string
+  periodStart:          string | null
+  periodEnd:            string | null
 }
 
 async function upsertSubscription(p: UpsertSubscriptionParams) {
