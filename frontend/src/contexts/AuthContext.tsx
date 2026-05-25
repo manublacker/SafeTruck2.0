@@ -94,15 +94,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    (async () => {
+      let { data: { session } } = await supabase.auth.getSession();
+
+      // If the cached access_token is expired (or about to expire), refresh
+      // it before fetching the profile. Without this, returning from Stripe
+      // Checkout after >1h triggers a 401 on /profile, which fires the
+      // unauthorized handler and logs the user out.
+      if (session?.expires_at) {
+        const expiresInSec = session.expires_at - Math.floor(Date.now() / 1000);
+        if (expiresInSec < 60) {
+          const { data: refreshed } = await supabase.auth.refreshSession();
+          if (refreshed.session) session = refreshed.session;
+        }
+      }
+
       if (session) {
         setToken(session.access_token);
         setTokenState(session.access_token);
-        ensureProfile(session.access_token).finally(() => setAuthReady(true));
-      } else {
-        setAuthReady(true);
+        await ensureProfile(session.access_token);
       }
-    });
+      setAuthReady(true);
+    })();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {

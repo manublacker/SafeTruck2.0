@@ -13,6 +13,7 @@ import type {
   SearchResult,
 } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
+import { supabase } from "@/lib/supabase";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
@@ -42,10 +43,31 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// On 401, try to refresh the Supabase session before logging the user out.
+// Returning from Stripe Checkout can take long enough that the cached JWT
+// expires; we shouldn't kick the user to /login if a valid refresh_token
+// is still available.
+let _refreshInFlight: Promise<boolean> | null = null;
+async function tryRefreshSession(): Promise<boolean> {
+  if (_refreshInFlight) return _refreshInFlight;
+  _refreshInFlight = (async () => {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error || !data.session) return false;
+    setToken(data.session.access_token);
+    return true;
+  })();
+  try {
+    return await _refreshInFlight;
+  } finally {
+    _refreshInFlight = null;
+  }
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     if (res.status === 401) {
-      _onUnauthorized?.();
+      const refreshed = await tryRefreshSession();
+      if (!refreshed) _onUnauthorized?.();
     }
     const text = await res.text().catch(() => "");
     throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
