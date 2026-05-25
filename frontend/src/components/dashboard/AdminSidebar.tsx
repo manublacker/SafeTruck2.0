@@ -2,7 +2,7 @@ import { Icons } from "./DashboardIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import safeTruckLogo from "@/assets/logo_safetruck.png";
 
-export type AdminPage = "map" | "fleet" | "trips";
+export type AdminPage = "map" | "fleet" | "trips" | "account";
 
 interface Props {
   page: AdminPage;
@@ -11,9 +11,10 @@ interface Props {
 }
 
 const NAV_ITEMS: { key: AdminPage; label: string; icon: React.ReactNode }[] = [
-  { key: "map",   label: "Live Map",  icon: <Icons.Map /> },
-  { key: "fleet", label: "Flota",     icon: <Icons.Truck /> },
-  { key: "trips", label: "Historial", icon: <Icons.Clock /> },
+  { key: "map",     label: "Live Map",  icon: <Icons.Map /> },
+  { key: "fleet",   label: "Flota",     icon: <Icons.Truck /> },
+  { key: "trips",   label: "Historial", icon: <Icons.Clock /> },
+  { key: "account", label: "Mi cuenta", icon: <Icons.User /> },
 ];
 
 function initials(name: string) {
