@@ -37,6 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [drivers, setDrivers]  = useState<Driver[]>([]);
   const [authReady, setAuthReady] = useState(false);
   const fetchingProfile = useRef(false);
+  // Tracks whether the profile was successfully loaded at least once.
+  // Fixes the stale-closure bug where `user` is always `null` inside the
+  // onAuthStateChange callback (captured at mount), causing ensureProfile to
+  // re-run on every TOKEN_REFRESHED event and risk a spurious 401 → logout.
+  const profileLoaded = useRef(false);
 
   const refreshDrivers = useCallback(async () => {
     try {
@@ -80,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setUser({ ...res.user, trucks: trucksList, drivers: driversList });
       setDrivers(driversList);
+      profileLoaded.current = true;
     } catch (err) {
       console.error("Error al obtener el perfil:", err);
     } finally {
@@ -102,7 +108,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session) {
         setToken(session.access_token);
         setTokenState(session.access_token);
-        if (!user) {
+        // Use `profileLoaded` ref (not the stale `user` closure) to decide
+        // whether to load the profile. This prevents re-running ensureProfile
+        // on every TOKEN_REFRESHED event, which could trigger a spurious
+        // 401 → logout cycle.
+        if (!profileLoaded.current) {
           ensureProfile(session.access_token);
         }
       } else {
@@ -110,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTokenState(null);
         setUser(null);
         setDrivers([]);
+        profileLoaded.current = false; // Reset so next login loads the profile
       }
     });
 

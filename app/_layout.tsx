@@ -10,16 +10,17 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    // Load session and profile before marking the app as ready.
+    // setReady(true) must come AFTER the profile fetch so that the tab layout
+    // never sees `profile === null` and incorrectly redirects to login.
+    supabase.auth.getSession().then(async ({ data }) => {
       if (data.session?.user) {
-        supabase
+        const { data: profile } = await supabase
           .from('st_profiles')
           .select('*')
           .eq('id', data.session.user.id)
           .single()
-          .then(({ data: profile }) => {
-            if (profile) setProfile(profile)
-          })
+        if (profile) setProfile(profile)
       }
       setReady(true)
     })
