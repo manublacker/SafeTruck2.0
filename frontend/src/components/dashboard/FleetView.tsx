@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Truck, Driver } from "@/types/auth";
-import { fetchTrucks, fetchDrivers, updateDriver, startCheckout } from "@/services/api";
+import { fetchTrucks, fetchDrivers, updateDriver, startCheckout, fetchInvitations, type DriverInvitation } from "@/services/api";
 import { Icons } from "./DashboardIcons";
 import TruckEditModal from "./TruckEditModal";
 import DriverEditModal from "./DriverEditModal";
 import AssignDriverModal from "./AssignDriverModal";
 import InviteDriverModal from "./InviteDriverModal";
-import BulkInviteModal from "./BulkInviteModal";
 import TruckTemplateModal from "./TruckTemplateModal";
 
 const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -338,26 +337,35 @@ interface DriversTabProps {
 }
 
 function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
-  const [editing, setEditing]           = useState<Driver | null>(null);
-  const [creating, setCreating]         = useState(false);
-  const [inviting, setInviting]         = useState(false);
-  const [invitingBulk, setInvitingBulk] = useState(false);
-  const [error, setError]           = useState("");
-  const [trucks, setTrucks]     = useState<Truck[]>([]);
+  const [editing, setEditing] = useState<Driver | null>(null);
+  const [inviting, setInviting] = useState(false);
+  const [error, setError]      = useState("");
+  const [trucks, setTrucks]             = useState<Truck[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<DriverInvitation[]>([]);
 
   const loadTrucks = useCallback(async () => {
     try {
       const list = await fetchTrucks();
       setTrucks(list);
     } catch (err) {
-      // Si falla no es bloqueante: el camión asignado se mostrará como "—".
       console.error("Error al cargar camiones para conductores:", err);
     }
   }, []);
 
+  const loadPendingInvitations = useCallback(async () => {
+    try {
+      const all = await fetchInvitations();
+      const now = Date.now();
+      setPendingInvitations(
+        all.filter((i) => !i.redeemed_at && new Date(i.expires_at).getTime() > now)
+      );
+    } catch { /* silencioso */ }
+  }, []);
+
   useEffect(() => {
     void loadTrucks();
-  }, [loadTrucks]);
+    void loadPendingInvitations();
+  }, [loadTrucks, loadPendingInvitations]);
 
   const driverIdToTruckName = useMemo(() => {
     const map = new Map<number, string>();
@@ -369,8 +377,8 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
 
   function handleSaved() {
     setEditing(null);
-    setCreating(false);
     void loadTrucks();
+    void refreshDrivers();
   }
 
   async function handleToggleStatus(driver: Driver) {
@@ -389,38 +397,22 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>Conductores</h3>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="st-btn-secondary"
-            style={{ padding: "10px 14px", fontSize: "0.82rem" }}
-            onClick={() => setInviting(true)}
-          >
-            Invitar conductor
-          </button>
-          <button
-            className="st-btn-secondary"
-            style={{ padding: "10px 14px", fontSize: "0.82rem" }}
-            onClick={() => setInvitingBulk(true)}
-          >
-            Invitar en masa
-          </button>
-          <button
-            className="st-btn-primary"
-            style={{ padding: "10px 16px" }}
-            onClick={() => setCreating(true)}
-          >
-            <Icons.Plus size={14} /> Agregar manual
-          </button>
-        </div>
+        <button
+          className="st-btn-primary"
+          style={{ padding: "10px 16px" }}
+          onClick={() => setInviting(true)}
+        >
+          Invitar conductor
+        </button>
       </div>
 
       {error && <Hint tone="error">{error}</Hint>}
 
-      {drivers.length === 0 ? (
+      {drivers.length === 0 && pendingInvitations.length === 0 ? (
         <EmptyState
           title="No tenés conductores registrados"
-          actionLabel="Agregar conductor"
-          onAction={() => setCreating(true)}
+          actionLabel="Invitar conductor"
+          onAction={() => setInviting(true)}
         />
       ) : (
         <table className="st-table">
@@ -437,6 +429,30 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
             </tr>
           </thead>
           <tbody>
+            {pendingInvitations.map((inv) => (
+              <tr key={`inv-${inv.id}`} style={{ opacity: 0.75 }}>
+                <td style={{ fontWeight: 600, color: "#6b7280" }}>
+                  {inv.hint_name || "Invitación pendiente"}
+                </td>
+                <td style={{ color: "#9ca3af" }}>—</td>
+                <td style={{ color: "#9ca3af" }}>—</td>
+                <td style={{ color: "#9ca3af" }}>—</td>
+                <td style={{ color: "#9ca3af" }}>—</td>
+                <td>
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                    background: "#fffbeb", border: "1px solid #fde68a",
+                    borderRadius: 999, padding: "3px 10px",
+                    fontSize: "0.78rem", fontWeight: 700, color: "#92400e",
+                  }}>
+                    <span style={{ width: 6, height: 6, borderRadius: 999, background: "#f59e0b", display: "inline-block" }} />
+                    Pendiente
+                  </span>
+                </td>
+                <td style={{ color: "#9ca3af" }}>—</td>
+                <td />
+              </tr>
+            ))}
             {drivers.map((d) => {
               const venceStyle = licenseExpiryStyle(d.vencimiento_licencia);
               const truckName = driverIdToTruckName.get(d.id) ?? "—";
@@ -491,17 +507,11 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
         </table>
       )}
 
-      {creating && (
-        <DriverEditModal driver={null} onSave={handleSaved} onClose={() => setCreating(false)} />
-      )}
       {editing && (
         <DriverEditModal driver={editing} onSave={handleSaved} onClose={() => setEditing(null)} />
       )}
       {inviting && (
-        <InviteDriverModal onClose={() => setInviting(false)} />
-      )}
-      {invitingBulk && (
-        <BulkInviteModal onClose={() => setInvitingBulk(false)} />
+        <InviteDriverModal onClose={() => { setInviting(false); void loadPendingInvitations(); }} />
       )}
     </div>
   );

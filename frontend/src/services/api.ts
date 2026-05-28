@@ -292,6 +292,14 @@ export interface DriverInvitation {
   expires_at: string;
   redeemed_at: string | null;
   created_at: string;
+  driver_nombre?: string | null;
+}
+
+export async function fetchInvitations(): Promise<DriverInvitation[]> {
+  const res = await fetch(`${BASE_URL}/api/invitations`, {
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
 }
 
 export async function createInvitation(hint_name?: string): Promise<DriverInvitation> {
