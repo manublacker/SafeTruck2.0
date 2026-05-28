@@ -1,22 +1,21 @@
 import { useState } from "react";
 import { createInvitation, type DriverInvitation } from "@/services/api";
-import type { Driver } from "@/types/auth";
 
 interface Props {
-  driver: Driver;
   onClose: () => void;
 }
 
-export default function InviteDriverModal({ driver, onClose }: Props) {
-  const [loading, setLoading]   = useState(false);
+export default function InviteDriverModal({ onClose }: Props) {
+  const [hintName, setHintName]     = useState("");
+  const [loading, setLoading]       = useState(false);
   const [invitation, setInvitation] = useState<DriverInvitation | null>(null);
-  const [error, setError]       = useState("");
+  const [error, setError]           = useState("");
 
   async function handleGenerate() {
     setLoading(true);
     setError("");
     try {
-      const inv = await createInvitation(driver.id);
+      const inv = await createInvitation(hintName.trim() || undefined);
       setInvitation(inv);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al generar el código");
@@ -25,23 +24,24 @@ export default function InviteDriverModal({ driver, onClose }: Props) {
     }
   }
 
+  function copyCode() {
+    if (!invitation) return;
+    navigator.clipboard.writeText(invitation.code).catch(() => null);
+  }
+
   function handleWhatsApp() {
     if (!invitation) return;
     const expiresDate = new Date(invitation.expires_at).toLocaleDateString("es-AR", {
       day: "2-digit", month: "2-digit", year: "numeric",
     });
+    const nombre = invitation.hint_name ? `Hola ${invitation.hint_name}! ` : "Hola! ";
     const msg = encodeURIComponent(
-      `Hola ${driver.nombre}! Te invito a SafeTruck 🚛\n\n` +
+      `${nombre}Te invito a SafeTruck 🚛\n\n` +
       `Tu código de acceso es: *${invitation.code}*\n\n` +
       `Válido hasta el ${expiresDate}.\n\n` +
-      `Descargá la app SafeTruck, creá tu cuenta e ingresá el código en tu perfil para recibir viajes asignados.`
+      `Descargá la app SafeTruck, creá tu cuenta e ingresá el código en tu perfil para recibir viajes.`
     );
     window.open(`https://wa.me/?text=${msg}`, "_blank");
-  }
-
-  function copyCode() {
-    if (!invitation) return;
-    navigator.clipboard.writeText(invitation.code).catch(() => null);
   }
 
   return (
@@ -53,51 +53,58 @@ export default function InviteDriverModal({ driver, onClose }: Props) {
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div
-        style={{
-          background: "#fff", borderRadius: 16, padding: 28,
-          width: "100%", maxWidth: 420, boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-        }}
-      >
+      <div style={{
+        background: "#fff", borderRadius: 16, padding: 28,
+        width: "100%", maxWidth: 420, boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+      }}>
         <h3 style={{ margin: "0 0 6px", fontSize: "1.1rem", fontWeight: 800, color: "#0d0d0d" }}>
           Invitar conductor
         </h3>
         <p style={{ margin: "0 0 20px", fontSize: "0.88rem", color: "#6b7280" }}>
-          Generá un código para que <strong>{driver.nombre}</strong> se vincule a tu empresa en la app SafeTruck.
+          Generá un código para que un conductor se vincule a tu empresa desde la app.
         </p>
 
-        {error && (
-          <p style={{ color: "#c62828", fontSize: "0.85rem", marginBottom: 12 }}>{error}</p>
-        )}
+        {error && <p style={{ color: "#c62828", fontSize: "0.85rem", marginBottom: 12 }}>{error}</p>}
 
         {!invitation ? (
-          <button
-            className="st-btn-primary"
-            style={{ width: "100%" }}
-            onClick={handleGenerate}
-            disabled={loading}
-          >
-            {loading ? "Generando…" : "Generar código de invitación"}
-          </button>
-        ) : (
           <>
             <div style={{ marginBottom: 16 }}>
+              <label className="st-label">Nombre del conductor (opcional)</label>
+              <input
+                className="st-field"
+                placeholder="Ej: Juan García"
+                value={hintName}
+                onChange={(e) => setHintName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !loading && handleGenerate()}
+              />
+              <p style={{ margin: "6px 0 0", fontSize: "0.78rem", color: "#9ca3af" }}>
+                Solo como referencia. El conductor va a completar sus datos al registrarse.
+              </p>
+            </div>
+
+            <button
+              className="st-btn-cta"
+              onClick={handleGenerate}
+              disabled={loading}
+            >
+              {loading ? "Generando…" : "Generar código"}
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{ marginBottom: 20 }}>
               <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "#6b7280", letterSpacing: 0.6, marginBottom: 8 }}>
                 CÓDIGO DE ACCESO
               </p>
-              <div
-                style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  background: "#f8f8f8", borderRadius: 12, padding: "12px 16px",
-                  border: "1.5px dashed #e53935",
-                }}
-              >
-                <span
-                  style={{
-                    flex: 1, fontFamily: "ui-monospace, monospace", fontSize: "1.6rem",
-                    fontWeight: 800, color: "#e53935", letterSpacing: 4,
-                  }}
-                >
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                background: "#f8f8f8", borderRadius: 12, padding: "14px 16px",
+                border: "1.5px dashed #e53935",
+              }}>
+                <span style={{
+                  flex: 1, fontFamily: "ui-monospace, monospace", fontSize: "1.8rem",
+                  fontWeight: 800, color: "#e53935", letterSpacing: 6,
+                }}>
                   {invitation.code}
                 </span>
                 <button
@@ -115,11 +122,11 @@ export default function InviteDriverModal({ driver, onClose }: Props) {
 
             <button
               style={{
-                width: "100%", padding: "12px 0", borderRadius: 10,
+                width: "100%", padding: "13px 0", borderRadius: 10,
                 background: "#25D366", color: "#fff", border: "none",
                 fontFamily: "inherit", fontSize: "0.95rem", fontWeight: 700,
                 cursor: "pointer", display: "flex", alignItems: "center",
-                justifyContent: "center", gap: 8,
+                justifyContent: "center", gap: 8, marginBottom: 10,
               }}
               onClick={handleWhatsApp}
             >
@@ -129,13 +136,8 @@ export default function InviteDriverModal({ driver, onClose }: Props) {
               Enviar por WhatsApp
             </button>
 
-            <button
-              className="st-btn-secondary"
-              style={{ width: "100%", marginTop: 10 }}
-              onClick={handleGenerate}
-              disabled={loading}
-            >
-              Regenerar código
+            <button className="st-btn-secondary" style={{ width: "100%" }} onClick={() => setInvitation(null)}>
+              Generar otro código
             </button>
           </>
         )}

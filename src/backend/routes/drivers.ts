@@ -200,4 +200,49 @@ router.delete("/:id", async (req: Request, res: Response) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// PATCH /api/drivers/me — Conductor actualiza sus propios datos desde el mobile
+// (usa app_user_id del JWT en lugar de admin user_id)
+// ---------------------------------------------------------------------------
+router.patch("/me", async (req: Request, res: Response) => {
+  const appUserId = req.user!.id;
+  const allowed = ["nombre", "telefono", "licencia", "categoria_licencia", "vencimiento_licencia"] as const;
+  const updates: Record<string, unknown> = {};
+
+  for (const field of allowed) {
+    if (field in req.body) updates[field] = req.body[field];
+  }
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "Sin campos para actualizar." });
+    return;
+  }
+
+  try {
+    const existing = await pool.query<{ id: number }>(
+      "SELECT id FROM drivers WHERE app_user_id = $1 AND is_active = true LIMIT 1",
+      [appUserId]
+    );
+    if (!existing.rowCount) {
+      res.status(404).json({ error: "No estás vinculado a ningún conductor." });
+      return;
+    }
+
+    const fields = Object.keys(updates);
+    const setClauses = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
+    const values = [...fields.map(f => updates[f] ?? null), existing.rows[0].id];
+
+    const result = await pool.query(
+      `UPDATE drivers SET ${setClauses}, updated_at = NOW()
+       WHERE id = $${fields.length + 1}
+       RETURNING id, nombre, telefono, licencia, categoria_licencia, vencimiento_licencia, estado`,
+      values
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Error en PATCH /api/drivers/me:", err);
+    res.status(500).json({ error: "Error interno del servidor." });
+  }
+});
+
 export default router;

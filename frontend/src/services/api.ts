@@ -287,32 +287,32 @@ export interface DriverInvitation {
   id: string;
   code: string;
   admin_id: string;
-  driver_id: number;
-  driver_name: string | null;
+  driver_id: number | null;
+  hint_name: string | null;
   expires_at: string;
   redeemed_at: string | null;
   created_at: string;
 }
 
-export async function bulkCreateInvitations(
-  driver_ids: number[]
-): Promise<{ driver_id: number; driver_name: string; code: string; expires_at: string }[]> {
-  const res = await fetch(`${BASE_URL}/api/invitations/bulk`, {
+export async function createInvitation(hint_name?: string): Promise<DriverInvitation> {
+  const res = await fetch(`${BASE_URL}/api/invitations`, {
     method:  "POST",
     headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
-    body:    JSON.stringify({ driver_ids }),
-  });
-  return handleResponse(res);
-}
-
-export async function createInvitation(driver_id: number): Promise<DriverInvitation> {
-  const res = await fetch(`${BASE_URL}/api/invitations`, {
-    method:  'POST',
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
-    body:    JSON.stringify({ driver_id }),
+    body:    JSON.stringify({ hint_name: hint_name ?? null }),
   });
   const data = await handleResponse<{ success: boolean; invitation: DriverInvitation }>(res);
   return data.invitation;
+}
+
+export async function bulkCreateInvitations(
+  quantity: number
+): Promise<{ code: string; expires_at: string }[]> {
+  const res = await fetch(`${BASE_URL}/api/invitations/bulk`, {
+    method:  "POST",
+    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    body:    JSON.stringify({ quantity }),
+  });
+  return handleResponse(res);
 }
 
 // ── Billing / Stripe ──────────────────────────────────────────

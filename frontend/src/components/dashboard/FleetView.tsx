@@ -338,9 +338,9 @@ interface DriversTabProps {
 }
 
 function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
-  const [editing, setEditing]       = useState<Driver | null>(null);
-  const [creating, setCreating]     = useState(false);
-  const [inviting, setInviting]     = useState<Driver | null>(null);
+  const [editing, setEditing]           = useState<Driver | null>(null);
+  const [creating, setCreating]         = useState(false);
+  const [inviting, setInviting]         = useState(false);
   const [invitingBulk, setInvitingBulk] = useState(false);
   const [error, setError]           = useState("");
   const [trucks, setTrucks]     = useState<Truck[]>([]);
@@ -393,16 +393,23 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
           <button
             className="st-btn-secondary"
             style={{ padding: "10px 14px", fontSize: "0.82rem" }}
+            onClick={() => setInviting(true)}
+          >
+            Invitar conductor
+          </button>
+          <button
+            className="st-btn-secondary"
+            style={{ padding: "10px 14px", fontSize: "0.82rem" }}
             onClick={() => setInvitingBulk(true)}
           >
-            <Icons.Plus size={13} /> Invitar en masa
+            Invitar en masa
           </button>
           <button
             className="st-btn-primary"
             style={{ padding: "10px 16px" }}
             onClick={() => setCreating(true)}
           >
-            <Icons.Plus size={14} /> Agregar conductor
+            <Icons.Plus size={14} /> Agregar manual
           </button>
         </div>
       </div>
@@ -463,13 +470,6 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                       <button
                         className="st-action-btn"
-                        title="Invitar a la app"
-                        onClick={() => setInviting(d)}
-                      >
-                        <Icons.Plus />
-                      </button>
-                      <button
-                        className="st-action-btn"
                         title="Editar"
                         onClick={() => setEditing(d)}
                       >
@@ -498,10 +498,10 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
         <DriverEditModal driver={editing} onSave={handleSaved} onClose={() => setEditing(null)} />
       )}
       {inviting && (
-        <InviteDriverModal driver={inviting} onClose={() => setInviting(null)} />
+        <InviteDriverModal onClose={() => setInviting(false)} />
       )}
       {invitingBulk && (
-        <BulkInviteModal drivers={drivers} onClose={() => setInvitingBulk(false)} />
+        <BulkInviteModal onClose={() => setInvitingBulk(false)} />
       )}
     </div>
   );
