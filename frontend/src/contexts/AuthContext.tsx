@@ -37,7 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [drivers, setDrivers]  = useState<Driver[]>([]);
   const [authReady, setAuthReady] = useState(false);
-  const fetchingProfile = useRef(false);
+  // Holds the in-flight ensureProfile promise so concurrent callers (the
+  // IIFE and onAuthStateChange's INITIAL_SESSION event) await the same fetch
+  // instead of one returning early and letting setAuthReady(true) fire before
+  // the user is set — which caused a redirect to /login on every refresh.
+  const profileFetchPromise = useRef<Promise<void> | null>(null);
   // Tracks whether the profile was successfully loaded at least once.
   // Fixes the stale-closure bug where `user` is always `null` inside the
   // onAuthStateChange callback (captured at mount), causing ensureProfile to
@@ -79,41 +83,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   };
 
-  const ensureProfile = useCallback(async (session: Session) => {
-    if (fetchingProfile.current) return;
-    fetchingProfile.current = true;
-    const accessToken = session.access_token;
-    try {
-      const res = await fetchUserProfile(accessToken, {});
-      // El backend devuelve trucks en /profile sin el campo `driver` y no
-      // devuelve drivers — los traemos por separado vía /api/trucks y
-      // /api/drivers para que el contexto exponga la relación completa.
-      const [driversResult, trucksResult] = await Promise.allSettled([
-        fetchDrivers(),
-        fetchTrucks(),
-      ]);
-      const driversList =
-        driversResult.status === "fulfilled" ? driversResult.value : [];
-      if (driversResult.status === "rejected") {
-        console.error("Error al obtener conductores:", driversResult.reason);
+  const ensureProfile = useCallback((session: Session): Promise<void> => {
+    if (profileFetchPromise.current) return profileFetchPromise.current;
+
+    profileFetchPromise.current = (async () => {
+      const accessToken = session.access_token;
+      try {
+        const res = await fetchUserProfile(accessToken, {});
+        // El backend devuelve trucks en /profile sin el campo `driver` y no
+        // devuelve drivers — los traemos por separado vía /api/trucks y
+        // /api/drivers para que el contexto exponga la relación completa.
+        const [driversResult, trucksResult] = await Promise.allSettled([
+          fetchDrivers(),
+          fetchTrucks(),
+        ]);
+        const driversList =
+          driversResult.status === "fulfilled" ? driversResult.value : [];
+        if (driversResult.status === "rejected") {
+          console.error("Error al obtener conductores:", driversResult.reason);
+        }
+        const trucksList =
+          trucksResult.status === "fulfilled" ? trucksResult.value : res.user.trucks;
+        if (trucksResult.status === "rejected") {
+          console.error("Error al obtener camiones:", trucksResult.reason);
+        }
+        setUser({ ...res.user, trucks: trucksList, drivers: driversList });
+        setDrivers(driversList);
+        profileLoaded.current = true;
+      } catch (err) {
+        console.error("Error al obtener el perfil:", err);
+        // Fallback: keep the user logged in with whatever the session gives us.
+        // The backend may be momentarily unreachable, but a valid Supabase
+        // session shouldn't be punished with a forced logout.
+        setUser((current) => current ?? userFromSession(session));
+      } finally {
+        profileFetchPromise.current = null;
       }
-      const trucksList =
-        trucksResult.status === "fulfilled" ? trucksResult.value : res.user.trucks;
-      if (trucksResult.status === "rejected") {
-        console.error("Error al obtener camiones:", trucksResult.reason);
-      }
-      setUser({ ...res.user, trucks: trucksList, drivers: driversList });
-      setDrivers(driversList);
-      profileLoaded.current = true;
-    } catch (err) {
-      console.error("Error al obtener el perfil:", err);
-      // Fallback: keep the user logged in with whatever the session gives us.
-      // The backend may be momentarily unreachable, but a valid Supabase
-      // session shouldn't be punished with a forced logout.
-      setUser((current) => current ?? userFromSession(session));
-    } finally {
-      fetchingProfile.current = false;
-    }
+    })();
+
+    return profileFetchPromise.current;
   }, []);
 
   useEffect(() => {
