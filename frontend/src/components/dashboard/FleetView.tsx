@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Truck, Driver } from "@/types/auth";
-import { fetchTrucks, updateDriver } from "@/services/api";
+import { fetchTrucks, updateDriver, startCheckout } from "@/services/api";
 import { Icons } from "./DashboardIcons";
 import TruckEditModal from "./TruckEditModal";
 import DriverEditModal from "./DriverEditModal";
@@ -472,6 +472,11 @@ function Toolbar({
   );
 }
 
+const PLAN_NEXT: Record<string, string> = {
+  starter: "pro",
+  pro: "enterprise",
+};
+
 function FleetUsageBar({
   current,
   limit,
@@ -481,9 +486,22 @@ function FleetUsageBar({
   limit: number;
   plan: string;
 }) {
+  const [upgrading, setUpgrading] = useState(false);
   const pct = Math.min((current / limit) * 100, 100);
   const atLimit = current >= limit;
   const barColor = atLimit ? "#e53935" : pct >= 80 ? "#f59e0b" : "#22c55e";
+  const nextPlan = PLAN_NEXT[plan];
+
+  async function handleUpgrade() {
+    if (!nextPlan || upgrading) return;
+    setUpgrading(true);
+    try {
+      const url = await startCheckout(nextPlan);
+      window.location.href = url;
+    } catch {
+      setUpgrading(false);
+    }
+  }
 
   return (
     <div style={{ marginBottom: 16 }}>
@@ -507,9 +525,30 @@ function FleetUsageBar({
         />
       </div>
       {atLimit && (
-        <p style={{ margin: "8px 0 0", fontSize: "0.8rem", color: "#e53935", fontWeight: 600 }}>
-          Límite alcanzado. Actualizá tu plan para agregar más camiones.
-        </p>
+        <div style={{ margin: "8px 0 0", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <p style={{ margin: 0, fontSize: "0.8rem", color: "#e53935", fontWeight: 600 }}>
+            Límite alcanzado. Actualizá tu plan para agregar más camiones.
+          </p>
+          {nextPlan && (
+            <button
+              onClick={handleUpgrade}
+              disabled={upgrading}
+              style={{
+                padding: "4px 12px",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                color: "#fff",
+                background: upgrading ? "#9ca3af" : "#2563eb",
+                border: "none",
+                borderRadius: 6,
+                cursor: upgrading ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {upgrading ? "Redirigiendo…" : `Pasá al plan ${nextPlan.charAt(0).toUpperCase() + nextPlan.slice(1)}`}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
