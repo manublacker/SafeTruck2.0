@@ -162,7 +162,7 @@ function TrucksTab() {
             display: "grid",
             gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
             gap: 16,
-            paddingBottom: 24,
+            paddingBottom: 48,
           }}
         >
           {trucks.map((t) => (
