@@ -162,6 +162,7 @@ function TrucksTab() {
             display: "grid",
             gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
             gap: 16,
+            paddingBottom: 24,
           }}
         >
           {trucks.map((t) => (
@@ -492,6 +493,14 @@ function FleetUsageBar({
   const barColor = atLimit ? "#e53935" : pct >= 80 ? "#f59e0b" : "#22c55e";
   const nextPlan = PLAN_NEXT[plan];
 
+  useEffect(() => {
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted) setUpgrading(false);
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   async function handleUpgrade() {
     if (!nextPlan || upgrading) return;
     setUpgrading(true);
@@ -531,16 +540,13 @@ function FleetUsageBar({
           </p>
           {nextPlan && (
             <button
+              className="st-btn-primary"
               onClick={handleUpgrade}
               disabled={upgrading}
               style={{
-                padding: "4px 12px",
-                fontSize: "0.78rem",
-                fontWeight: 700,
-                color: "#fff",
-                background: upgrading ? "#9ca3af" : "#2563eb",
-                border: "none",
-                borderRadius: 6,
+                padding: "7px 16px",
+                fontSize: "0.85rem",
+                opacity: upgrading ? 0.6 : 1,
                 cursor: upgrading ? "not-allowed" : "pointer",
                 whiteSpace: "nowrap",
               }}
