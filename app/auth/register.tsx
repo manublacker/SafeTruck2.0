@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image,
@@ -9,7 +9,7 @@ import { getTheme, Theme } from '../../src/theme'
 import { supabase } from '../../src/services/supabase'
 import {
   isValidEmail, isValidPassword, resendSignupOtp,
-  sanitizeOtpDigit, signUpWithEmail, verifySignupOtp,
+  signUpWithEmail, verifySignupOtp,
   MIN_PASSWORD_LENGTH, OTP_LENGTH,
 } from '../../src/services/auth'
 import { OTP_RESEND_COOLDOWN_SECONDS } from '../../src/constants/register'
@@ -30,7 +30,7 @@ export default function RegisterScreen() {
     fullName: '', email: '', password: '', confirmPassword: '', acceptedTerms: false,
   })
   const [errors, setErrors]   = useState<FieldErrors>({})
-  const [otpDigits, setOtpDigits] = useState<string[]>(() => Array(OTP_LENGTH).fill(''))
+  const [otpCode, setOtpCode] = useState('')
   const [resendIn, setResendIn]   = useState(0)
   const [loading, setLoading]     = useState(false)
 
@@ -79,14 +79,13 @@ export default function RegisterScreen() {
     }
 
     // Step 2: verify OTP
-    const code = otpDigits.join('')
-    if (code.length < OTP_LENGTH) {
+    if (otpCode.length < OTP_LENGTH) {
       setErrors({ otp: `Ingresá los ${OTP_LENGTH} dígitos` })
       return
     }
     setLoading(true)
     try {
-      await verifySignupOtp(form.email, code)
+      await verifySignupOtp(form.email, otpCode)
 
       // Guardar nombre en st_profiles
       const { data: { user } } = await supabase.auth.getUser()
@@ -194,8 +193,8 @@ export default function RegisterScreen() {
         {/* Step 2: OTP */}
         {step === 2 && (
           <OtpStep
-            email={form.email} digits={otpDigits} error={errors.otp}
-            resendIn={resendIn} onDigitsChange={setOtpDigits}
+            email={form.email} code={otpCode} error={errors.otp}
+            resendIn={resendIn} onCodeChange={v => { setOtpCode(v.replace(/\D/g, '').slice(0, OTP_LENGTH)); setErrors(p => ({ ...p, otp: undefined })) }}
             onResend={handleResendOtp} s={s} t={t}
           />
         )}
@@ -223,40 +222,43 @@ export default function RegisterScreen() {
 }
 
 function OtpStep({
-  email, digits, error, resendIn, onDigitsChange, onResend, s, t,
+  email, code, error, resendIn, onCodeChange, onResend, s, t,
 }: {
-  email: string; digits: string[]; error?: string; resendIn: number
-  onDigitsChange: (d: string[]) => void; onResend: () => void; s: any; t: Theme
+  email: string; code: string; error?: string; resendIn: number
+  onCodeChange: (v: string) => void; onResend: () => void; s: any; t: Theme
 }) {
-  const inputRefs = useRef<Array<TextInput | null>>([])
-
-  function handleChange(index: number, raw: string) {
-    const digit = sanitizeOtpDigit(raw)
-    const next = [...digits]; next[index] = digit
-    onDigitsChange(next)
-    if (digit && index < OTP_LENGTH - 1) inputRefs.current[index + 1]?.focus()
-  }
-
-  function handleKeyPress(index: number, key: string) {
-    if (key === 'Backspace' && !digits[index] && index > 0) inputRefs.current[index - 1]?.focus()
-  }
-
   return (
     <View>
       <Text style={s.title}>Verificá tu email</Text>
-      <Text style={s.subtitle}>Te enviamos un código de {OTP_LENGTH} dígitos a {email}.</Text>
+      <Text style={s.subtitle}>
+        Te enviamos un código de {OTP_LENGTH} dígitos a {'\n'}{email}.
+      </Text>
 
-      <View style={s.otpRow}>
-        {digits.map((digit, i) => (
-          <TextInput
-            key={i} ref={ref => { inputRefs.current[i] = ref }}
-            style={[s.otpInput, digit && s.otpInputFilled]}
-            value={digit} onChangeText={raw => handleChange(i, raw)}
-            onKeyPress={({ nativeEvent }) => handleKeyPress(i, nativeEvent.key)}
-            keyboardType="number-pad" maxLength={1} textAlign="center"
+      <TextInput
+        style={s.otpSingleInput}
+        value={code}
+        onChangeText={onCodeChange}
+        keyboardType="number-pad"
+        maxLength={OTP_LENGTH}
+        placeholder={'—'.repeat(OTP_LENGTH)}
+        placeholderTextColor={t.textSoft}
+        textAlign="center"
+        autoFocus
+      />
+
+      {/* Indicador de progreso */}
+      <View style={s.otpDotsRow}>
+        {Array.from({ length: OTP_LENGTH }).map((_, i) => (
+          <View
+            key={i}
+            style={[
+              s.otpDot,
+              i < code.length && s.otpDotFilled,
+            ]}
           />
         ))}
       </View>
+
       {error && <Text style={[s.error, { textAlign: 'center' }]}>{error}</Text>}
 
       <TouchableOpacity style={s.resendRow} onPress={onResend} disabled={resendIn > 0}>
@@ -309,13 +311,20 @@ function makeStyles(t: Theme) {
     checkboxMark: { color: '#fff', fontSize: 13, fontWeight: '700' },
     checkboxLabel: { color: t.text, fontSize: 13, flex: 1 },
 
-    otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-    otpInput: {
-      width: 48, height: 56, backgroundColor: t.card, borderRadius: 12,
-      borderWidth: 1, borderColor: t.border, color: t.text,
-      fontSize: 22, fontWeight: '700',
+    otpSingleInput: {
+      backgroundColor: t.card, color: t.text, borderRadius: 16,
+      borderWidth: 1.5, borderColor: t.accent,
+      paddingVertical: 20, fontSize: 32, fontWeight: '800',
+      letterSpacing: 12, marginBottom: 16, textAlign: 'center',
     },
-    otpInputFilled: { borderColor: t.accent },
+    otpDotsRow: {
+      flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 8,
+    },
+    otpDot: {
+      width: 10, height: 10, borderRadius: 5,
+      backgroundColor: t.border,
+    },
+    otpDotFilled: { backgroundColor: t.accent },
     resendRow: { marginTop: 12, alignItems: 'center' },
 
     btn: { backgroundColor: t.accent, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 16 },
