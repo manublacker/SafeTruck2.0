@@ -16,8 +16,17 @@ const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const TILE_ATTRIBUTION = "&copy; OpenStreetMap contributors";
 const TILE_MAX_ZOOM = 19;
 
+export interface DriverLocation {
+  driver_app_user_id: string;
+  driver_name: string | null;
+  truck_plate: string | null;
+  lat: number;
+  lng: number;
+}
+
 interface Props {
   routeResponse: RouteResponse | null;
+  driverLocations?: DriverLocation[];
 }
 
 function buildDestinationIcon(): L.DivIcon {
@@ -29,11 +38,26 @@ function buildDestinationIcon(): L.DivIcon {
   });
 }
 
-export default function MapDisplay({ routeResponse }: Props) {
+function buildDriverIcon(label: string): L.DivIcon {
+  return L.divIcon({
+    className: "",
+    html: `<div style="background:#0d47a1;color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.30);white-space:nowrap;position:relative;">
+      🚛
+      <div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:#0d47a1;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;white-space:nowrap;pointer-events:none;">
+        ${label}
+      </div>
+    </div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+}
+
+export default function MapDisplay({ routeResponse, driverLocations = [] }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const polylineRef = useRef<L.Polyline | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const driverMarkersRef = useRef<Map<string, L.Marker>>(new Map());
 
   // Inicialización + cleanup del mapa
   useEffect(() => {
@@ -67,8 +91,44 @@ export default function MapDisplay({ routeResponse }: Props) {
       mapRef.current = null;
       polylineRef.current = null;
       markerRef.current = null;
+      driverMarkersRef.current.clear();
     };
   }, []);
+
+  // Render de marcadores de conductores en tiempo real
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const incoming = new Map(driverLocations.map((d) => [d.driver_app_user_id, d]));
+
+    // Eliminar marcadores de conductores que ya no están activos
+    driverMarkersRef.current.forEach((marker, id) => {
+      if (!incoming.has(id)) {
+        marker.remove();
+        driverMarkersRef.current.delete(id);
+      }
+    });
+
+    // Agregar o actualizar marcadores
+    incoming.forEach((loc) => {
+      const label = loc.truck_plate ?? loc.driver_name ?? "Driver";
+      const existing = driverMarkersRef.current.get(loc.driver_app_user_id);
+      if (existing) {
+        existing.setLatLng([loc.lat, loc.lng]);
+        existing.setIcon(buildDriverIcon(label));
+      } else {
+        const marker = L.marker([loc.lat, loc.lng], {
+          icon: buildDriverIcon(label),
+          title: label,
+          zIndexOffset: 1000,
+        })
+          .addTo(map)
+          .bindPopup(`<strong>${loc.driver_name ?? "Conductor"}</strong><br/>${loc.truck_plate ?? ""}`);
+        driverMarkersRef.current.set(loc.driver_app_user_id, marker);
+      }
+    });
+  }, [driverLocations]);
 
   // Render de la ruta
   useEffect(() => {

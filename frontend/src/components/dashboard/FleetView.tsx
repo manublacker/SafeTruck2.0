@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Truck, Driver } from "@/types/auth";
-import { fetchTrucks, updateDriver, startCheckout } from "@/services/api";
+import { fetchTrucks, fetchDrivers, updateDriver, startCheckout } from "@/services/api";
 import { Icons } from "./DashboardIcons";
 import TruckEditModal from "./TruckEditModal";
 import DriverEditModal from "./DriverEditModal";
 import AssignDriverModal from "./AssignDriverModal";
+import InviteDriverModal from "./InviteDriverModal";
+import BulkInviteModal from "./BulkInviteModal";
+import TruckTemplateModal from "./TruckTemplateModal";
 
 const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
 const SERVICE_WARN_DAYS = 30;
@@ -24,8 +27,23 @@ const DRIVER_ESTADO_INACTIVO = "Inactivo";
 type FleetTab = "trucks" | "drivers";
 
 export default function FleetView() {
-  const { drivers, refreshDrivers } = useAuth();
+  const { refreshDrivers } = useAuth();
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [tab, setTab] = useState<FleetTab>("drivers");
+
+  const loadDrivers = useCallback(async () => {
+    try {
+      const list = await fetchDrivers();
+      setDrivers(list);
+    } catch { /* silencioso */ }
+  }, []);
+
+  useEffect(() => { void loadDrivers(); }, [loadDrivers]);
+
+  const refreshAllDrivers = useCallback(async () => {
+    await loadDrivers();
+    await refreshDrivers().catch(() => {});
+  }, [loadDrivers, refreshDrivers]);
 
   return (
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
@@ -40,7 +58,7 @@ export default function FleetView() {
         {tab === "trucks" ? (
           <TrucksTab />
         ) : (
-          <DriversTab drivers={drivers} refreshDrivers={refreshDrivers} />
+          <DriversTab drivers={drivers} refreshDrivers={refreshAllDrivers} />
         )}
       </div>
     </div>
@@ -91,9 +109,10 @@ function TrucksTab() {
   const [loading, setLoading] = useState(user === null);
   const [error, setError] = useState("");
 
-  const [editing, setEditing]   = useState<Truck | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [assigning, setAssigning] = useState<Truck | null>(null);
+  const [editing, setEditing]         = useState<Truck | null>(null);
+  const [creating, setCreating]       = useState(false);
+  const [fromTemplate, setFromTemplate] = useState(false);
+  const [assigning, setAssigning]     = useState<Truck | null>(null);
 
   // ── Límite de flota por plan ─────────────────────────────────────────────
   const plan = user?.plan ?? "starter";
@@ -132,12 +151,28 @@ function TrucksTab() {
 
   return (
     <div>
-      <Toolbar
-        title="Camiones"
-        actionLabel="Agregar camión"
-        onAction={() => setCreating(true)}
-        disabled={atLimit}
-      />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>Camiones</h3>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="st-btn-secondary"
+            style={{ padding: "10px 14px", fontSize: "0.82rem", opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }}
+            onClick={atLimit ? undefined : () => setFromTemplate(true)}
+            disabled={atLimit}
+          >
+            Desde plantilla
+          </button>
+          <button
+            className="st-btn-primary"
+            style={{ padding: "10px 16px", opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }}
+            onClick={atLimit ? undefined : () => setCreating(true)}
+            disabled={atLimit}
+            title={atLimit ? "Alcanzaste el límite de camiones de tu plan" : undefined}
+          >
+            <Icons.Plus size={14} /> Agregar camión
+          </button>
+        </div>
+      </div>
 
       {/* Indicador de uso del plan */}
       {Number.isFinite(truckLimit) && (
@@ -188,6 +223,12 @@ function TrucksTab() {
           drivers={drivers}
           onDone={handleAssignDone}
           onClose={() => setAssigning(null)}
+        />
+      )}
+      {fromTemplate && (
+        <TruckTemplateModal
+          onSaved={handleSaved}
+          onClose={() => setFromTemplate(false)}
         />
       )}
     </div>
@@ -297,9 +338,11 @@ interface DriversTabProps {
 }
 
 function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
-  const [editing, setEditing]   = useState<Driver | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [error, setError]       = useState("");
+  const [editing, setEditing]       = useState<Driver | null>(null);
+  const [creating, setCreating]     = useState(false);
+  const [inviting, setInviting]     = useState<Driver | null>(null);
+  const [invitingBulk, setInvitingBulk] = useState(false);
+  const [error, setError]           = useState("");
   const [trucks, setTrucks]     = useState<Truck[]>([]);
 
   const loadTrucks = useCallback(async () => {
@@ -344,11 +387,25 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
 
   return (
     <div>
-      <Toolbar
-        title="Conductores"
-        actionLabel="Agregar conductor"
-        onAction={() => setCreating(true)}
-      />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>Conductores</h3>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="st-btn-secondary"
+            style={{ padding: "10px 14px", fontSize: "0.82rem" }}
+            onClick={() => setInvitingBulk(true)}
+          >
+            <Icons.Plus size={13} /> Invitar en masa
+          </button>
+          <button
+            className="st-btn-primary"
+            style={{ padding: "10px 16px" }}
+            onClick={() => setCreating(true)}
+          >
+            <Icons.Plus size={14} /> Agregar conductor
+          </button>
+        </div>
+      </div>
 
       {error && <Hint tone="error">{error}</Hint>}
 
@@ -406,6 +463,13 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                       <button
                         className="st-action-btn"
+                        title="Invitar a la app"
+                        onClick={() => setInviting(d)}
+                      >
+                        <Icons.Plus />
+                      </button>
+                      <button
+                        className="st-action-btn"
                         title="Editar"
                         onClick={() => setEditing(d)}
                       >
@@ -432,6 +496,12 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
       )}
       {editing && (
         <DriverEditModal driver={editing} onSave={handleSaved} onClose={() => setEditing(null)} />
+      )}
+      {inviting && (
+        <InviteDriverModal driver={inviting} onClose={() => setInviting(null)} />
+      )}
+      {invitingBulk && (
+        <BulkInviteModal drivers={drivers} onClose={() => setInvitingBulk(false)} />
       )}
     </div>
   );

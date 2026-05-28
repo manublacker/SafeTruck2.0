@@ -13,3 +13,4 @@ venv/
 *.sql
 SafeTruck3/node_modules/
 src/data/*.geojson
+frontend/.claude/

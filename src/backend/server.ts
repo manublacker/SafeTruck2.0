@@ -14,6 +14,10 @@ import reportsRouter from './routes/reports'
 import usersRouter from './routes/users'
 import billingRouter from './routes/billing'
 import { authMiddleware } from './middleware/authMiddleware'
+import assignedTripsRouter from './routes/assigned-trips'
+import invitationsRouter from './routes/invitations'
+import locationsRouter from './routes/locations'
+import pushTokensRouter from './routes/push-tokens'
 
 const app = express()
 app.use(cors({ maxAge: 86400 }))
@@ -34,6 +38,10 @@ app.use('/api/users', usersRouter)
 app.use('/api/trucks', authMiddleware, trucksRouter)
 app.use('/api/drivers', authMiddleware, driversRouter)
 app.use('/api/truck-drivers', authMiddleware, truckDriversRouter)
+app.use('/api/assigned-trips', assignedTripsRouter)
+app.use('/api/invitations', invitationsRouter)
+app.use('/api/locations', locationsRouter)
+app.use('/api/push-tokens', pushTokensRouter)
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'SafeTruck API' }))
 
 // ────────────────────────────────────────────────────────────────────────────

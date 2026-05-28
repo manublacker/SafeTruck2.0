@@ -497,3 +497,124 @@
   font-weight: 700;
   color: #16a34a;
 }
+
+/* ── Trip status badge (mini) ── */
+.st-tbadge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  padding: 2px 6px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* ── Upcoming trip card ── */
+.upcoming-card {
+  transition: background .12s ease, border-color .12s ease;
+}
+.upcoming-card:hover { background: #fafafa !important; }
+
+/* ── Skeleton shimmer ── */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.st-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* ── Live pulse dot ── */
+.live-dot {
+  width: 8px; height: 8px; border-radius: 999px;
+  background: #22c55e; display: inline-block;
+  box-shadow: 0 0 0 0 rgba(34,197,94,0.7);
+  animation: livePulse 2s infinite;
+}
+@keyframes livePulse {
+  0%   { box-shadow: 0 0 0 0   rgba(34,197,94,0.6); }
+  70%  { box-shadow: 0 0 0 8px rgba(34,197,94,0);   }
+  100% { box-shadow: 0 0 0 0   rgba(34,197,94,0);   }
+}
+
+/* ── st-field (44px inputs) ── */
+.st-field {
+  width: 100%; height: 44px;
+  border: 1.5px solid #e0e0e0; border-radius: 10px;
+  background: #fff; color: #0d0d0d; font-size: 0.92rem;
+  padding: 0 14px; font-family: inherit;
+  transition: border-color .15s ease; outline: none; box-sizing: border-box;
+}
+.st-field::placeholder { color: #9ca3af; }
+.st-field:focus { border-color: #0d0d0d; }
+.st-field:disabled { background: #fafafa; color: #9ca3af; }
+select.st-field {
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat; background-position: right 14px center; padding-right: 38px;
+}
+select.st-field.placeholder { color: #9ca3af; }
+
+/* ── CTA button (48px) ── */
+.st-btn-cta {
+  height: 48px; font-size: 1rem; font-weight: 800;
+  border-radius: 12px; background: #e53935; color: #fff;
+  border: none; cursor: pointer; width: 100%;
+  letter-spacing: 0.01em;
+  transition: background .15s ease, box-shadow .15s ease, transform .1s ease;
+  box-shadow: 0 2px 6px rgba(229,57,53,0.22); font-family: inherit;
+}
+.st-btn-cta:hover:not(:disabled) { background: #c62828; box-shadow: 0 6px 16px rgba(229,57,53,0.32); }
+.st-btn-cta:active:not(:disabled) { transform: translateY(1px); }
+.st-btn-cta:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Sidebar account popover ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.st-account-trigger {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; background: transparent; border: none;
+  padding: 8px; border-radius: 10px; cursor: pointer;
+  color: inherit; text-align: left; font-family: inherit;
+  transition: background 0.15s ease;
+}
+.st-account-trigger:hover { background: rgba(255,255,255,0.04); }
+.st-account-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 12px;
+  z-index: 200;
+  background: #1e2d40;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 -8px 24px rgba(0,0,0,0.30);
+  animation: fadeSlideUp 0.15s ease;
+}
+.st-popover-btn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  border: none; background: transparent;
+  color: rgba(255,255,255,0.75);
+  font-family: inherit; font-size: 0.88rem; font-weight: 600;
+  cursor: pointer; width: 100%; text-align: left;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.st-popover-btn:hover { background: rgba(255,255,255,0.07); color: #fff; }
+.st-popover-btn:disabled { cursor: not-allowed; opacity: 0.55; }
+.st-popover-btn:disabled:hover { background: transparent; color: rgba(255,255,255,0.75); }
+.st-popover-btn.logout:hover { background: rgba(239,68,68,0.18); color: #fff; }
+.st-popover-sep { border-top: 1px solid rgba(255,255,255,0.08); margin: 4px 0; }
+
+/* ── Hide on mobile ── */
+@media (max-width: 768px) { .hide-on-mobile { display: none !important; } }
+
+.scroll-y { overflow-y: auto; }
+.scroll-y::-webkit-scrollbar { width: 8px; }
+.scroll-y::-webkit-scrollbar-thumb { background: rgba(13,13,13,0.18); border-radius: 4px; }

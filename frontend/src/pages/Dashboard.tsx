@@ -5,6 +5,7 @@ import LiveMapContainer from "@/components/dashboard/LiveMapContainer";
 import FleetView from "@/components/dashboard/FleetView";
 import TripHistoryView from "@/components/dashboard/TripHistoryView";
 import AccountView from "@/components/dashboard/AccountView";
+import PlansView from "@/components/dashboard/PlansView";
 
 import "@/styles/admin.css";
 
@@ -15,6 +16,7 @@ const TITLE: Record<AdminPage, string> = {
   fleet:   "Flota",
   trips:   "Historial de viajes",
   account: "Mi cuenta",
+  plans:   "Planes y suscripción",
 };
 
 function getInitialPage(): AdminPage {
@@ -40,7 +42,8 @@ export default function Dashboard() {
           {page === "map"     && <LiveMapContainer onNavigate={handleSetPage} />}
           {page === "fleet"   && <FleetView />}
           {page === "trips"   && <TripHistoryView />}
-          {page === "account" && <AccountView />}
+          {page === "account" && <AccountView onNavigate={setPage} />}
+          {page === "plans"   && <PlansView />}
         </div>
       </main>
     </div>
