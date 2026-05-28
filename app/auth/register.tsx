@@ -1,76 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Image,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 import { supabase } from '../../src/services/supabase'
 import {
-  formatCuit,
-  isValidCuit,
-  isValidEmail,
-  isValidPassword,
-  resendSignupOtp,
-  sanitizeOtpDigit,
-  signUpWithEmail,
-  upsertProfile,
-  verifySignupOtp,
-  MIN_PASSWORD_LENGTH,
-  OTP_LENGTH,
+  isValidEmail, isValidPassword, resendSignupOtp,
+  sanitizeOtpDigit, signUpWithEmail, verifySignupOtp,
+  MIN_PASSWORD_LENGTH, OTP_LENGTH,
 } from '../../src/services/auth'
-import {
-  INDUSTRY_OPTIONS,
-  OTP_RESEND_COOLDOWN_SECONDS,
-  PLAN_OPTIONS,
-  REGISTER_STEPS,
-  TOTAL_STEPS,
-  type PlanOption,
-} from '../../src/constants/register'
-import { startMobileCheckout } from '../../src/services/billing'
-import type { SubscriptionPlan } from '../../src/types'
+import { OTP_RESEND_COOLDOWN_SECONDS } from '../../src/constants/register'
 
 interface FormData {
+  fullName: string
   email: string
   password: string
   confirmPassword: string
   acceptedTerms: boolean
-  companyName: string
-  cuit: string
-  rubro: string
-}
-
-const INITIAL_FORM: FormData = {
-  email: '',
-  password: '',
-  confirmPassword: '',
-  acceptedTerms: false,
-  companyName: '',
-  cuit: '',
-  rubro: '',
 }
 
 type FieldErrors = Partial<Record<keyof FormData | 'otp' | 'general', string>>
 
-type S = ReturnType<typeof makeStyles>
-
 export default function RegisterScreen() {
-  const [step, setStep] = useState(1)
-  const [form, setForm] = useState<FormData>(INITIAL_FORM)
-  const [errors, setErrors] = useState<FieldErrors>({})
+  const [step, setStep]       = useState<1 | 2>(1)
+  const [form, setForm]       = useState<FormData>({
+    fullName: '', email: '', password: '', confirmPassword: '', acceptedTerms: false,
+  })
+  const [errors, setErrors]   = useState<FieldErrors>({})
   const [otpDigits, setOtpDigits] = useState<string[]>(() => Array(OTP_LENGTH).fill(''))
-  const [resendIn, setResendIn] = useState(0)
-  const [loading, setLoading] = useState(false)
+  const [resendIn, setResendIn]   = useState(0)
+  const [loading, setLoading]     = useState(false)
 
   const setProfile = useStore(st => st.setProfile)
   const isDark = useStore(st => st.isDark)
@@ -80,90 +42,76 @@ export default function RegisterScreen() {
 
   useEffect(() => {
     if (resendIn <= 0) return
-    const timer = setTimeout(() => setResendIn(value => value - 1), 1000)
+    const timer = setTimeout(() => setResendIn(v => v - 1), 1000)
     return () => clearTimeout(timer)
   }, [resendIn])
 
-  const updateField = <K extends keyof FormData>(key: K, value: FormData[K]) => {
-    setForm(prev => ({ ...prev, [key]: value }))
-    setErrors(prev => ({ ...prev, [key]: undefined }))
+  function update<K extends keyof FormData>(key: K, value: FormData[K]) {
+    setForm(p => ({ ...p, [key]: value }))
+    setErrors(p => ({ ...p, [key]: undefined }))
   }
 
-  const validateStep1 = (): boolean => {
+  function validateStep1(): boolean {
     const next: FieldErrors = {}
+    if (!form.fullName.trim()) next.fullName = 'Ingresá tu nombre'
     if (!isValidEmail(form.email)) next.email = 'Email inválido'
-    if (!isValidPassword(form.password)) {
-      next.password = `Mínimo ${MIN_PASSWORD_LENGTH} caracteres`
-    }
-    if (form.password !== form.confirmPassword) {
-      next.confirmPassword = 'Las contraseñas no coinciden'
-    }
+    if (!isValidPassword(form.password)) next.password = `Mínimo ${MIN_PASSWORD_LENGTH} caracteres`
+    if (form.password !== form.confirmPassword) next.confirmPassword = 'Las contraseñas no coinciden'
     if (!form.acceptedTerms) next.acceptedTerms = 'Debés aceptar los términos'
     setErrors(next)
     return Object.keys(next).length === 0
   }
 
-  const validateStep2 = (): boolean => {
-    const next: FieldErrors = {}
-    if (!form.companyName.trim()) next.companyName = 'Requerido'
-    if (!isValidCuit(form.cuit)) next.cuit = 'Formato XX-XXXXXXXX-X'
-    if (!form.rubro) next.rubro = 'Requerido'
-    setErrors(next)
-    return Object.keys(next).length === 0
-  }
-
-  const submitSignUp = async (): Promise<boolean> => {
-    setLoading(true)
-    try {
-      await signUpWithEmail({
-        email: form.email,
-        password: form.password,
-        fullName: form.companyName,
-      })
-      setResendIn(OTP_RESEND_COOLDOWN_SECONDS)
-      return true
-    } catch (e: any) {
-      setErrors({ general: e.message ?? 'Error al crear la cuenta' })
-      return false
-    } finally {
-      setLoading(false)
+  async function handleNext() {
+    if (step === 1) {
+      if (!validateStep1()) return
+      setLoading(true)
+      try {
+        await signUpWithEmail({ email: form.email, password: form.password, fullName: form.fullName })
+        setResendIn(OTP_RESEND_COOLDOWN_SECONDS)
+        setStep(2)
+      } catch (e: any) {
+        setErrors({ general: e.message ?? 'Error al crear la cuenta' })
+      } finally {
+        setLoading(false)
+      }
+      return
     }
-  }
 
-  const submitOtp = async (): Promise<boolean> => {
+    // Step 2: verify OTP
     const code = otpDigits.join('')
     if (code.length < OTP_LENGTH) {
       setErrors({ otp: `Ingresá los ${OTP_LENGTH} dígitos` })
-      return false
+      return
     }
     setLoading(true)
     try {
       await verifySignupOtp(form.email, code)
-      return true
+
+      // Guardar nombre en st_profiles
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('st_profiles').upsert({
+          id: user.id,
+          full_name: form.fullName,
+          email: form.email,
+          role: 'driver',
+        }, { onConflict: 'id' })
+
+        const { data: profile } = await supabase
+          .from('st_profiles').select('*').eq('id', user.id).single()
+        if (profile) setProfile(profile)
+      }
+
+      router.replace('/(tabs)/')
     } catch (e: any) {
       setErrors({ otp: e.message ?? 'Código inválido' })
-      return false
     } finally {
       setLoading(false)
     }
   }
 
-  const goNext = async () => {
-    if (step === 1 && !validateStep1()) return
-    if (step === 2) {
-      if (!validateStep2()) return
-      if (!(await submitSignUp())) return
-    }
-    if (step === 3 && !(await submitOtp())) return
-    setStep(prev => Math.min(prev + 1, TOTAL_STEPS))
-  }
-
-  const goBack = () => {
-    setErrors({})
-    setStep(prev => Math.max(prev - 1, 1))
-  }
-
-  const handleResendOtp = async () => {
+  async function handleResendOtp() {
     if (resendIn > 0) return
     try {
       await resendSignupOtp(form.email)
@@ -173,112 +121,96 @@ export default function RegisterScreen() {
     }
   }
 
-  /** Tamaño de flota implícito según el plan elegido. */
-  const PLAN_FLEET_SIZE: Record<SubscriptionPlan, string> = {
-    starter: '1 a 5',
-    pro: '6 a 20',
-    enterprise: 'Más de 50',
-  }
-
-  const handleChoosePlan = async (plan: SubscriptionPlan) => {
-    setLoading(true)
-    try {
-      const { data: sessionData } = await supabase.auth.getUser()
-      const userId = sessionData.user?.id
-      if (!userId) throw new Error('Sesión no encontrada. Volvé a verificar tu email.')
-
-      // 1. Guardar perfil con datos de empresa (el plan se confirma vía webhook de Stripe)
-      await upsertProfile({
-        userId,
-        fullName: form.companyName,
-        companyName: form.companyName,
-        cuit: form.cuit,
-        plan,
-        fleetSize: PLAN_FLEET_SIZE[plan],
-      })
-
-      // Cargar perfil en el store para que el tab ya esté disponible
-      const { data: profile } = await supabase
-        .from('st_profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      if (profile) setProfile(profile)
-
-      // 2. Abrir Stripe Checkout en el browser del sistema
-      try {
-        await startMobileCheckout(plan)
-      } catch (stripeErr: any) {
-        // Si el checkout falla, igual dejar pasar al usuario (el perfil ya fue creado)
-        Alert.alert(
-          'Pago no completado',
-          stripeErr.message ?? 'No se pudo iniciar el pago. Podés intentarlo desde tu perfil.',
-        )
-      }
-
-      // 3. Ir a la app (con o sin pago completado)
-      router.replace('/(tabs)/')
-    } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'No se pudo guardar el plan')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
-    <KeyboardAvoidingView
-      style={s.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <Image
-          source={require('../../camion_padding.png')}
-          style={s.logo}
-          resizeMode="contain"
-        />
+        <Image source={require('../../camion_padding.png')} style={s.logo} resizeMode="contain" />
 
-        <ProgressBar step={step} s={s} />
+        {/* Progress */}
+        <View style={s.progressRow}>
+          {(['Cuenta', 'Verificación'] as const).map((label, i) => {
+            const n = i + 1
+            const done = n < step
+            const active = n === step
+            return (
+              <View key={label} style={s.progressItem}>
+                <View style={[s.progressCircle, done && s.progressCircleDone, active && s.progressCircleActive]}>
+                  <Text style={s.progressCircleText}>{done ? '✓' : n}</Text>
+                </View>
+                <Text style={[s.progressLabel, active && s.progressLabelActive]}>{label}</Text>
+              </View>
+            )
+          })}
+        </View>
 
-        {step > 1 && step < TOTAL_STEPS && (
-          <TouchableOpacity style={s.backLink} onPress={goBack}>
+        {step === 2 && (
+          <TouchableOpacity style={s.backLink} onPress={() => { setErrors({}); setStep(1); }}>
             <Text style={s.backText}>← Volver</Text>
           </TouchableOpacity>
         )}
 
+        {/* Step 1 */}
         {step === 1 && (
-          <StepAccess form={form} errors={errors} onChange={updateField} s={s} t={t} />
+          <View>
+            <Text style={s.title}>Creá tu cuenta</Text>
+            <Text style={s.subtitle}>Para conductores SafeTruck.</Text>
+
+            <TextInput
+              style={s.input} placeholder="Tu nombre completo"
+              placeholderTextColor={t.textSoft} value={form.fullName}
+              onChangeText={v => update('fullName', v)}
+            />
+            {errors.fullName && <Text style={s.error}>{errors.fullName}</Text>}
+
+            <TextInput
+              style={s.input} placeholder="Email" placeholderTextColor={t.textSoft}
+              value={form.email} onChangeText={v => update('email', v)}
+              autoCapitalize="none" keyboardType="email-address"
+            />
+            {errors.email && <Text style={s.error}>{errors.email}</Text>}
+
+            <TextInput
+              style={s.input} placeholder="Contraseña" placeholderTextColor={t.textSoft}
+              value={form.password} onChangeText={v => update('password', v)} secureTextEntry
+            />
+            {errors.password && <Text style={s.error}>{errors.password}</Text>}
+
+            <TextInput
+              style={s.input} placeholder="Repetí tu contraseña" placeholderTextColor={t.textSoft}
+              value={form.confirmPassword} onChangeText={v => update('confirmPassword', v)} secureTextEntry
+            />
+            {errors.confirmPassword && <Text style={s.error}>{errors.confirmPassword}</Text>}
+
+            <TouchableOpacity style={s.checkboxRow} onPress={() => update('acceptedTerms', !form.acceptedTerms)}>
+              <View style={[s.checkbox, form.acceptedTerms && s.checkboxChecked]}>
+                {form.acceptedTerms && <Text style={s.checkboxMark}>✓</Text>}
+              </View>
+              <Text style={s.checkboxLabel}>Acepto los términos y la política de privacidad</Text>
+            </TouchableOpacity>
+            {errors.acceptedTerms && <Text style={s.error}>{errors.acceptedTerms}</Text>}
+          </View>
         )}
+
+        {/* Step 2: OTP */}
         {step === 2 && (
-          <StepCompany form={form} errors={errors} onChange={updateField} s={s} t={t} />
-        )}
-        {step === 3 && (
-          <StepVerification
-            email={form.email}
-            digits={otpDigits}
-            error={errors.otp}
-            resendIn={resendIn}
-            onDigitsChange={setOtpDigits}
-            onResend={handleResendOtp}
-            s={s}
+          <OtpStep
+            email={form.email} digits={otpDigits} error={errors.otp}
+            resendIn={resendIn} onDigitsChange={setOtpDigits}
+            onResend={handleResendOtp} s={s} t={t}
           />
         )}
-        {step === 4 && <StepPlan onChoose={handleChoosePlan} loading={loading} s={s} t={t} />}
 
         {errors.general && <Text style={s.error}>{errors.general}</Text>}
 
-        {step < TOTAL_STEPS && (
-          <TouchableOpacity
-            style={[s.btn, loading && s.btnDisabled]}
-            onPress={goNext}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={s.btnText}>{step === 3 ? 'Verificar código' : 'Siguiente'}</Text>
-            )}
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[s.btn, loading && s.btnDisabled]}
+          onPress={handleNext} disabled={loading}
+        >
+          {loading
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={s.btnText}>{step === 2 ? 'Verificar y entrar' : 'Siguiente'}</Text>
+          }
+        </TouchableOpacity>
 
         {step === 1 && (
           <TouchableOpacity style={s.link} onPress={() => router.push('/auth/login')}>
@@ -290,285 +222,47 @@ export default function RegisterScreen() {
   )
 }
 
-function ProgressBar({ step, s }: { step: number; s: S }) {
-  return (
-    <View style={s.progressRow}>
-      {REGISTER_STEPS.map((label, index) => {
-        const stepNumber = index + 1
-        const done = stepNumber < step
-        const active = stepNumber === step
-        return (
-          <View key={label} style={s.progressItem}>
-            <View
-              style={[
-                s.progressCircle,
-                done && s.progressCircleDone,
-                active && s.progressCircleActive,
-              ]}
-            >
-              <Text style={s.progressCircleText}>{done ? '✓' : stepNumber}</Text>
-            </View>
-            <Text style={[s.progressLabel, active && s.progressLabelActive]}>{label}</Text>
-          </View>
-        )
-      })}
-    </View>
-  )
-}
-
-interface StepFieldProps {
-  form: FormData
-  errors: FieldErrors
-  onChange: <K extends keyof FormData>(key: K, value: FormData[K]) => void
-  s: S
-  t: Theme
-}
-
-function StepAccess({ form, errors, onChange, s, t }: StepFieldProps) {
-  return (
-    <View>
-      <Text style={s.title}>Creá tu cuenta</Text>
-      <Text style={s.subtitle}>Ingresá los datos para acceder a SafeTruck.</Text>
-
-      <TextInput
-        style={s.input}
-        placeholder="empresa@mail.com"
-        placeholderTextColor={t.textSoft}
-        value={form.email}
-        onChangeText={value => onChange('email', value)}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      {errors.email && <Text style={s.error}>{errors.email}</Text>}
-
-      <TextInput
-        style={s.input}
-        placeholder="Contraseña"
-        placeholderTextColor={t.textSoft}
-        value={form.password}
-        onChangeText={value => onChange('password', value)}
-        secureTextEntry
-      />
-      {errors.password && <Text style={s.error}>{errors.password}</Text>}
-
-      <TextInput
-        style={s.input}
-        placeholder="Repetí tu contraseña"
-        placeholderTextColor={t.textSoft}
-        value={form.confirmPassword}
-        onChangeText={value => onChange('confirmPassword', value)}
-        secureTextEntry
-      />
-      {errors.confirmPassword && <Text style={s.error}>{errors.confirmPassword}</Text>}
-
-      <TouchableOpacity
-        style={s.checkboxRow}
-        onPress={() => onChange('acceptedTerms', !form.acceptedTerms)}
-      >
-        <View style={[s.checkbox, form.acceptedTerms && s.checkboxChecked]}>
-          {form.acceptedTerms && <Text style={s.checkboxMark}>✓</Text>}
-        </View>
-        <Text style={s.checkboxLabel}>Acepto los términos y la política de privacidad</Text>
-      </TouchableOpacity>
-      {errors.acceptedTerms && <Text style={s.error}>{errors.acceptedTerms}</Text>}
-    </View>
-  )
-}
-
-function StepCompany({ form, errors, onChange, s, t }: StepFieldProps) {
-  return (
-    <View>
-      <Text style={s.title}>Tu empresa</Text>
-      <Text style={s.subtitle}>Contanos sobre tu flota.</Text>
-
-      <TextInput
-        style={s.input}
-        placeholder="Nombre de la empresa"
-        placeholderTextColor={t.textSoft}
-        value={form.companyName}
-        onChangeText={value => onChange('companyName', value)}
-      />
-      {errors.companyName && <Text style={s.error}>{errors.companyName}</Text>}
-
-      <TextInput
-        style={s.input}
-        placeholder="CUIT — XX-XXXXXXXX-X"
-        placeholderTextColor={t.textSoft}
-        value={form.cuit}
-        onChangeText={value => onChange('cuit', formatCuit(value))}
-        keyboardType="number-pad"
-      />
-      {errors.cuit && <Text style={s.error}>{errors.cuit}</Text>}
-
-      <Text style={s.fieldLabel}>Rubro / tipo de carga</Text>
-      <OptionChips
-        options={INDUSTRY_OPTIONS}
-        selected={form.rubro}
-        onSelect={value => onChange('rubro', value)}
-        s={s}
-      />
-      {errors.rubro && <Text style={s.error}>{errors.rubro}</Text>}
-
-    </View>
-  )
-}
-
-function OptionChips({
-  options,
-  selected,
-  onSelect,
-  s,
+function OtpStep({
+  email, digits, error, resendIn, onDigitsChange, onResend, s, t,
 }: {
-  options: readonly string[]
-  selected: string
-  onSelect: (value: string) => void
-  s: S
-}) {
-  return (
-    <View style={s.chipsRow}>
-      {options.map(option => {
-        const active = option === selected
-        return (
-          <TouchableOpacity
-            key={option}
-            style={[s.chip, active && s.chipActive]}
-            onPress={() => onSelect(option)}
-          >
-            <Text style={[s.chipText, active && s.chipTextActive]}>{option}</Text>
-          </TouchableOpacity>
-        )
-      })}
-    </View>
-  )
-}
-
-function StepVerification({
-  email,
-  digits,
-  error,
-  resendIn,
-  onDigitsChange,
-  onResend,
-  s,
-}: {
-  email: string
-  digits: string[]
-  error?: string
-  resendIn: number
-  onDigitsChange: (digits: string[]) => void
-  onResend: () => void
-  s: S
+  email: string; digits: string[]; error?: string; resendIn: number
+  onDigitsChange: (d: string[]) => void; onResend: () => void; s: any; t: Theme
 }) {
   const inputRefs = useRef<Array<TextInput | null>>([])
 
-  const handleChange = (index: number, raw: string) => {
+  function handleChange(index: number, raw: string) {
     const digit = sanitizeOtpDigit(raw)
-    const next = [...digits]
-    next[index] = digit
+    const next = [...digits]; next[index] = digit
     onDigitsChange(next)
-    if (digit && index < OTP_LENGTH - 1) {
-      inputRefs.current[index + 1]?.focus()
-    }
+    if (digit && index < OTP_LENGTH - 1) inputRefs.current[index + 1]?.focus()
   }
 
-  const handleKeyPress = (index: number, key: string) => {
-    if (key === 'Backspace' && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus()
-    }
+  function handleKeyPress(index: number, key: string) {
+    if (key === 'Backspace' && !digits[index] && index > 0) inputRefs.current[index - 1]?.focus()
   }
 
   return (
     <View>
       <Text style={s.title}>Verificá tu email</Text>
-      <Text style={s.subtitle}>
-        Te enviamos un código de {OTP_LENGTH} dígitos a {email || 'tu email'}.
-      </Text>
+      <Text style={s.subtitle}>Te enviamos un código de {OTP_LENGTH} dígitos a {email}.</Text>
 
       <View style={s.otpRow}>
-        {digits.map((digit, index) => (
+        {digits.map((digit, i) => (
           <TextInput
-            key={index}
-            ref={ref => {
-              inputRefs.current[index] = ref
-            }}
+            key={i} ref={ref => { inputRefs.current[i] = ref }}
             style={[s.otpInput, digit && s.otpInputFilled]}
-            value={digit}
-            onChangeText={raw => handleChange(index, raw)}
-            onKeyPress={({ nativeEvent }) => handleKeyPress(index, nativeEvent.key)}
-            keyboardType="number-pad"
-            maxLength={1}
-            textAlign="center"
+            value={digit} onChangeText={raw => handleChange(i, raw)}
+            onKeyPress={({ nativeEvent }) => handleKeyPress(i, nativeEvent.key)}
+            keyboardType="number-pad" maxLength={1} textAlign="center"
           />
         ))}
       </View>
-      {error && <Text style={[s.error, s.errorCentered]}>{error}</Text>}
+      {error && <Text style={[s.error, { textAlign: 'center' }]}>{error}</Text>}
 
       <TouchableOpacity style={s.resendRow} onPress={onResend} disabled={resendIn > 0}>
-        <Text style={[s.linkText, resendIn > 0 && s.resendDisabled]}>
+        <Text style={[s.linkText, resendIn > 0 && { color: t.textMuted }]}>
           {resendIn > 0 ? `Reenviar en ${resendIn}s` : 'Reenviar código'}
         </Text>
-      </TouchableOpacity>
-    </View>
-  )
-}
-
-function StepPlan({
-  onChoose,
-  loading,
-  s,
-  t,
-}: {
-  onChoose: (plan: SubscriptionPlan) => void
-  loading: boolean
-  s: S
-  t: Theme
-}) {
-  return (
-    <View>
-      <Text style={[s.title, s.textCentered]}>Elegí tu plan</Text>
-      <Text style={[s.subtitle, s.textCentered]}>Comenzá a trackear tu flota hoy.</Text>
-
-      {PLAN_OPTIONS.map(plan => (
-        <PlanCard key={plan.slug} plan={plan} loading={loading} onChoose={onChoose} s={s} />
-      ))}
-    </View>
-  )
-}
-
-function PlanCard({
-  plan,
-  loading,
-  onChoose,
-  s,
-}: {
-  plan: PlanOption
-  loading: boolean
-  onChoose: (plan: SubscriptionPlan) => void
-  s: S
-}) {
-  return (
-    <View style={[s.planCard, plan.highlighted && s.planCardHighlighted]}>
-      {plan.highlighted && (
-        <View style={s.planBadge}>
-          <Text style={s.planBadgeText}>Más elegido</Text>
-        </View>
-      )}
-      <Text style={s.planName}>{plan.name}</Text>
-      <View style={s.planPriceRow}>
-        <Text style={s.planPrice}>{plan.price}</Text>
-        <Text style={s.planPeriod}>USD/mes</Text>
-      </View>
-      {plan.features.map(feature => (
-        <Text key={feature} style={s.planFeature}>
-          ✓ {feature}
-        </Text>
-      ))}
-      <TouchableOpacity
-        style={[s.btn, s.planBtn, loading && s.btnDisabled]}
-        onPress={() => onChoose(plan.slug)}
-        disabled={loading}
-      >
-        <Text style={s.btnText}>Elegir {plan.name}</Text>
       </TouchableOpacity>
     </View>
   )
@@ -581,20 +275,13 @@ function makeStyles(t: Theme) {
     logo: { width: 180, height: 150, alignSelf: 'center', marginBottom: 8 },
     title: { fontSize: 26, fontWeight: '700', color: t.text, marginBottom: 6 },
     subtitle: { fontSize: 14, color: t.textMuted, marginBottom: 24 },
-    textCentered: { textAlign: 'center' },
 
-    progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
-    progressItem: { flex: 1, alignItems: 'center' },
+    progressRow: { flexDirection: 'row', justifyContent: 'center', gap: 40, marginBottom: 28 },
+    progressItem: { alignItems: 'center' },
     progressCircle: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: t.card,
-      borderWidth: 1,
-      borderColor: t.border,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 6,
+      width: 32, height: 32, borderRadius: 16,
+      backgroundColor: t.card, borderWidth: 1, borderColor: t.border,
+      alignItems: 'center', justifyContent: 'center', marginBottom: 6,
     },
     progressCircleActive: { borderColor: t.accent },
     progressCircleDone: { backgroundColor: t.accent, borderColor: t.accent },
@@ -606,88 +293,30 @@ function makeStyles(t: Theme) {
     backText: { color: t.accent, fontSize: 14 },
 
     input: {
-      backgroundColor: t.card,
-      color: t.text,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 8,
-      fontSize: 16,
-      borderWidth: 1,
-      borderColor: t.border,
+      backgroundColor: t.card, color: t.text, borderRadius: 12,
+      padding: 16, marginBottom: 8, fontSize: 16,
+      borderWidth: 1, borderColor: t.border,
     },
-    fieldLabel: { color: t.textMuted, fontSize: 13, marginTop: 12, marginBottom: 8 },
     error: { color: t.danger, fontSize: 13, marginBottom: 8 },
-    errorCentered: { textAlign: 'center' },
 
     checkboxRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
     checkbox: {
-      width: 22,
-      height: 22,
-      borderRadius: 6,
-      borderWidth: 1,
-      borderColor: t.border,
-      backgroundColor: t.card,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 10,
+      width: 22, height: 22, borderRadius: 6, borderWidth: 1,
+      borderColor: t.border, backgroundColor: t.card,
+      alignItems: 'center', justifyContent: 'center', marginRight: 10,
     },
     checkboxChecked: { backgroundColor: t.accent, borderColor: t.accent },
     checkboxMark: { color: '#fff', fontSize: 13, fontWeight: '700' },
     checkboxLabel: { color: t.text, fontSize: 13, flex: 1 },
 
-    chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    chip: {
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 12,
-      backgroundColor: t.card,
-      borderWidth: 1,
-      borderColor: t.border,
-    },
-    chipActive: { backgroundColor: t.accent, borderColor: t.accent },
-    chipText: { color: t.textMuted, fontSize: 13 },
-    chipTextActive: { color: '#fff', fontWeight: '600' },
-
     otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
     otpInput: {
-      width: 48,
-      height: 56,
-      backgroundColor: t.card,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: t.border,
-      color: t.text,
-      fontSize: 22,
-      fontWeight: '700',
+      width: 48, height: 56, backgroundColor: t.card, borderRadius: 12,
+      borderWidth: 1, borderColor: t.border, color: t.text,
+      fontSize: 22, fontWeight: '700',
     },
     otpInputFilled: { borderColor: t.accent },
     resendRow: { marginTop: 12, alignItems: 'center' },
-    resendDisabled: { color: t.textMuted },
-
-    planCard: {
-      backgroundColor: t.card,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: t.border,
-      padding: 20,
-      marginBottom: 16,
-    },
-    planCardHighlighted: { borderColor: t.accent },
-    planBadge: {
-      alignSelf: 'flex-start',
-      backgroundColor: t.accent,
-      borderRadius: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      marginBottom: 8,
-    },
-    planBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-    planName: { color: t.text, fontSize: 20, fontWeight: '700' },
-    planPriceRow: { flexDirection: 'row', alignItems: 'flex-end', marginVertical: 8 },
-    planPrice: { color: t.text, fontSize: 28, fontWeight: '700' },
-    planPeriod: { color: t.textMuted, fontSize: 13, marginLeft: 6, marginBottom: 4 },
-    planFeature: { color: t.text, fontSize: 13, marginBottom: 4 },
-    planBtn: { marginTop: 12 },
 
     btn: { backgroundColor: t.accent, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 16 },
     btnDisabled: { opacity: 0.6 },
