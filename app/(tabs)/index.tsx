@@ -169,6 +169,28 @@ export default function MapScreen() {
   const profile = useStore(st => st.profile)
   const mapSource = useMemo(() => ({ html: MAP_HTML }), [])
 
+  // Cargar el vehículo activo si todavía no está en el store. Antes los
+  // vehículos solo se cargaban al entrar a Perfil, por eso el mapa mostraba
+  // "Configurá tu camión" aunque el usuario ya tuviera uno (hasta visitar Perfil).
+  // checkedVehicles evita el "flash" del cartel mientras la consulta está en curso.
+  const [checkedVehicles, setCheckedVehicles] = useState(false)
+  useEffect(() => {
+    if (activeVehicle || !profile) return
+    supabase
+      .from('st_vehicles')
+      .select('*')
+      .eq('user_id', profile.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data?.length) {
+          const { setVehicles, setActiveVehicle } = useStore.getState()
+          setVehicles(data)
+          setActiveVehicle(data.find(v => v.is_default) ?? data[0])
+        }
+        setCheckedVehicles(true)
+      })
+  }, [profile, activeVehicle])
+
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [loading, setLoading] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
@@ -576,8 +598,8 @@ export default function MapScreen() {
         )}
       </View>
 
-      {/* Banner sin vehículo */}
-      {!activeVehicle && (
+      {/* Banner sin vehículo — solo tras confirmar que realmente no hay ninguno */}
+      {!activeVehicle && checkedVehicles && (
         <View style={s.banner}>
           <Text style={s.bannerText}>⚠️ Configurá tu camión en Perfil</Text>
         </View>
