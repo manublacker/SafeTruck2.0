@@ -1,25 +1,32 @@
 import { useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import * as Notifications from 'expo-notifications'
-import Constants from 'expo-constants'
+import Constants, { ExecutionEnvironment } from 'expo-constants'
 import { Platform } from 'react-native'
 import { supabase } from '../src/services/supabase'
 import { useStore } from '../src/store/useStore'
 import { registerPushToken } from '../src/services/assignedTrips'
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge:  true,
-    shouldShowBanner: true,
-    shouldShowList:   true,
-  }),
-})
+// expo-notifications (push remoto) fue removido de Expo Go en SDK 53: importarlo
+// ahí crashea la app. Solo lo cargamos fuera de Expo Go (development build /
+// standalone), de forma diferida, para no romper el arranque en Expo Go.
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
 
 async function registerForPushNotifications() {
+  if (isExpoGo) return
   try {
+    const Notifications = await import('expo-notifications')
+
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge:  true,
+        shouldShowBanner: true,
+        shouldShowList:   true,
+      }),
+    })
+
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',

@@ -46,24 +46,18 @@ html,body,#map { width:100%;height:100%; }
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'© OSM', maxZoom:19
   }).addTo(map);
-  var userMarker=null, destMarker=null, routeLayers=[], incidentMarkers=[];
+  var userMarker=null, originMarker=null, destMarker=null, routeLayers=[], incidentMarkers=[];
 
   function setMapTheme(dark) {
     if (dark) map.getContainer().classList.add('night-mode');
     else map.getContainer().classList.remove('night-mode');
   }
 
+  // El marcador concreto lo decide React Native segun el campo activo (origen/destino)
   map.on('click', function(e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'mapClick', lat: e.latlng.lat, lng: e.latlng.lng
     }));
-    if (destMarker) map.removeLayer(destMarker);
-    destMarker = L.marker([e.latlng.lat, e.latlng.lng], {
-      icon: L.divIcon({
-        className: '',
-        html: '<div style="background:#FF6B35;width:14px;height:14px;border-radius:50%;border:2.5px solid white"></div>'
-      })
-    }).addTo(map);
   });
 
   function setUserLocation(lat, lng) {
@@ -72,6 +66,33 @@ html,body,#map { width:100%;height:100%; }
       radius: 7, fillColor: '#FF6B35', color: 'white', weight: 2, fillOpacity: 1
     }).addTo(map);
     map.setView([lat, lng], 14);
+  }
+
+  // Punto de partida elegido a mano (distinto del GPS): pin verde
+  function setOriginMarker(lat, lng) {
+    if (originMarker) map.removeLayer(originMarker);
+    originMarker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="background:#34C759;width:14px;height:14px;border-radius:50%;border:2.5px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4)"></div>',
+        iconAnchor: [7, 7]
+      })
+    }).addTo(map);
+  }
+
+  function removeOriginMarker() {
+    if (originMarker) { map.removeLayer(originMarker); originMarker = null; }
+  }
+
+  function setDestMarker(lat, lng) {
+    if (destMarker) map.removeLayer(destMarker);
+    destMarker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="background:#FF6B35;width:14px;height:14px;border-radius:50%;border:2.5px solid white"></div>',
+        iconAnchor: [7, 7]
+      })
+    }).addTo(map);
   }
 
   function drawRoute(segments) {
@@ -144,7 +165,7 @@ export default function MapScreen() {
   const t = getTheme(isDark)
   const s = useMemo(() => makeStyles(t), [isDark])
 
-  const { activeVehicle, currentRoute, setCurrentRoute, setOrigin, setDestination } = useStore()
+  const { activeVehicle, currentRoute, destination, setCurrentRoute, setOrigin, setDestination } = useStore()
   const profile = useStore(st => st.profile)
   const mapSource = useMemo(() => ({ html: MAP_HTML }), [])
 
@@ -156,10 +177,22 @@ export default function MapScreen() {
   const [incidentLocation, setIncidentLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [reportingIncident, setReportingIncident] = useState(false)
 
+  // Destino
   const [searchText, setSearchText] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
+
+  // Origen — por defecto el GPS ("Mi ubicación"); editable a mano
+  const [originText, setOriginText] = useState('Mi ubicación')
+  const [originResults, setOriginResults] = useState<any[]>([])
+  const [originSearching, setOriginSearching] = useState(false)
+  const [showOriginSearch, setShowOriginSearch] = useState(false)
+  // Coordenadas de origen elegidas a mano. null = usar GPS (location)
+  const [originCoords, setOriginCoords] = useState<{ lat: number; lng: number } | null>(null)
+  // Campo al que aplica un tap en el mapa
+  const [activeField, setActiveField] = useState<'origin' | 'destination'>('destination')
+  const originTimeout = useRef<any>(null)
 
   useEffect(() => {
     (async () => {
@@ -178,16 +211,20 @@ export default function MapScreen() {
     webRef.current?.injectJavaScript(`setMapTheme(${isDark}); true;`)
   }, [isDark])
 
+  const geocode = async (query: string): Promise<any[]> => {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}&format=json&limit=5&countrycodes=ar&bounded=1&viewbox=-59.2,-35.1,-57.8,-34.2`,
+      { headers: { 'User-Agent': 'SafeTruck/1.0' } }
+    )
+    return res.json()
+  }
+
+  // ── Destino ──────────────────────────────────────────────
   const searchAddress = async (query: string) => {
     if (query.length < 3) { setSearchResults([]); return }
     setSearching(true)
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}&format=json&limit=5&countrycodes=ar&bounded=1&viewbox=-59.2,-35.1,-57.8,-34.2`,
-        { headers: { 'User-Agent': 'SafeTruck/1.0' } }
-      )
-      const data = await res.json()
-      setSearchResults(data)
+      setSearchResults(await geocode(query))
     } catch (e) {
       console.log('Search error:', e)
     } finally {
@@ -197,6 +234,7 @@ export default function MapScreen() {
 
   const onSearchChange = (text: string) => {
     setSearchText(text)
+    setActiveField('destination')
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
     searchTimeout.current = setTimeout(() => searchAddress(text), 400)
   }
@@ -208,8 +246,61 @@ export default function MapScreen() {
     setSearchResults([])
     setShowSearch(false)
     Keyboard.dismiss()
-    webRef.current?.injectJavaScript(`map.setView([${lat}, ${lng}], 15); true;`)
+    webRef.current?.injectJavaScript(`setDestMarker(${lat}, ${lng}); map.setView([${lat}, ${lng}], 15); true;`)
     calculateRoute(lat, lng)
+  }
+
+  // ── Origen ───────────────────────────────────────────────
+  const searchOrigin = async (query: string) => {
+    if (query.length < 3) { setOriginResults([]); return }
+    setOriginSearching(true)
+    try {
+      setOriginResults(await geocode(query))
+    } catch (e) {
+      console.log('Origin search error:', e)
+    } finally {
+      setOriginSearching(false)
+    }
+  }
+
+  const onOriginChange = (text: string) => {
+    setOriginText(text)
+    setActiveField('origin')
+    if (originTimeout.current) clearTimeout(originTimeout.current)
+    originTimeout.current = setTimeout(() => searchOrigin(text), 400)
+  }
+
+  const selectOrigin = (result: any) => {
+    const lat = parseFloat(result.lat)
+    const lng = parseFloat(result.lon)
+    setOriginText(result.display_name.split(',').slice(0, 2).join(','))
+    setOriginResults([])
+    setShowOriginSearch(false)
+    Keyboard.dismiss()
+    setOrigin(applyOrigin({ lat, lng }))
+  }
+
+  // Vuelve a usar el GPS como punto de partida
+  const resetOriginToGps = () => {
+    setOriginCoords(null)
+    setOriginText('Mi ubicación')
+    setOriginResults([])
+    setShowOriginSearch(false)
+    webRef.current?.injectJavaScript(`removeOriginMarker(); true;`)
+    if (location) {
+      webRef.current?.injectJavaScript(`map.setView([${location.lat}, ${location.lng}], 14); true;`)
+      setOrigin(location)
+    }
+    // Recalcular con el GPS si ya hay destino fijado
+    if (destination) calculateRoute(destination.lat, destination.lng, location)
+  }
+
+  // Fija un origen elegido a mano: marca el mapa y recalcula si hay destino
+  const applyOrigin = (coords: { lat: number; lng: number }) => {
+    setOriginCoords(coords)
+    webRef.current?.injectJavaScript(`setOriginMarker(${coords.lat}, ${coords.lng}); map.setView([${coords.lat}, ${coords.lng}], 15); true;`)
+    if (destination) calculateRoute(destination.lat, destination.lng, coords)
+    return coords
   }
 
   const loadIncidents = async () => {
@@ -228,9 +319,15 @@ export default function MapScreen() {
     if (newMode) Alert.alert('Modo reporte', 'Tocá el lugar en el mapa donde ocurrió el incidente')
   }
 
-  const calculateRoute = async (destLat: number, destLng: number) => {
+  const calculateRoute = async (
+    destLat: number,
+    destLng: number,
+    originOverride?: { lat: number; lng: number } | null,
+  ) => {
     if (loading) return
-    if (!location) return Alert.alert('Error', 'Esperando GPS...')
+    // Origen: el pasado explícitamente, el elegido a mano, o el GPS
+    const routeOrigin = originOverride ?? originCoords ?? location
+    if (!routeOrigin) return Alert.alert('Error', 'Esperando GPS o elegí un punto de partida')
     if (!activeVehicle) return Alert.alert('Sin vehículo', 'Configurá tu camión en Perfil')
     webRef.current?.injectJavaScript(`clearRoute(); true;`)
     setCurrentRoute(null)
@@ -242,7 +339,7 @@ export default function MapScreen() {
         signal: (() => { const c = new AbortController(); setTimeout(() => c.abort(), 60000); return c.signal })(),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          origin: location,
+          origin: routeOrigin,
           destination: { lat: destLat, lng: destLng },
           vehicle: {
             weight_kg: activeVehicle.weight_kg,
@@ -257,15 +354,23 @@ export default function MapScreen() {
       setDestination({ lat: destLat, lng: destLng })
       setShowInfo(true)
 
+      // Mantener visible el marcador del punto de partida cuando no es el GPS
+      if (originCoords || originOverride) {
+        webRef.current?.injectJavaScript(`setOriginMarker(${routeOrigin.lat}, ${routeOrigin.lng}); true;`)
+      }
+
       if (profile && activeVehicle) {
+        const originIsGps = !(originOverride ?? originCoords)
         supabase.rpc('insert_trip', {
           p_user_id: profile.id,
           p_vehicle_id: activeVehicle.id,
-          p_origin_lat: location.lat,
-          p_origin_lng: location.lng,
+          p_origin_lat: routeOrigin.lat,
+          p_origin_lng: routeOrigin.lng,
           p_dest_lat: destLat,
           p_dest_lng: destLng,
-          p_origin_address: `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`,
+          p_origin_address: originIsGps
+            ? `${routeOrigin.lat.toFixed(4)}, ${routeOrigin.lng.toFixed(4)}`
+            : (originText || `${routeOrigin.lat.toFixed(4)}, ${routeOrigin.lng.toFixed(4)}`),
           p_dest_address: searchText || `${destLat.toFixed(4)}, ${destLng.toFixed(4)}`,
           p_distance_km: data.route.total_distance_km,
           p_duration_min: data.route.total_duration_min,
@@ -328,8 +433,16 @@ export default function MapScreen() {
         if (reportModeRef.current) {
           setIncidentLocation({ lat: msg.lat, lng: msg.lng })
           setShowIncidentModal(true)
+        } else if (activeField === 'origin') {
+          // El tap fija el punto de partida
+          setOriginText(`${msg.lat.toFixed(5)}, ${msg.lng.toFixed(5)}`)
+          setOriginResults([])
+          setShowOriginSearch(false)
+          setOrigin(applyOrigin({ lat: msg.lat, lng: msg.lng }))
         } else {
+          // El tap fija el destino
           setSearchText(`${msg.lat.toFixed(5)}, ${msg.lng.toFixed(5)}`)
+          webRef.current?.injectJavaScript(`setDestMarker(${msg.lat}, ${msg.lng}); true;`)
           calculateRoute(msg.lat, msg.lng)
         }
       }
@@ -351,43 +464,95 @@ export default function MapScreen() {
 
       {/* Header */}
       <View style={s.header}>
-        {/* Barra de búsqueda */}
+        {/* Barra de búsqueda: Origen + Destino */}
         <View style={s.searchRow}>
-          <View style={s.searchBox}>
-            <Ionicons name="search-outline" size={16} color={t.text} />
-            <TextInput
-              style={s.searchInput}
-              placeholder="Buscar destino..."
-              placeholderTextColor={t.textMuted}
-              value={searchText}
-              onChangeText={onSearchChange}
-              onFocus={() => setShowSearch(true)}
-              returnKeyType="search"
-              onSubmitEditing={() => searchAddress(searchText)}
-            />
-            {searchText.length > 0 && (
-              <TouchableOpacity onPress={() => { setSearchText(''); setSearchResults([]); setShowSearch(false) }}>
-                <Text style={s.searchClear}>✕</Text>
+          <View style={s.searchWidget}>
+            {/* Origen (punto de partida) */}
+            <View style={s.fieldRow}>
+              <View style={[s.fieldDot, { backgroundColor: t.success }]} />
+              <TextInput
+                style={s.searchInput}
+                placeholder="Punto de partida"
+                placeholderTextColor={t.textMuted}
+                value={originText}
+                onChangeText={onOriginChange}
+                onFocus={() => { setActiveField('origin'); setShowOriginSearch(true) }}
+                returnKeyType="search"
+                onSubmitEditing={() => searchOrigin(originText)}
+              />
+              {originCoords ? (
+                <TouchableOpacity onPress={resetOriginToGps} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="locate" size={16} color={t.accent} />
+                </TouchableOpacity>
+              ) : (
+                <Ionicons name="navigate-circle-outline" size={16} color={t.textMuted} />
+              )}
+            </View>
+
+            <View style={s.fieldDivider} />
+
+            {/* Destino */}
+            <View style={s.fieldRow}>
+              <View style={[s.fieldDot, { backgroundColor: t.accent }]} />
+              <TextInput
+                style={s.searchInput}
+                placeholder="Buscar destino..."
+                placeholderTextColor={t.textMuted}
+                value={searchText}
+                onChangeText={onSearchChange}
+                onFocus={() => { setActiveField('destination'); setShowSearch(true) }}
+                returnKeyType="search"
+                onSubmitEditing={() => searchAddress(searchText)}
+              />
+              {searchText.length > 0 && (
+                <TouchableOpacity onPress={() => { setSearchText(''); setSearchResults([]); setShowSearch(false) }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={s.searchClear}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          <View style={s.headerBtns}>
+            <TouchableOpacity style={s.iconBtn} onPress={toggleTheme}>
+              <Ionicons
+                name={isDark ? 'sunny-outline' : 'moon-outline'}
+                size={18}
+                color={t.text}
+              />
+            </TouchableOpacity>
+
+            {currentRoute && (
+              <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute}>
+                <Ionicons name="close-outline" size={18} color={t.danger} />
               </TouchableOpacity>
             )}
           </View>
-
-          <TouchableOpacity style={s.iconBtn} onPress={toggleTheme}>
-            <Ionicons
-              name={isDark ? 'sunny-outline' : 'moon-outline'}
-              size={18}
-              color={t.text}
-            />
-          </TouchableOpacity>
-
-          {currentRoute && (
-            <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute}>
-              <Ionicons name="close-outline" size={18} color={t.danger} />
-            </TouchableOpacity>
-          )}
         </View>
 
-        {/* Resultados de búsqueda */}
+        {/* Resultados de búsqueda — origen */}
+        {showOriginSearch && (originResults.length > 0 || originSearching) && (
+          <View style={s.searchResults}>
+            {originSearching && (
+              <View style={s.searchResultItem}>
+                <ActivityIndicator size="small" color={t.accent} />
+                <Text style={s.searchResultAddr}>Buscando...</Text>
+              </View>
+            )}
+            {originResults.map((result, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[s.searchResultItem, idx < originResults.length - 1 && s.searchResultBorder]}
+                onPress={() => selectOrigin(result)}
+              >
+                <Text style={s.searchResultName} numberOfLines={1}>
+                  {result.display_name.split(',')[0]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Resultados de búsqueda — destino */}
         {showSearch && (searchResults.length > 0 || searching) && (
           <View style={s.searchResults}>
             {searching && (
@@ -559,6 +724,13 @@ function makeStyles(t: Theme) {
     },
     searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
 
+    // Widget combinado origen + destino (estilo Waze)
+    searchWidget: { flex: 1 },
+    fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    fieldDot: { width: 9, height: 9, borderRadius: 5, flexShrink: 0 },
+    fieldDivider: { height: 1, backgroundColor: t.border, marginVertical: 4, marginLeft: 17 },
+    headerBtns: { gap: 8 },
+
     searchInput: { flex: 1, color: t.text, fontSize: 15, height: 36 },
     searchClear: { color: t.textMuted, fontSize: 14, paddingHorizontal: 4 },
 
@@ -599,18 +771,18 @@ function makeStyles(t: Theme) {
     searchResultName: { color: t.text, fontSize: 14, fontWeight: '500' },
     searchResultAddr: { color: t.textMuted, fontSize: 12, marginTop: 2 },
 
-    // Banner (sin vehículo)
+    // Banner (sin vehículo) — debajo del widget origen/destino (2 filas)
     banner: {
-      position: 'absolute', top: 110, left: 16, right: 16,
+      position: 'absolute', top: 160, left: 16, right: 16,
       backgroundColor: t.card, borderRadius: 999,
       borderWidth: 1, borderColor: t.warning,
       paddingHorizontal: 16, paddingVertical: 10,
     },
     bannerText: { color: t.warning, fontSize: 13, textAlign: 'center', fontWeight: '600' },
 
-    // Hint pill (--dash-placeholder__tag style)
+    // Hint pill (--dash-placeholder__tag style) — debajo del widget origen/destino (2 filas)
     hintPill: {
-      position: 'absolute', top: 110,
+      position: 'absolute', top: 160,
       alignSelf: 'center', left: 16, right: 16,
       backgroundColor: t.card, borderRadius: 999,
       borderWidth: 1, borderColor: t.border,
