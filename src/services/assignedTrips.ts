@@ -105,3 +105,17 @@ export interface AssignedTruck {
 export async function fetchMyAssignedTruck(): Promise<AssignedTruck | null> {
   return apiRequest<AssignedTruck | null>('/api/drivers/me/truck')
 }
+
+export interface DriverProfile {
+  id: number
+  nombre: string
+  telefono: string | null
+  licencia: string | null
+  categoria_licencia: string | null
+  vencimiento_licencia: string | null
+  estado: string
+}
+
+export async function fetchMyDriverProfile(): Promise<DriverProfile | null> {
+  return apiRequest<DriverProfile | null>('/api/drivers/me')
+}

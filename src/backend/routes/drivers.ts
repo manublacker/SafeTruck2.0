@@ -201,6 +201,24 @@ router.delete("/:id", async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/drivers/me — Conductor obtiene su propio perfil (por app_user_id)
+// ---------------------------------------------------------------------------
+router.get('/me', async (req: Request, res: Response) => {
+  const appUserId = req.user!.id
+  try {
+    const result = await pool.query(
+      `SELECT id, nombre, telefono, licencia, categoria_licencia, vencimiento_licencia, estado
+       FROM drivers WHERE app_user_id = $1 AND is_active = true LIMIT 1`,
+      [appUserId]
+    )
+    res.json(result.rows[0] ?? null)
+  } catch (err: any) {
+    console.error('Error en GET /api/drivers/me:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ---------------------------------------------------------------------------
 // GET /api/drivers/me/truck — Conductor consulta el camión que le asignó el admin
 // ---------------------------------------------------------------------------
 router.get('/me/truck', async (req: Request, res: Response) => {

@@ -1,15 +1,17 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator,
   Modal, ScrollView, TextInput, Keyboard,
 } from 'react-native'
 import { WebView } from 'react-native-webview'
 import * as Location from 'expo-location'
+import { useLocalSearchParams } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
+import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, type AssignedTrip } from '../../src/services/assignedTrips'
 
 const BACKEND = "https://safetruck20-production.up.railway.app"
 
@@ -62,7 +64,7 @@ html,body,#map { width:100%;height:100%; }
     destMarker = L.marker([e.latlng.lat, e.latlng.lng], {
       icon: L.divIcon({
         className: '',
-        html: '<div style="background:#FF6B35;width:14px;height:14px;border-radius:50%;border:2.5px solid white"></div>'
+        html: '<div style="background:#E5342B;width:14px;height:14px;border-radius:50%;border:2.5px solid white"></div>'
       })
     }).addTo(map);
   });
@@ -70,7 +72,7 @@ html,body,#map { width:100%;height:100%; }
   function setUserLocation(lat, lng) {
     if (userMarker) map.removeLayer(userMarker);
     userMarker = L.circleMarker([lat, lng], {
-      radius: 7, fillColor: '#FF6B35', color: 'white', weight: 2, fillOpacity: 1
+      radius: 7, fillColor: '#E5342B', color: 'white', weight: 2, fillOpacity: 1
     }).addTo(map);
     map.setView([lat, lng], 14);
   }
@@ -149,7 +151,7 @@ html,body,#map { width:100%;height:100%; }
     if (userMarker) map.removeLayer(userMarker);
     if (headingMarker) map.removeLayer(headingMarker);
     userMarker = L.circleMarker([lat, lng], {
-      radius: 9, fillColor: '#FF6B35', color: 'white', weight: 3, fillOpacity: 1
+      radius: 9, fillColor: '#E5342B', color: 'white', weight: 3, fillOpacity: 1
     }).addTo(map);
     if (heading !== null) {
       var rad = (heading - 90) * Math.PI / 180;
@@ -175,10 +177,27 @@ html,body,#map { width:100%;height:100%; }
     if (userMarker) map.removeLayer(userMarker);
     if (lat !== null) {
       userMarker = L.circleMarker([lat, lng], {
-        radius: 7, fillColor: '#FF6B35', color: 'white', weight: 2, fillOpacity: 1
+        radius: 7, fillColor: '#E5342B', color: 'white', weight: 2, fillOpacity: 1
       }).addTo(map);
     }
     try { map.setBearing(0); } catch(e) {}
+  }
+
+  function drawTripPath(points, originLat, originLng, destLat, destLng) {
+    clearRoute();
+    var latlngs = [];
+    if (points && points.length > 1) {
+      latlngs = points.map(function(p) { return [p.lat, p.lon !== undefined ? p.lon : p.lng]; });
+    } else if (originLat && destLat) {
+      latlngs = [[originLat, originLng], [destLat, destLng]];
+    }
+    if (latlngs.length < 2) return;
+    var poly = L.polyline(latlngs, { color: '#E5342B', weight: 5, opacity: 0.9, lineCap: 'round' }).addTo(map);
+    routeLayers.push(poly);
+    L.circleMarker(latlngs[0], { radius: 8, fillColor: '#1F9D57', color: 'white', weight: 2.5, fillOpacity: 1 }).addTo(map);
+    var dest = latlngs[latlngs.length - 1];
+    L.circleMarker(dest, { radius: 8, fillColor: '#E5342B', color: 'white', weight: 2.5, fillOpacity: 1 }).addTo(map);
+    map.fitBounds(poly.getBounds(), { padding: [80, 80] });
   }
 </script>
 </body>
@@ -212,6 +231,72 @@ export default function MapScreen() {
   const [showSearch, setShowSearch] = useState(false)
   const [navMode, setNavMode] = useState(false)
   const watchRef = useRef<any>(null)
+
+  // ── Trip visualization (navegado desde Viajes) ─────────────────────────
+  const { tripId } = useLocalSearchParams<{ tripId?: string }>()
+  const [tripSheet, setTripSheet] = useState<AssignedTrip | null>(null)
+  const [tripUpdating, setTripUpdating] = useState(false)
+  const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const loadTripById = useCallback(async (id: string) => {
+    try {
+      const all = await fetchAllMyTrips()
+      const found = all.find(t => String(t.id) === id)
+      if (found) {
+        setTripSheet(found)
+        // Draw trip route on map
+        const path = (() => {
+          try {
+            const p = typeof found.path === 'string' ? JSON.parse(found.path) : found.path
+            return (p?.path || p?.polyline || p?.segments?.flatMap((s: any) => s.coordinates) || []) as { lat: number; lon?: number; lng?: number }[]
+          } catch { return [] }
+        })()
+        webRef.current?.injectJavaScript(
+          `drawTripPath(${JSON.stringify(path)}, ${found.origin_lat ?? 'null'}, ${found.origin_lon ?? 'null'}, ${found.destination_lat ?? 'null'}, ${found.destination_lon ?? 'null'}); true;`
+        )
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (tripId) {
+      void loadTripById(tripId)
+    } else {
+      setTripSheet(null)
+      if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
+    }
+  }, [tripId])
+
+  // GPS tracking for in_progress trip
+  useEffect(() => {
+    if (!tripSheet || tripSheet.status !== 'in_progress') {
+      if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
+      return
+    }
+    const sendGps = async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync()
+      if (status !== 'granted') return
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      await sendLocation(loc.coords.latitude, loc.coords.longitude, String(tripSheet.id), profile?.full_name ?? 'Conductor', tripSheet.truck_patente ?? undefined).catch(() => null)
+    }
+    void sendGps()
+    gpsIntervalRef.current = setInterval(() => void sendGps(), 15_000)
+    return () => { if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null } }
+  }, [tripSheet?.id, tripSheet?.status])
+
+  const handleTripAction = async (newStatus: AssignedTrip['status']) => {
+    if (!tripSheet) return
+    setTripUpdating(true)
+    try {
+      await updateTripStatus(String(tripSheet.id), newStatus)
+      if (newStatus === 'completed') await clearLocation().catch(() => null)
+      setTripSheet(prev => prev ? { ...prev, status: newStatus } : null)
+    } catch (e: any) {
+      Alert.alert('Error', e.message)
+    } finally {
+      setTripUpdating(false)
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -649,6 +734,95 @@ export default function MapScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Trip Sheet (Google Maps style bottom panel) ─────────────── */}
+      {tripSheet && !navMode && !showInfo && (
+        <View style={s.tripSheet}>
+          {/* Handle */}
+          <View style={s.tripSheetHandle} />
+
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+            <View style={{ flex: 1 }}>
+              {/* Status badge */}
+              {(() => {
+                const cfg: Record<string, { label: string; color: string; bg: string }> = {
+                  pending:     { label: 'Pendiente',  color: '#D9881A', bg: '#FBF1E0' },
+                  accepted:    { label: 'Aceptado',   color: '#1A56C4', bg: '#EFF4FF' },
+                  in_progress: { label: 'En curso',   color: '#1F9D57', bg: '#E7F6EE' },
+                  completed:   { label: 'Completado', color: '#9AA3AD', bg: '#F2F4F7' },
+                  cancelled:   { label: 'Cancelado',  color: t.accent,  bg: t.accentSoft },
+                }
+                const c = cfg[tripSheet.status] ?? cfg.pending
+                return (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: c.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, alignSelf: 'flex-start', marginBottom: 12 }}>
+                    <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: c.color }} />
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: c.color }}>{c.label}</Text>
+                  </View>
+                )
+              })()}
+
+              {/* Route */}
+              <View style={{ position: 'relative' }}>
+                <View style={{ position: 'absolute', left: 5, top: 14, bottom: 14, borderLeftWidth: 2, borderLeftColor: t.borderStrong, borderStyle: 'dashed' }} />
+                <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', marginBottom: 12 }}>
+                  <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2.5, borderColor: t.textSoft, backgroundColor: 'transparent', marginTop: 2, flexShrink: 0 }} />
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: t.text, flex: 1 }} numberOfLines={1}>{tripSheet.origin_label ?? 'Origen'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
+                  <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: t.accent, marginTop: 2, flexShrink: 0 }} />
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: t.text, flex: 1 }} numberOfLines={1}>{tripSheet.destination_label ?? 'Destino'}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Close */}
+            <TouchableOpacity onPress={() => { setTripSheet(null); webRef.current?.injectJavaScript('clearRoute(); true;') }} style={{ backgroundColor: t.surface2, borderRadius: 8, padding: 8, marginLeft: 12 }}>
+              <Text style={{ color: t.textMuted, fontSize: 14, fontWeight: '700' }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Truck badge */}
+          {(tripSheet.truck_patente || tripSheet.truck_name) && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+              <Text style={{ fontSize: 14, color: t.textMuted }}>🚛</Text>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: t.textMuted }}>{tripSheet.truck_name ?? ''}</Text>
+              {tripSheet.truck_patente && (
+                <View style={{ backgroundColor: t.surface2, borderRadius: 4, borderWidth: 1, borderColor: t.border, paddingHorizontal: 6, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: t.textMuted }}>{tripSheet.truck_patente}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Actions */}
+          {tripUpdating ? (
+            <ActivityIndicator color={t.accent} />
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {tripSheet.status === 'pending' && (
+                <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: '#1A56C4', flex: 1 }]} onPress={() => handleTripAction('accepted')}>
+                  <Text style={s.tripSheetBtnText}>Aceptar viaje</Text>
+                </TouchableOpacity>
+              )}
+              {tripSheet.status === 'accepted' && (
+                <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: t.success, flex: 1 }]} onPress={() => handleTripAction('in_progress')}>
+                  <Text style={s.tripSheetBtnText}>Iniciar viaje</Text>
+                </TouchableOpacity>
+              )}
+              {tripSheet.status === 'in_progress' && (
+                <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: t.accent, flex: 1 }]} onPress={() => handleTripAction('completed')}>
+                  <Text style={s.tripSheetBtnText}>Llegué al destino</Text>
+                </TouchableOpacity>
+              )}
+              {(tripSheet.status === 'pending' || tripSheet.status === 'accepted') && (
+                <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.danger }]} onPress={() => handleTripAction('cancelled')}>
+                  <Text style={[s.tripSheetBtnText, { color: t.danger }]}>Cancelar</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   )
 }
@@ -793,6 +967,25 @@ function makeStyles(t: Theme) {
       paddingHorizontal: 10, paddingVertical: 3,
     },
     warnBadgeText: { color: t.warning, fontSize: 11, fontWeight: '600' },
+
+    tripSheet: {
+      position: 'absolute', bottom: 0, left: 0, right: 0,
+      backgroundColor: t.card,
+      borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      borderTopWidth: 1, borderTopColor: t.border,
+      padding: 20, paddingBottom: 36,
+      shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16,
+      shadowOffset: { width: 0, height: -4 }, elevation: 12,
+    },
+    tripSheetHandle: {
+      width: 36, height: 4, borderRadius: 2,
+      backgroundColor: t.borderStrong, alignSelf: 'center', marginBottom: 16,
+    },
+    tripSheetBtn: {
+      paddingVertical: 12, paddingHorizontal: 16,
+      borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+    },
+    tripSheetBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
     modalCard: {

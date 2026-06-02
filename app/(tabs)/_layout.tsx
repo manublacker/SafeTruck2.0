@@ -13,13 +13,15 @@ export default function TabLayout() {
     <Tabs screenOptions={{
       headerShown: false,
       tabBarStyle: {
-        backgroundColor: t.card,
-        borderTopWidth: 1,
-        borderTopColor: t.border,
+        backgroundColor: t.navy,
+        borderTopWidth: 0,
+        elevation: 0,
+        shadowOpacity: 0,
+        height: 60,
       },
-      tabBarActiveTintColor: t.accent,
-      tabBarInactiveTintColor: t.textMuted,
-      tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+      tabBarActiveTintColor: '#FFFFFF',
+      tabBarInactiveTintColor: t.navyText,
+      tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginBottom: 6 },
     }}>
       <Tabs.Screen name="index"     options={{ title: 'Mapa',    tabBarIcon: () => null }} />
       <Tabs.Screen name="trips"     options={{ title: 'Viajes',  tabBarIcon: () => null }} />
