@@ -17,13 +17,11 @@ export default function TabLayout() {
         borderTopWidth: 0,
         elevation: 0,
         shadowOpacity: 0,
-        height: 64,
+        height: 60,
       },
       tabBarActiveTintColor: '#FFFFFF',
       tabBarInactiveTintColor: t.navyText,
-      tabBarIconStyle: { height: 0, minHeight: 0 },
-      tabBarLabelStyle: { fontSize: 13, fontWeight: '600', marginTop: -6 },
-      tabBarItemStyle: { justifyContent: 'center', paddingVertical: 0 },
+      tabBarLabelStyle: { fontSize: 14, fontWeight: '600', marginBottom: 10 },
     }}>
       <Tabs.Screen name="index"     options={{ title: 'Mapa',   tabBarIcon: () => null }} />
       <Tabs.Screen name="trips"     options={{ title: 'Viajes', tabBarIcon: () => null }} />
