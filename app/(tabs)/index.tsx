@@ -804,12 +804,7 @@ export default function MapScreen() {
             <ActivityIndicator color={t.accent} />
           ) : (
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              {tripSheet.status === 'pending' && (
-                <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: '#1A56C4', flex: 1 }]} onPress={() => handleTripAction('accepted')}>
-                  <Text style={s.tripSheetBtnText}>Aceptar viaje</Text>
-                </TouchableOpacity>
-              )}
-              {tripSheet.status === 'accepted' && (
+              {(tripSheet.status === 'pending' || tripSheet.status === 'accepted') && (
                 <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: t.success, flex: 1 }]} onPress={() => handleTripAction('in_progress')}>
                   <Text style={s.tripSheetBtnText}>Iniciar viaje</Text>
                 </TouchableOpacity>
@@ -817,11 +812,6 @@ export default function MapScreen() {
               {tripSheet.status === 'in_progress' && (
                 <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: t.accent, flex: 1 }]} onPress={() => handleTripAction('completed')}>
                   <Text style={s.tripSheetBtnText}>Llegué al destino</Text>
-                </TouchableOpacity>
-              )}
-              {(tripSheet.status === 'pending' || tripSheet.status === 'accepted') && (
-                <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.danger }]} onPress={() => handleTripAction('cancelled')}>
-                  <Text style={[s.tripSheetBtnText, { color: t.danger }]}>Cancelar</Text>
                 </TouchableOpacity>
               )}
             </View>

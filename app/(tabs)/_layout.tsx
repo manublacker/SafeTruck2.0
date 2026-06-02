@@ -18,12 +18,12 @@ export default function TabLayout() {
         elevation: 0,
         shadowOpacity: 0,
         height: 72,
-        paddingBottom: 10,
-        paddingTop: 8,
+        paddingBottom: 6,
+        paddingTop: 12,
       },
       tabBarActiveTintColor: '#FFFFFF',
       tabBarInactiveTintColor: t.navyText,
-      tabBarLabelStyle: { fontSize: 13, fontWeight: '600' },
+      tabBarLabelStyle: { fontSize: 13, fontWeight: '600', marginTop: -4 },
     }}>
       <Tabs.Screen name="index"   options={{ title: 'Mapa',   tabBarIcon: () => null }} />
       <Tabs.Screen name="trips"   options={{ title: 'Viajes', tabBarIcon: () => null }} />
