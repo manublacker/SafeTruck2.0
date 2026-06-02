@@ -148,7 +148,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
         .eq('id', userId)
     }
 
-    await logEvent(body.data.id, body.action ?? body.type ?? '', userId, body)
+    await logEvent(String(body.id ?? body.data.id), body.action ?? body.type ?? '', userId, body)
 
     res.json({ received: true })
   } catch (err: any) {
