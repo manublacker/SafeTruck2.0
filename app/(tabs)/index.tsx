@@ -290,6 +290,11 @@ export default function MapScreen() {
     try {
       await updateTripStatus(String(tripSheet.id), newStatus)
       if (newStatus === 'completed') await clearLocation().catch(() => null)
+      if (newStatus === 'in_progress' && location) {
+        webRef.current?.injectJavaScript(
+          `map.flyTo([${location.lat}, ${location.lng}], 16, { animate: true, duration: 1.2 }); true;`
+        )
+      }
       setTripSheet(prev => prev ? { ...prev, status: newStatus } : null)
     } catch (e: any) {
       Alert.alert('Error', e.message)
