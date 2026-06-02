@@ -14,7 +14,7 @@ const preferenceClient = new Preference(mp)
 const paymentClient    = new Payment(mp)
 
 const PLAN_CONFIG: Record<string, { amount: number; title: string }> = {
-  starter:    { amount: 43500,  title: 'Plan Starter - SafeTruck' },
+  starter:    { amount: 1,  title: 'Plan Starter - SafeTruck' },
   pro:        { amount: 118500, title: 'Plan Pro - SafeTruck' },
   enterprise: { amount: 298500, title: 'Plan Enterprise - SafeTruck' },
 }
