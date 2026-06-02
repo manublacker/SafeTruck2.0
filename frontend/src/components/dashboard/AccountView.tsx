@@ -9,7 +9,7 @@ interface Subscription {
   plan: string;
   status: string;
   current_period_end: string | null;
-  stripe_customer_id?: string | null;
+  mp_payer_id?: string | null;
 }
 
 // ── Constantes de planes ───────────────────────────────────────────────────

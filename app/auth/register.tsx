@@ -187,7 +187,7 @@ export default function RegisterScreen() {
       const userId = sessionData.user?.id
       if (!userId) throw new Error('Sesión no encontrada. Volvé a verificar tu email.')
 
-      // 1. Guardar perfil con datos de empresa (el plan se confirma vía webhook de Stripe)
+      // 1. Guardar perfil con datos de empresa (el plan se confirma vía webhook de MercadoPago)
       await upsertProfile({
         userId,
         fullName: form.companyName,
@@ -205,14 +205,14 @@ export default function RegisterScreen() {
         .single()
       if (profile) setProfile(profile)
 
-      // 2. Abrir Stripe Checkout en el browser del sistema
+      // 2. Abrir MercadoPago Checkout en el browser del sistema
       try {
         await startMobileCheckout(plan)
-      } catch (stripeErr: any) {
+      } catch (mpErr: any) {
         // Si el checkout falla, igual dejar pasar al usuario (el perfil ya fue creado)
         Alert.alert(
           'Pago no completado',
-          stripeErr.message ?? 'No se pudo iniciar el pago. Podés intentarlo desde tu perfil.',
+          mpErr.message ?? 'No se pudo iniciar el pago. Podés intentarlo desde tu perfil.',
         )
       }
 

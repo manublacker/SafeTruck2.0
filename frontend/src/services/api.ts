@@ -44,7 +44,7 @@ function authHeaders(): Record<string, string> {
 }
 
 // On 401, try to refresh the Supabase session before logging the user out.
-// Returning from Stripe Checkout can take long enough that the cached JWT
+// Returning from MercadoPago Checkout can take long enough that the cached JWT
 // expires; we shouldn't kick the user to /login if a valid refresh_token
 // is still available.
 let _refreshInFlight: Promise<boolean> | null = null;
@@ -213,17 +213,17 @@ export async function unassignDriver(truckId: number): Promise<void> {
   }
 }
 
-// ── Billing / Stripe ──────────────────────────────────────────
+// ── Billing / MercadoPago ──────────────────────────────────────────
 
 /**
- * Crea una Stripe Checkout Session para el plan dado y devuelve la URL.
+ * Crea una MercadoPago Checkout Session para el plan dado y devuelve la URL.
  * El llamador debe hacer window.location.href = url para redirigir al usuario.
  */
 export async function startCheckout(plan: string): Promise<string> {
   const res = await fetch(`${BASE_URL}/api/billing/checkout`, {
     method:  "POST",
     headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
-    // returnUrl tells the backend where to redirect after Stripe checkout,
+    // returnUrl tells the backend where to redirect after MercadoPago checkout,
     // so it works correctly both in local dev and in production.
     body:    JSON.stringify({ plan, returnUrl: window.location.origin }),
   });

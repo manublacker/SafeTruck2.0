@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let { data: { session } } = await supabase.auth.getSession();
 
       // If the cached access_token is expired (or about to expire), refresh
-      // it before fetching the profile. Without this, returning from Stripe
+      // it before fetching the profile. Without this, returning from MercadoPago
       // Checkout after >1h triggers a 401 on /profile, which fires the
       // unauthorized handler and logs the user out.
       if (session?.expires_at) {

@@ -1,81 +1,59 @@
 import { Router, Request, Response } from 'express'
-import Stripe from 'stripe'
+import { MercadoPagoConfig, PreApproval } from 'mercadopago'
+import { createHmac } from 'crypto'
 import { supabase } from '../supabaseClient'
 import { authMiddleware } from '../middleware/authMiddleware'
 
 const router = Router()
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-04-22.dahlia',
+const mp = new MercadoPagoConfig({
+  accessToken: process.env.MP_ACCESS_TOKEN!,
 })
 
-// Mapeo plan → price_id de Stripe (cargados desde .env)
-const PRICE_IDS: Record<string, string> = {
-  starter:    process.env.STRIPE_PRICE_STARTER!,
-  pro:        process.env.STRIPE_PRICE_PRO!,
-  enterprise: process.env.STRIPE_PRICE_ENTERPRISE!,
+const preapprovalClient = new PreApproval(mp)
+
+const PLAN_CONFIG: Record<string, { amount: number; reason: string }> = {
+  starter:    { amount: 43500,  reason: 'Plan Starter - SafeTruck' },
+  pro:        { amount: 118500, reason: 'Plan Pro - SafeTruck' },
+  enterprise: { amount: 298500, reason: 'Plan Enterprise - SafeTruck' },
 }
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://safetruck20.vercel.app'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/billing/checkout
-// Crea una Stripe Checkout Session y devuelve la URL de pago.
-// Requiere autenticación.
+// Crea una suscripción pendiente en MercadoPago y devuelve la URL de pago.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/checkout', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { plan, returnUrl } = req.body as { plan: string; returnUrl?: string }
-    const userId   = req.user!.id
-    const email    = req.user!.email
+    const userId = req.user!.id
+    const email  = req.user!.email
 
-    if (!plan || !PRICE_IDS[plan]) {
+    const config = PLAN_CONFIG[plan]
+    if (!config) {
       return res.status(400).json({ error: 'Plan inválido. Debe ser starter, pro o enterprise.' })
     }
 
-    // Use the origin the request came from so Stripe redirects back to the
-    // correct environment (local dev or production). Falls back to FRONTEND_URL.
     const baseUrl = (returnUrl || FRONTEND_URL).replace(/\/$/, '')
 
-    // Buscar o crear customer en Stripe
-    let stripeCustomerId: string | undefined
-
-    const { data: existingSub } = await supabase
-      .from('st_subscriptions')
-      .select('stripe_customer_id')
-      .eq('user_id', userId)
-      .maybeSingle()
-
-    if (existingSub?.stripe_customer_id) {
-      stripeCustomerId = existingSub.stripe_customer_id
-    } else {
-      const customer = await stripe.customers.create({
-        email,
-        metadata: { supabase_user_id: userId },
-      })
-      stripeCustomerId = customer.id
-    }
-
-    // Crear Checkout Session
-    const session = await stripe.checkout.sessions.create({
-      customer:   stripeCustomerId,
-      mode:       'subscription',
-      line_items: [{ price: PRICE_IDS[plan], quantity: 1 }],
-      success_url: `${baseUrl}/dashboard?billing=success&plan=${plan}`,
-      cancel_url:  `${baseUrl}/dashboard?billing=cancelled`,
-      metadata: {
-        supabase_user_id: userId,
-        plan,
-      },
-      subscription_data: {
-        metadata: {
-          supabase_user_id: userId,
-          plan,
+    const result = await preapprovalClient.create({
+      body: {
+        reason:        config.reason,
+        payer_email:   email,
+        auto_recurring: {
+          frequency:          1,
+          frequency_type:     'months',
+          transaction_amount: config.amount,
+          currency_id:        'ARS',
         },
+        back_url:           `${baseUrl}/dashboard?billing=success&plan=${plan}`,
+        status:             'pending',
+        external_reference: `${userId}|${plan}`,
       },
     })
 
-    res.json({ url: session.url })
+    res.json({ url: result.init_point })
   } catch (err: any) {
     console.error('[/api/billing/checkout]', err.message)
     res.status(500).json({ error: err.message })
@@ -109,127 +87,67 @@ router.get('/subscription', authMiddleware, async (req: Request, res: Response) 
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/billing/webhook
-// Recibe eventos de Stripe. Usa express.raw() — NO express.json().
+// Recibe notificaciones de MercadoPago. Usa express.json() normal.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/webhook', async (req: Request, res: Response) => {
-  const sig     = req.headers['stripe-signature'] as string
-  const secret  = process.env.STRIPE_WEBHOOK_SECRET!
+  const signature = req.headers['x-signature'] as string | undefined
+  const requestId = req.headers['x-request-id'] as string | undefined
+  const secret    = process.env.MP_WEBHOOK_SECRET
 
-  let event: Stripe.Event
+  // Verificar firma solo si el secret está configurado
+  if (secret && signature) {
+    const parts    = Object.fromEntries(signature.split(',').map(p => p.split('=')))
+    const ts       = parts['ts']
+    const v1       = parts['v1']
+    const manifest = `id:${(req.body as any).id};request-id:${requestId};ts:${ts}`
+    const expected = createHmac('sha256', secret).update(manifest).digest('hex')
 
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, secret)
-  } catch (err: any) {
-    console.error('[webhook] Firma inválida:', err.message)
-    return res.status(400).json({ error: `Webhook error: ${err.message}` })
+    if (expected !== v1) {
+      console.error('[webhook] Firma inválida')
+      return res.status(400).json({ error: 'Firma inválida' })
+    }
   }
 
-  console.log(`[webhook] Evento recibido: ${event.type}`)
+  const body = req.body as { type?: string; action?: string; data?: { id?: string }; id?: string }
+
+  // Solo procesamos eventos de preapproval (suscripciones)
+  if (body.type !== 'preapproval' || !body.data?.id) {
+    return res.json({ received: true })
+  }
 
   try {
-    switch (event.type) {
+    const sub = await preapprovalClient.get({ id: body.data.id })
 
-      // Pago exitoso — suscripción creada
-      case 'checkout.session.completed': {
-        const session  = event.data.object as Stripe.Checkout.Session
-        if (session.mode !== 'subscription') break
-
-        const userId   = session.metadata?.supabase_user_id
-        const plan     = session.metadata?.plan
-        const subId    = session.subscription as string
-        const custId   = session.customer as string
-
-        if (!userId || !plan) break
-
-        // Obtener detalles de la suscripción para las fechas
-        const stripeSub = await stripe.subscriptions.retrieve(subId)
-        const item = stripeSub.items.data[0]
-
-        await upsertSubscription({
-          userId,
-          plan,
-          status:              'active',
-          stripeCustomerId:    custId,
-          stripeSubscriptionId: subId,
-          stripePriceId:       item?.price.id,
-          periodStart:         item ? new Date(item.current_period_start * 1000).toISOString() : null,
-          periodEnd:           item ? new Date(item.current_period_end   * 1000).toISOString() : null,
-        })
-
-        await logEvent(event.id, event.type, userId, event.data.object)
-        break
-      }
-
-      // Suscripción actualizada (cambio de plan, renovación, etc.)
-      case 'customer.subscription.updated': {
-        const stripeSub = event.data.object as Stripe.Subscription
-        const userId    = stripeSub.metadata?.supabase_user_id
-        const plan      = stripeSub.metadata?.plan
-
-        if (!userId || !plan) break
-
-        const item = stripeSub.items.data[0]
-
-        await upsertSubscription({
-          userId,
-          plan,
-          status:              mapStripeStatus(stripeSub.status),
-          stripeCustomerId:    stripeSub.customer as string,
-          stripeSubscriptionId: stripeSub.id,
-          stripePriceId:       item?.price.id,
-          periodStart:         item ? new Date(item.current_period_start * 1000).toISOString() : null,
-          periodEnd:           item ? new Date(item.current_period_end   * 1000).toISOString() : null,
-        })
-
-        await logEvent(event.id, event.type, userId, event.data.object)
-        break
-      }
-
-      // Suscripción cancelada
-      case 'customer.subscription.deleted': {
-        const stripeSub = event.data.object as Stripe.Subscription
-        const userId    = stripeSub.metadata?.supabase_user_id
-
-        if (!userId) break
-
-        await supabase
-          .from('st_subscriptions')
-          .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-          .eq('stripe_subscription_id', stripeSub.id)
-
-        // Quitar el plan del perfil
-        await supabase
-          .from('st_profiles')
-          .update({ plan: null })
-          .eq('id', userId)
-
-        await logEvent(event.id, event.type, userId, event.data.object)
-        break
-      }
-
-      // Pago fallido
-      case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice
-        const subId   = (invoice.parent?.subscription_details?.subscription as string) ?? null
-
-        if (subId) {
-          await supabase
-            .from('st_subscriptions')
-            .update({ status: 'past_due', updated_at: new Date().toISOString() })
-            .eq('stripe_subscription_id', subId)
-        }
-
-        await logEvent(event.id, event.type, null, event.data.object)
-        break
-      }
-
-      default:
-        console.log(`[webhook] Evento no manejado: ${event.type}`)
+    const [userId, plan] = (sub.external_reference ?? '').split('|')
+    if (!userId || !plan) {
+      console.error('[webhook] external_reference inválido:', sub.external_reference)
+      return res.json({ received: true })
     }
+
+    const status = mapMPStatus(sub.status ?? '')
+
+    await upsertSubscription({
+      userId,
+      plan,
+      status,
+      mpSubscriptionId: sub.id!,
+      mpPayerId:        String(sub.payer_id ?? ''),
+      periodStart:      sub.date_created ?? null,
+      periodEnd:        sub.next_payment_date ?? null,
+    })
+
+    if (status === 'cancelled') {
+      await supabase
+        .from('st_profiles')
+        .update({ plan: null })
+        .eq('id', userId)
+    }
+
+    await logEvent(body.data.id, body.action ?? body.type ?? '', userId, body)
 
     res.json({ received: true })
   } catch (err: any) {
-    console.error('[webhook] Error procesando evento:', err.message)
+    console.error('[webhook] Error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })
@@ -238,35 +156,32 @@ router.post('/webhook', async (req: Request, res: Response) => {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface UpsertSubscriptionParams {
-  userId:               string
-  plan:                 string
-  status:               string
-  stripeCustomerId:     string
-  stripeSubscriptionId: string
-  stripePriceId:        string | undefined
-  periodStart:          string | null
-  periodEnd:            string | null
+interface UpsertParams {
+  userId:           string
+  plan:             string
+  status:           string
+  mpSubscriptionId: string
+  mpPayerId:        string
+  periodStart:      string | null
+  periodEnd:        string | null
 }
 
-async function upsertSubscription(p: UpsertSubscriptionParams) {
-  // Upsert en st_subscriptions
+async function upsertSubscription(p: UpsertParams) {
   const { error: subErr } = await supabase
     .from('st_subscriptions')
     .upsert({
-      user_id:                p.userId,
-      stripe_customer_id:     p.stripeCustomerId,
-      stripe_subscription_id: p.stripeSubscriptionId,
-      stripe_price_id:        p.stripePriceId,
-      plan:                   p.plan,
-      status:                 p.status,
-      current_period_start:   p.periodStart,
-      current_period_end:     p.periodEnd,
-    }, { onConflict: 'stripe_subscription_id' })
+      user_id:             p.userId,
+      mp_payer_id:         p.mpPayerId,
+      mp_subscription_id:  p.mpSubscriptionId,
+      mp_plan:             p.plan,
+      plan:                p.plan,
+      status:              p.status,
+      current_period_start: p.periodStart,
+      current_period_end:   p.periodEnd,
+    }, { onConflict: 'mp_subscription_id' })
 
   if (subErr) throw subErr
 
-  // Upsert en st_profiles para que funcione tanto con usuarios web como móvil
   const { error: profileErr } = await supabase
     .from('st_profiles')
     .upsert({ id: p.userId, plan: p.plan }, { onConflict: 'id' })
@@ -274,28 +189,19 @@ async function upsertSubscription(p: UpsertSubscriptionParams) {
   if (profileErr) throw profileErr
 }
 
-async function logEvent(
-  stripeEventId: string,
-  eventType:     string,
-  userId:        string | null,
-  payload:       object,
-) {
+async function logEvent(eventId: string, eventType: string, userId: string, payload: object) {
   await supabase.from('st_payment_events').upsert(
-    { stripe_event_id: stripeEventId, event_type: eventType, user_id: userId, payload },
-    { onConflict: 'stripe_event_id' },
+    { mp_event_id: eventId, event_type: eventType, user_id: userId, payload },
+    { onConflict: 'mp_event_id' },
   )
 }
 
-function mapStripeStatus(status: Stripe.Subscription.Status): string {
+function mapMPStatus(status: string): string {
   const map: Record<string, string> = {
-    active:             'active',
-    past_due:           'past_due',
-    canceled:           'cancelled',
-    trialing:           'trialing',
-    incomplete:         'incomplete',
-    incomplete_expired: 'cancelled',
-    unpaid:             'past_due',
-    paused:             'past_due',
+    authorized: 'active',
+    pending:    'incomplete',
+    paused:     'past_due',
+    cancelled:  'cancelled',
   }
   return map[status] ?? 'incomplete'
 }

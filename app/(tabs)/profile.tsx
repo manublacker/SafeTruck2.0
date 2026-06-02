@@ -38,7 +38,7 @@ export default function ProfileScreen() {
 
   useEffect(() => { refreshSubscription() }, [refreshSubscription])
 
-  // Refresh when the app comes to the foreground (user returns from Stripe browser)
+  // Refresh when the app comes to the foreground (user returns from MercadoPago browser)
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
       if (state === 'active') refreshSubscription()

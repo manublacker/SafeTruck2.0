@@ -1,15 +1,15 @@
 /**
- * billing.ts — Mobile billing service (Stripe via WebBrowser)
+ * billing.ts — Mobile billing service (MercadoPago via WebBrowser)
  *
  * Flow:
  *   1. startMobileCheckout(plan) → calls backend /api/billing/checkout
- *      → opens Stripe hosted checkout in the system browser
+ *      → opens MercadoPago hosted checkout in the system browser
  *      → resolves when the user dismisses the browser (Done / back button)
  *   2. fetchMobileSubscription() → GET /api/billing/subscription
  *      → returns the active subscription row or null
  *
  * After startMobileCheckout resolves, call fetchMobileSubscription() to get
- * the updated plan (the Stripe webhook will have fired by then in most cases).
+ * the updated plan (the MercadoPago webhook will have fired by then in most cases).
  */
 
 import * as WebBrowser from 'expo-web-browser'
@@ -52,11 +52,10 @@ export interface MobileSubscription {
   plan: string
   status: string
   current_period_end: string | null
-  stripe_customer_id?: string | null
 }
 
 /**
- * Opens Stripe Checkout in the system browser for the given plan.
+ * Opens MercadoPago Checkout in the system browser for the given plan.
  * Awaits until the user dismisses the browser (presses Done / back).
  * After this resolves, call fetchMobileSubscription() to read the updated plan.
  */
@@ -65,7 +64,7 @@ export async function startMobileCheckout(plan: string): Promise<void> {
     method: 'POST',
     body: JSON.stringify({
       plan,
-      // returnUrl tells the backend to redirect Stripe back to the web dashboard,
+      // returnUrl tells the backend to redirect MercadoPago back to the web dashboard,
       // which shows a clear success/cancel message inside the browser.
       returnUrl: 'https://safetruck20.vercel.app',
     }),
