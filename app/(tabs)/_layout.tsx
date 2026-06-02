@@ -19,15 +19,15 @@ export default function TabLayout() {
         shadowOpacity: 0,
         height: 64,
       },
-      tabBarShowIcon: false,
       tabBarActiveTintColor: '#FFFFFF',
       tabBarInactiveTintColor: t.navyText,
-      tabBarLabelStyle: { fontSize: 13, fontWeight: '600' },
-      tabBarItemStyle: { justifyContent: 'center', paddingBottom: 8 },
+      tabBarIconStyle: { height: 0, minHeight: 0 },
+      tabBarLabelStyle: { fontSize: 13, fontWeight: '600', marginTop: -6 },
+      tabBarItemStyle: { justifyContent: 'center', paddingVertical: 0 },
     }}>
-      <Tabs.Screen name="index"     options={{ title: 'Mapa'   }} />
-      <Tabs.Screen name="trips"     options={{ title: 'Viajes' }} />
-      <Tabs.Screen name="profile"   options={{ title: 'Perfil' }} />
+      <Tabs.Screen name="index"     options={{ title: 'Mapa',   tabBarIcon: () => null }} />
+      <Tabs.Screen name="trips"     options={{ title: 'Viajes', tabBarIcon: () => null }} />
+      <Tabs.Screen name="profile"   options={{ title: 'Perfil', tabBarIcon: () => null }} />
       <Tabs.Screen name="incidents" options={{ href: null }} />
     </Tabs>
   )
