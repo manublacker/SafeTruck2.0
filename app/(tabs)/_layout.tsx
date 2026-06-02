@@ -1,4 +1,4 @@
-import { Tabs, Redirect } from 'expo-router'
+import { Redirect, Tabs } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { getTheme } from '../../src/theme'
 
@@ -17,7 +17,7 @@ export default function TabLayout() {
         borderTopWidth: 0,
         elevation: 0,
         shadowOpacity: 0,
-        height: 60,
+        height: 90,
       },
       tabBarActiveTintColor: '#FFFFFF',
       tabBarInactiveTintColor: t.navyText,

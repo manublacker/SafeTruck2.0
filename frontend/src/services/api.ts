@@ -271,6 +271,17 @@ export async function createInvitation(): Promise<{ code: string; expires_at: st
   return data.invitation;
 }
 
+export async function deleteInvitation(id: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/invitations/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok && res.status !== 204) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+  }
+}
+
 export async function bulkCreateInvitations(quantity: number): Promise<{ code: string; expires_at: string }[]> {
   const res = await fetch(`${BASE_URL}/api/invitations/bulk`, {
     method: 'POST',
