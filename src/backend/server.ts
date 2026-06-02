@@ -22,10 +22,6 @@ import pushTokensRouter from './routes/push-tokens'
 const app = express()
 app.use(cors({ maxAge: 86400 }))
 
-// El webhook de Stripe necesita el body crudo (sin parsear) para verificar la firma.
-// IMPORTANTE: esta ruta debe ir ANTES del middleware express.json() global.
-app.use('/api/billing/webhook', express.raw({ type: 'application/json' }))
-
 app.use(express.json({ limit: '50mb' }))
 
 app.use('/api/auth', authRouter)

@@ -3,6 +3,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { AdminPage } from "./AdminSidebar";
 
+interface Subscription {
+  plan: string;
+  status: string;
+  current_period_end: string | null;
+  mp_payer_id?: string | null;
+}
+
 interface Props {
   onNavigate: (page: AdminPage) => void;
 }
