@@ -292,6 +292,7 @@ export async function fetchInvitations(): Promise<DriverInvitation[]> {
 export interface AssignedTrip {
   id: number;
   driver_id: number;
+  driver_nombre?: string | null;
   truck_id: number;
   origin_label: string;
   destination_label: string;
