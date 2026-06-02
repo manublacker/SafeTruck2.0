@@ -12,7 +12,7 @@ const plans: Plan[] = [
   {
     name: "Starter",
     slug: "starter",
-    price: "$29",
+    price: "$43.500",
     features: [
       "Hasta 5 camiones",
       "Tracking en tiempo real",
@@ -24,7 +24,7 @@ const plans: Plan[] = [
   {
     name: "Pro",
     slug: "pro",
-    price: "$79",
+    price: "$118.500",
     features: [
       "Hasta 20 camiones",
       "Todo lo de Starter",
@@ -38,7 +38,7 @@ const plans: Plan[] = [
   {
     name: "Enterprise",
     slug: "enterprise",
-    price: "$199",
+    price: "$298.500",
     features: [
       "Camiones ilimitados",
       "Todo lo de Pro",

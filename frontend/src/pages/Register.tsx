@@ -502,7 +502,7 @@ const Register = () => {
                   <div style={{ display: "flex", flexDirection: "row", flexWrap: "wrap", gap: "1.5rem", justifyContent: "center", alignItems: "stretch" }}>
                     <PlanCard
                       name="Starter"
-                      price="$29"
+                      price="$43.500"
                       features={[
                         "Hasta 5 camiones",
                         "Tracking en tiempo real",
@@ -516,7 +516,7 @@ const Register = () => {
                     />
                     <PlanCard
                       name="Pro"
-                      price="$79"
+                      price="$118.500"
                       features={[
                         "Hasta 20 camiones",
                         "Todo lo de Starter",
@@ -532,7 +532,7 @@ const Register = () => {
                     />
                     <PlanCard
                       name="Enterprise"
-                      price="$199"
+                      price="$298.500"
                       features={[
                         "Camiones ilimitados",
                         "Todo lo de Pro",

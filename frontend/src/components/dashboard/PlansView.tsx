@@ -12,8 +12,8 @@ const PLANS = [
   {
     slug: "starter",
     name: "Starter",
-    price: "$29",
-    period: "USD / mes",
+    price: "$43.500",
+    period: "ARS / mes",
     color: "#6b7280",
     accentBg: "#f3f4f6",
     border: "#e5e7eb",
@@ -28,8 +28,8 @@ const PLANS = [
   {
     slug: "pro",
     name: "Pro",
-    price: "$79",
-    period: "USD / mes",
+    price: "$118.500",
+    period: "ARS / mes",
     color: "#2563eb",
     accentBg: "#eff6ff",
     border: "#bfdbfe",
@@ -46,8 +46,8 @@ const PLANS = [
   {
     slug: "enterprise",
     name: "Enterprise",
-    price: "$199",
-    period: "USD / mes",
+    price: "$298.500",
+    period: "ARS / mes",
     color: "#9333ea",
     accentBg: "#fdf4ff",
     border: "#e9d5ff",
