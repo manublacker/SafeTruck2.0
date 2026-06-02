@@ -247,3 +247,104 @@ export async function fetchSubscription(): Promise<{
   if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
   return (data as { subscription: any }).subscription;
 }
+
+// ── Invitations ────────────────────────────────────────────────────────────────
+
+export interface DriverInvitation {
+  id: number;
+  code: string;
+  admin_id: string;
+  hint_name: string | null;
+  driver_id: number | null;
+  driver_nombre: string | null;
+  redeemed_at: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
+export async function createInvitation(): Promise<{ code: string; expires_at: string }> {
+  const res = await fetch(`${BASE_URL}/api/invitations`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  const data = await handleResponse<{ success: boolean; invitation: DriverInvitation }>(res);
+  return data.invitation;
+}
+
+export async function bulkCreateInvitations(quantity: number): Promise<{ code: string; expires_at: string }[]> {
+  const res = await fetch(`${BASE_URL}/api/invitations/bulk`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity }),
+  });
+  return handleResponse<{ code: string; expires_at: string }[]>(res);
+}
+
+export async function fetchInvitations(): Promise<DriverInvitation[]> {
+  const res = await fetch(`${BASE_URL}/api/invitations`, {
+    headers: authHeaders(),
+  });
+  return handleResponse<DriverInvitation[]>(res);
+}
+
+// ── Assigned Trips ─────────────────────────────────────────────────────────────
+
+export interface AssignedTrip {
+  id: number;
+  driver_id: number;
+  truck_id: number;
+  origin_label: string;
+  destination_label: string;
+  origin_lat: number;
+  origin_lon: number;
+  destination_lat: number;
+  destination_lon: number;
+  scheduled_at: string | null;
+  status: string;
+  created_at: string;
+}
+
+export async function fetchAssignedTrips(): Promise<AssignedTrip[]> {
+  const res = await fetch(`${BASE_URL}/api/assigned-trips`, {
+    headers: authHeaders(),
+  });
+  return handleResponse<AssignedTrip[]>(res);
+}
+
+export async function createAssignedTrip(data: {
+  driver_id: number;
+  truck_id: number;
+  origin_address: string;
+  destination_address: string;
+  origin_lat: number;
+  origin_lng: number;
+  destination_lat: number;
+  destination_lng: number;
+  route: unknown;
+  scheduled_at?: string;
+}): Promise<AssignedTrip> {
+  const res = await fetch(`${BASE_URL}/api/assigned-trips`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<AssignedTrip>(res);
+}
+
+// ── Driver Locations ───────────────────────────────────────────────────────────
+
+export interface DriverLocation {
+  driver_app_user_id: string;
+  driver_name: string;
+  truck_plate: string;
+  lat: number;
+  lng: number;
+  updated_at: string;
+}
+
+export async function fetchDriverLocations(): Promise<DriverLocation[]> {
+  const res = await fetch(`${BASE_URL}/api/locations`, {
+    headers: authHeaders(),
+  });
+  return handleResponse<DriverLocation[]>(res);
+}
