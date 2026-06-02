@@ -13,17 +13,6 @@ import {
   type DriverProfile,
 } from '../../src/services/assignedTrips'
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-function daysUntil(dateStr: string | null): number | null {
-  if (!dateStr) return null
-  const diff = new Date(dateStr).getTime() - Date.now()
-  return Math.ceil(diff / (1000 * 60 * 60 * 24))
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 function SectionLabel({ children }: { children: string }) {
@@ -109,10 +98,6 @@ export default function ProfileScreen() {
     .join('')
     .toUpperCase() ?? '?'
 
-  const days = daysUntil(driverProfile?.vencimiento_licencia ?? null)
-  const expiringSoon = days !== null && days <= 30 && days >= 0
-  const expired      = days !== null && days < 0
-
   return (
     <ScrollView style={{ flex: 1, backgroundColor: bgColor }} contentContainerStyle={{ padding: 18, paddingTop: 60, paddingBottom: 60 }}>
 
@@ -145,58 +130,6 @@ export default function ProfileScreen() {
         <ActivityIndicator color={t.accent} style={{ marginVertical: 32 }} />
       ) : (
         <>
-          {/* ── Licencia (credencial navy) ───────────────────────────── */}
-          <SectionLabel>Licencia de conducir</SectionLabel>
-          <View style={{
-            backgroundColor: t.navy, borderRadius: 16,
-            padding: 20, marginBottom: 22, overflow: 'hidden',
-            shadowColor: '#10203080', shadowOpacity: 0.18, shadowRadius: 12,
-            shadowOffset: { width: 0, height: 4 }, elevation: 6,
-          }}>
-            {/* Watermark truck */}
-            <Text style={{ position: 'absolute', right: -10, bottom: -20, fontSize: 120, opacity: 0.05 }}>🚛</Text>
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-              <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1.6, textTransform: 'uppercase', color: t.accent }}>
-                Licencia de conducir
-              </Text>
-              <Text style={{ fontSize: 18, opacity: 0.5 }}>🪪</Text>
-            </View>
-
-            <Text style={{ fontSize: 24, fontWeight: '800', letterSpacing: 0.8, color: '#FFFFFF', fontVariantNumeric: 'tabular-nums', marginBottom: 20 }}>
-              {driverProfile?.licencia ?? '— — —'}
-            </Text>
-
-            <View style={{ flexDirection: 'row', gap: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
-              {/* Categoría */}
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 9.5, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: t.navyText, marginBottom: 7 }}>
-                  Categoría
-                </Text>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}>
-                  {driverProfile?.categoria_licencia ?? '—'}
-                </Text>
-              </View>
-              {/* Vencimiento */}
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 9.5, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: t.navyText, marginBottom: 7 }}>
-                  Vence
-                </Text>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}>
-                  {formatDate(driverProfile?.vencimiento_licencia ?? null)}
-                </Text>
-                {(expiringSoon || expired) && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8, backgroundColor: 'rgba(217,136,26,0.18)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(217,136,26,0.4)' }}>
-                    <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#F0A93C' }} />
-                    <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#F0A93C', textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                      {expired ? 'Vencida' : `Vence en ${days}d`}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          </View>
-
           {/* ── Camión asignado ──────────────────────────────────────── */}
           <SectionLabel>Camión asignado</SectionLabel>
           <View style={{ marginBottom: 22 }}>
