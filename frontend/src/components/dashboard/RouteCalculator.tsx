@@ -8,8 +8,18 @@ import {
 import type { RouteResponse } from "@/types/route";
 import type { Truck } from "@/types/auth";
 
+export interface CalculateResult {
+  route: RouteResponse;
+  originLabel: string;
+  destinationLabel: string;
+  originLat: number;
+  originLon: number;
+  destinationLat: number;
+  destinationLon: number;
+}
+
 export interface RouteCalculatorHandle {
-  calculate: () => Promise<RouteResponse | null>;
+  calculate: () => Promise<CalculateResult | null>;
 }
 
 const MIN_QUERY_LENGTH = 3;
@@ -83,7 +93,15 @@ const RouteCalculator = forwardRef<RouteCalculatorHandle, Props>(function RouteC
           return null;
         }
         onRouteCalculated(response);
-        return response;
+        return {
+          route: response,
+          originLabel:      resolvedOrigin.label,
+          destinationLabel: resolvedDestination.label,
+          originLat:        resolvedOrigin.lat,
+          originLon:        resolvedOrigin.lon,
+          destinationLat:   resolvedDestination.lat,
+          destinationLon:   resolvedDestination.lon,
+        };
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error al calcular la ruta.");
         return null;

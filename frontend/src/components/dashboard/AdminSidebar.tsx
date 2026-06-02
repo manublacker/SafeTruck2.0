@@ -1,8 +1,9 @@
+import { useEffect, useRef, useState } from "react";
 import { Icons } from "./DashboardIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import safeTruckLogo from "@/assets/logo_safetruck.png";
 
-export type AdminPage = "map" | "fleet" | "trips" | "account";
+export type AdminPage = "map" | "fleet" | "trips" | "account" | "plans";
 
 interface Props {
   page: AdminPage;
@@ -11,50 +12,43 @@ interface Props {
 }
 
 const NAV_ITEMS: { key: AdminPage; label: string; icon: React.ReactNode }[] = [
-  { key: "map",     label: "Live Map",  icon: <Icons.Map /> },
-  { key: "fleet",   label: "Flota",     icon: <Icons.Truck /> },
-  { key: "trips",   label: "Historial", icon: <Icons.Clock /> },
-  { key: "account", label: "Mi cuenta", icon: <Icons.User /> },
+  { key: "map",   label: "Live Map",  icon: <Icons.Map /> },
+  { key: "fleet", label: "Flota",     icon: <Icons.Truck /> },
+  { key: "trips", label: "Historial", icon: <Icons.Clock /> },
 ];
 
 function initials(name: string) {
   return name.split(" ").slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
 
-const PLAN_COLORS: Record<string, { bg: string; color: string }> = {
-  starter:    { bg: "#f0f0f0", color: "#6b7280" },
-  pro:        { bg: "#eff6ff", color: "#2563eb" },
-  enterprise: { bg: "#fdf4ff", color: "#9333ea" },
-};
-
-function PlanBadge({ plan }: { plan: string | null }) {
-  if (!plan) return null;
-  const style = PLAN_COLORS[plan] ?? PLAN_COLORS.starter;
-  return (
-    <span style={{
-      display: "inline-block",
-      padding: "2px 8px",
-      borderRadius: 999,
-      fontSize: "0.7rem",
-      fontWeight: 700,
-      letterSpacing: 0.3,
-      background: style.bg,
-      color: style.color,
-      textTransform: "capitalize",
-    }}>
-      {plan}
-    </span>
-  );
-}
-
 export default function AdminSidebar({ page, setPage, collapsed }: Props) {
   const { user, logout } = useAuth();
   const width = collapsed ? 60 : 220;
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const footerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!popoverOpen) return;
+    function handler(e: MouseEvent) {
+      if (footerRef.current && !footerRef.current.contains(e.target as Node)) {
+        setPopoverOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [popoverOpen]);
+
+  function goAccount() { setPage("account"); setPopoverOpen(false); }
+  function goPlans()   { setPage("plans");   setPopoverOpen(false); }
+  function handleLogout() { setPopoverOpen(false); void logout(); }
+
+  const plan = user?.plan ?? null;
+  const isEnterprise = plan === "enterprise";
 
   return (
     <aside
       className={`st-sidebar${collapsed ? " collapsed" : ""}`}
-      style={{ width }}
+      style={{ width, display: "flex", flexDirection: "column", flexShrink: 0, position: "relative" }}
     >
       {/* Logo */}
       <div
@@ -67,11 +61,7 @@ export default function AdminSidebar({ page, setPage, collapsed }: Props) {
         }}
       >
         <div className="st-sidebar-logo-icon">
-          <img
-            src={safeTruckLogo}
-            alt="SafeTruck"
-            style={{ width: "100%", height: "100%", objectFit: "contain" }}
-          />
+          <img src={safeTruckLogo} alt="SafeTruck" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
         </div>
         {!collapsed && (
           <div className="label-fade" style={{ lineHeight: 1.2 }}>
@@ -82,64 +72,93 @@ export default function AdminSidebar({ page, setPage, collapsed }: Props) {
       </div>
 
       {/* Nav */}
-      <nav
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-          flex: 1,
-          padding: collapsed ? "0 8px" : "0 12px",
-        }}
-      >
+      <nav style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, padding: collapsed ? "0 8px" : "0 12px" }}>
         {NAV_ITEMS.map((it) => (
           <div
             key={it.key}
             title={collapsed ? it.label : undefined}
             className={`st-nav-item${page === it.key ? " active" : ""}`}
-            style={{
-              padding: collapsed ? "12px 0" : "12px 16px",
-              justifyContent: collapsed ? "center" : "flex-start",
-            }}
+            style={{ padding: collapsed ? "12px 0" : "12px 16px", justifyContent: collapsed ? "center" : "flex-start" }}
             onClick={() => setPage(it.key)}
           >
-            <span style={{ width: 18, height: 18, display: "inline-flex", flexShrink: 0 }}>
-              {it.icon}
-            </span>
+            <span style={{ width: 18, height: 18, display: "inline-flex", flexShrink: 0 }}>{it.icon}</span>
             {!collapsed && <span style={{ whiteSpace: "nowrap" }}>{it.label}</span>}
           </div>
         ))}
       </nav>
 
-      {/* Footer: user */}
+      {/* Footer con popover */}
       <div
-        className="st-sidebar-footer"
-        style={{ padding: collapsed ? "20px 8px" : "20px" }}
+        ref={footerRef}
+        style={{
+          padding: collapsed ? "12px 8px" : "12px",
+          borderTop: "1px solid rgba(255,255,255,0.08)",
+          position: "relative",
+        }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            justifyContent: collapsed ? "center" : "flex-start",
-          }}
+        <button
+          className="st-account-trigger"
+          onClick={() => setPopoverOpen((o) => !o)}
+          aria-expanded={popoverOpen}
+          style={{ justifyContent: collapsed ? "center" : "flex-start" }}
         >
-          <div className="st-sidebar-user-avatar">
+          <div className="st-sidebar-user-avatar" style={{ flexShrink: 0 }}>
             {user ? initials(user.full_name) : "?"}
           </div>
           {!collapsed && user && (
-            <div style={{ lineHeight: 1.3, flex: 1 }}>
-              <div className="st-sidebar-user-name">{user.full_name}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                <span className="st-sidebar-user-role">Admin</span>
-                <PlanBadge plan={user.plan} />
+            <>
+              <div style={{ lineHeight: 1.3, flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: "0.88rem", fontWeight: 700, color: "#fff",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}
+                >
+                  {user.full_name}
+                </div>
+                <div style={{ color: "rgba(255,255,255,0.50)", fontSize: "0.74rem", textTransform: "capitalize" }}>
+                  Plan {plan ?? "starter"}
+                </div>
               </div>
-            </div>
+              <span
+                style={{
+                  color: "rgba(255,255,255,0.55)",
+                  display: "inline-flex",
+                  transform: popoverOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 0.2s ease",
+                  flexShrink: 0,
+                }}
+              >
+                <Icons.ChevronUp size={14} />
+              </span>
+            </>
           )}
-        </div>
-        {!collapsed && (
-          <button className="st-sidebar-logout" onClick={logout}>
-            Cerrar sesión
-          </button>
+        </button>
+
+        {popoverOpen && (
+          <div
+            className="st-account-popover"
+            style={{ width: collapsed ? 200 : "calc(100% - 24px)" }}
+          >
+            <button className="st-popover-btn" onClick={goAccount}>
+              <Icons.Settings size={16} />
+              <span>Mi cuenta</span>
+            </button>
+            <button
+              className="st-popover-btn"
+              onClick={goPlans}
+              disabled={isEnterprise}
+              style={{ color: isEnterprise ? "rgba(255,255,255,0.55)" : "#fbbf24" }}
+            >
+              <Icons.Zap size={16} />
+              <span>{isEnterprise ? "Plan Enterprise ✓" : "Mejorar plan"}</span>
+            </button>
+            <div className="st-popover-sep" />
+            <button className="st-popover-btn logout" onClick={handleLogout}>
+              <Icons.LogOut size={16} />
+              <span>Cerrar sesión</span>
+            </button>
+          </div>
         )}
       </div>
     </aside>

@@ -13,6 +13,7 @@ import {
 } from '../../src/services/billing'
 import { PLAN_OPTIONS } from '../../src/constants/register'
 import type { SubscriptionPlan } from '../../src/types'
+import { redeemInvitation, fetchMyAssignedTruck, type AssignedTruck } from '../../src/services/assignedTrips'
 
 export default function ProfileScreen() {
   const { profile, setProfile, activeVehicle, setActiveVehicle, vehicles, setVehicles } = useStore()
@@ -57,6 +58,42 @@ export default function ProfileScreen() {
       Alert.alert('Error', err.message ?? 'No se pudo iniciar el pago.')
     } finally {
       setUpgradingPlan(null)
+    }
+  }
+
+  // ── Camión asignado por el admin ─────────────────────────────
+  const [assignedTruck, setAssignedTruck] = useState<AssignedTruck | null | undefined>(undefined)
+
+  const loadAssignedTruck = useCallback(async () => {
+    try {
+      const truck = await fetchMyAssignedTruck()
+      setAssignedTruck(truck)
+    } catch {
+      setAssignedTruck(null)
+    }
+  }, [])
+
+  useEffect(() => { loadAssignedTruck() }, [loadAssignedTruck])
+
+  // ── Invitación ───────────────────────────────────────────────
+  const [inviteCode, setInviteCode]       = useState('')
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [inviteLinked, setInviteLinked]   = useState(false)
+
+  const handleRedeemCode = async () => {
+    const code = inviteCode.trim().toUpperCase()
+    if (!code) return Alert.alert('Error', 'Ingresá el código de invitación')
+    setInviteLoading(true)
+    try {
+      const res = await redeemInvitation(code)
+      setInviteLinked(true)
+      setInviteCode('')
+      void loadAssignedTruck()
+      Alert.alert('¡Vinculado!', `Quedaste vinculado como conductor. Ahora podés recibir viajes asignados.`)
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'Código inválido o vencido')
+    } finally {
+      setInviteLoading(false)
     }
   }
 
@@ -180,6 +217,92 @@ export default function ProfileScreen() {
           <Text style={s.logoutText}>Salir</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ── Vincular empresa ─────────────────────────────────── */}
+      {!inviteLinked && (
+        <View style={s.section}>
+          <Text style={s.sectionLabel}> VINCULAR CON EMPRESA</Text>
+          <View style={s.card}>
+            <Text style={[s.cardTitle, { marginBottom: 8 }]}>Código de invitación</Text>
+            <Text style={{ color: t.textMuted, fontSize: 13, marginBottom: 14 }}>
+              Si tu empresa te envió un código, ingrésalo aquí para poder recibir viajes asignados.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TextInput
+                style={[s.input, { flex: 1, textTransform: 'uppercase', letterSpacing: 2 }]}
+                placeholder="Ej: AB3X7YKP"
+                placeholderTextColor={t.textSoft}
+                value={inviteCode}
+                onChangeText={setInviteCode}
+                autoCapitalize="characters"
+                maxLength={10}
+              />
+              <TouchableOpacity
+                style={[s.btnPrimary, { paddingHorizontal: 16 }, inviteLoading && s.btnDisabled]}
+                onPress={handleRedeemCode}
+                disabled={inviteLoading}
+              >
+                {inviteLoading
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={s.btnPrimaryText}>Canjear</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {inviteLinked && (
+        <View style={s.section}>
+          <Text style={s.sectionLabel}> EMPRESA VINCULADA</Text>
+          <View style={[s.card, { borderColor: t.success, borderWidth: 1.5 }]}>
+            <Text style={{ color: t.success, fontWeight: '700', fontSize: 14 }}>
+              ✓ Vinculado correctamente
+            </Text>
+            <Text style={{ color: t.textMuted, fontSize: 13, marginTop: 4 }}>
+              Ya podés recibir viajes asignados en la pestaña Viajes.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* ── Camión asignado ─────────────────────────────────── */}
+      {assignedTruck !== undefined && (
+        <View style={s.section}>
+          <Text style={s.sectionLabel}> CAMIÓN ASIGNADO</Text>
+          {assignedTruck ? (
+            <View style={[s.vehicleCard, { borderColor: t.success }]}>
+              <Text style={s.vehicleName}>{assignedTruck.name}</Text>
+              {assignedTruck.patente && (
+                <Text style={s.vehiclePlate}>{assignedTruck.patente}</Text>
+              )}
+              {assignedTruck.modelo && (
+                <Text style={[s.vehiclePlate, { marginBottom: 12 }]}>
+                  {assignedTruck.modelo}{assignedTruck.anio ? ` · ${assignedTruck.anio}` : ''}
+                </Text>
+              )}
+              <View style={s.specsRow}>
+                {[
+                  { val: `${assignedTruck.max_weight_kg} kg`, lbl: 'PESO MÁX' },
+                  { val: `${assignedTruck.max_height_m} m`,   lbl: 'ALTURA MÁX' },
+                  { val: `${assignedTruck.max_width_m} m`,    lbl: 'ANCHO MÁX' },
+                ].map(spec => (
+                  <View key={spec.lbl} style={s.spec}>
+                    <Text style={[s.specVal, { color: t.success }]}>{spec.val}</Text>
+                    <Text style={s.specLbl}>{spec.lbl}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : (
+            <View style={s.card}>
+              <Text style={{ color: t.textMuted, fontSize: 13 }}>
+                Tu empresa aún no te asignó un camión.
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
 
       {/* ── Suscripción ──────────────────────────────────────── */}
       <View style={s.section}>

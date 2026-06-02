@@ -319,4 +319,60 @@ router.delete("/:id", async (req: Request, res: Response) => {
   }
 });
 
+// POST /bulk — Crea múltiples camiones desde plantilla
+router.post('/bulk', async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const { template, quantity, name_prefix } = req.body ?? {};
+
+  const TEMPLATES: Record<string, { max_weight_kg: number; max_height_m: number; max_width_m: number; max_length_m: number }> = {
+    standard: { max_weight_kg: 20000, max_height_m: 4.2, max_width_m: 2.55, max_length_m: 12 },
+    heavy:    { max_weight_kg: 40000, max_height_m: 4.2, max_width_m: 2.6,  max_length_m: 18 },
+    trailer:  { max_weight_kg: 32000, max_height_m: 4.0, max_width_m: 2.55, max_length_m: 20 },
+  };
+
+  if (!TEMPLATES[template]) {
+    return res.status(400).json({ error: 'template inválido: standard | heavy | trailer' });
+  }
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty < 1 || qty > 10) {
+    return res.status(400).json({ error: 'quantity debe ser entre 1 y 10' });
+  }
+  if (!name_prefix || typeof name_prefix !== 'string') {
+    return res.status(400).json({ error: 'name_prefix requerido' });
+  }
+
+  try {
+    const { data: profile } = await supabase
+      .from('st_profiles').select('plan').eq('id', userId).single();
+    const plan = (profile?.plan as string | null) ?? 'starter';
+    const limit = PLAN_TRUCK_LIMITS[plan] ?? 5;
+
+    const countResult = await pool.query<{ count: string }>(
+      'SELECT COUNT(*) FROM trucks WHERE user_id = $1 AND is_active = true', [userId]
+    );
+    const current = parseInt(countResult.rows[0].count, 10);
+    if (current + qty > limit) {
+      return res.status(403).json({
+        error: `Tu plan ${plan} permite ${limit} camiones. Tenés ${current} y querés agregar ${qty}.`,
+      });
+    }
+
+    const specs = TEMPLATES[template];
+    const created = [];
+    for (let i = 1; i <= qty; i++) {
+      const name = qty === 1 ? name_prefix.trim() : `${name_prefix.trim()} ${i}`;
+      const ins = await pool.query(
+        `INSERT INTO trucks (user_id, name, max_weight_kg, max_height_m, max_width_m, max_length_m)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, max_weight_kg, max_height_m, max_width_m, max_length_m, estado, created_at`,
+        [userId, name, specs.max_weight_kg, specs.max_height_m, specs.max_width_m, specs.max_length_m]
+      );
+      created.push(ins.rows[0]);
+    }
+
+    res.status(201).json(created);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
