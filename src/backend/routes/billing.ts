@@ -96,10 +96,15 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
   // Verificar firma solo si el secret está configurado
   if (secret && signature) {
-    const parts    = Object.fromEntries(signature.split(',').map(p => p.split('=')))
-    const ts       = parts['ts']
-    const v1       = parts['v1']
-    const manifest = `id:${(req.body as any).id};request-id:${requestId};ts:${ts}`
+    const parts = Object.fromEntries(signature.split(',').map(p => p.trim().split('=')))
+    const ts = parts['ts']
+    const v1 = parts['v1']
+    const bodyId = (req.body as any)?.id
+    if (!ts || !v1 || !requestId || !bodyId) {
+      console.error('[webhook] Firma inválida (headers/body incompletos)')
+      return res.status(400).json({ error: 'Firma inválida' })
+    }
+    const manifest = `id:${bodyId};request-id:${requestId};ts:${ts}`
     const expected = createHmac('sha256', secret).update(manifest).digest('hex')
 
     if (expected !== v1) {
@@ -143,7 +148,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
         .eq('id', userId)
     }
 
-    await logEvent(body.data.id, body.action ?? body.type ?? '', userId, body)
+    await logEvent(String(body.id ?? body.data.id), body.action ?? body.type ?? '', userId, body)
 
     res.json({ received: true })
   } catch (err: any) {
