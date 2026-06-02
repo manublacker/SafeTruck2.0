@@ -112,8 +112,9 @@ const s = StyleSheet.create({
 })
 
 export default function RootLayout() {
-  const { profile, setProfile } = useStore(s => ({ profile: s.profile, setProfile: s.setProfile }))
-  const isDark = useStore(s => s.isDark)
+  const profile    = useStore(s => s.profile)
+  const setProfile = useStore(s => s.setProfile)
+  const isDark     = useStore(s => s.isDark)
   const [ready, setReady]               = useState(false)
   const [needsCompletion, setNeedsCompletion] = useState(false)
 
