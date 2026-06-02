@@ -51,9 +51,8 @@ router.post('/checkout', authMiddleware, async (req: Request, res: Response) => 
         back_urls: {
           success: `${baseUrl}/dashboard?billing=success&plan=${plan}`,
           failure: `${baseUrl}/dashboard?billing=cancelled`,
-          pending: `${baseUrl}/dashboard?billing=pending&plan=${plan}`,
+          pending: `${baseUrl}/dashboard?billing=success&plan=${plan}`,
         },
-        auto_return:        'approved',
         external_reference: `${userId}|${plan}`,
       },
     })
