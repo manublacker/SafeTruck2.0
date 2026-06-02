@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { WebView } from 'react-native-webview'
 import * as Location from 'expo-location'
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme } from '../../src/theme'
@@ -234,6 +234,7 @@ export default function MapScreen() {
 
   // ── Trip visualization (navegado desde Viajes) ─────────────────────────
   const { tripId } = useLocalSearchParams<{ tripId?: string }>()
+  const router = useRouter()
   const [tripSheet, setTripSheet] = useState<AssignedTrip | null>(null)
   const [tripUpdating, setTripUpdating] = useState(false)
   const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -781,7 +782,7 @@ export default function MapScreen() {
             </View>
 
             {/* Close */}
-            <TouchableOpacity onPress={() => { setTripSheet(null); webRef.current?.injectJavaScript('clearRoute(); true;') }} style={{ backgroundColor: t.surface2, borderRadius: 8, padding: 8, marginLeft: 12 }}>
+            <TouchableOpacity onPress={() => { setTripSheet(null); webRef.current?.injectJavaScript('clearRoute(); true;'); router.replace('/(tabs)/') }} style={{ backgroundColor: t.surface2, borderRadius: 8, padding: 8, marginLeft: 12 }}>
               <Text style={{ color: t.textMuted, fontSize: 14, fontWeight: '700' }}>✕</Text>
             </TouchableOpacity>
           </View>
