@@ -13,7 +13,7 @@ import {
 } from '../../src/services/billing'
 import { PLAN_OPTIONS } from '../../src/constants/register'
 import type { SubscriptionPlan } from '../../src/types'
-import { redeemInvitation } from '../../src/services/assignedTrips'
+import { redeemInvitation, fetchMyAssignedTruck, type AssignedTruck } from '../../src/services/assignedTrips'
 
 export default function ProfileScreen() {
   const { profile, setProfile, activeVehicle, setActiveVehicle, vehicles, setVehicles } = useStore()
@@ -61,6 +61,20 @@ export default function ProfileScreen() {
     }
   }
 
+  // ── Camión asignado por el admin ─────────────────────────────
+  const [assignedTruck, setAssignedTruck] = useState<AssignedTruck | null | undefined>(undefined)
+
+  const loadAssignedTruck = useCallback(async () => {
+    try {
+      const truck = await fetchMyAssignedTruck()
+      setAssignedTruck(truck)
+    } catch {
+      setAssignedTruck(null)
+    }
+  }, [])
+
+  useEffect(() => { loadAssignedTruck() }, [loadAssignedTruck])
+
   // ── Invitación ───────────────────────────────────────────────
   const [inviteCode, setInviteCode]       = useState('')
   const [inviteLoading, setInviteLoading] = useState(false)
@@ -74,6 +88,7 @@ export default function ProfileScreen() {
       const res = await redeemInvitation(code)
       setInviteLinked(true)
       setInviteCode('')
+      void loadAssignedTruck()
       Alert.alert('¡Vinculado!', `Quedaste vinculado como conductor. Ahora podés recibir viajes asignados.`)
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'Código inválido o vencido')
@@ -248,6 +263,44 @@ export default function ProfileScreen() {
               Ya podés recibir viajes asignados en la pestaña Viajes.
             </Text>
           </View>
+        </View>
+      )}
+
+      {/* ── Camión asignado ─────────────────────────────────── */}
+      {assignedTruck !== undefined && (
+        <View style={s.section}>
+          <Text style={s.sectionLabel}> CAMIÓN ASIGNADO</Text>
+          {assignedTruck ? (
+            <View style={[s.vehicleCard, { borderColor: t.success }]}>
+              <Text style={s.vehicleName}>{assignedTruck.name}</Text>
+              {assignedTruck.patente && (
+                <Text style={s.vehiclePlate}>{assignedTruck.patente}</Text>
+              )}
+              {assignedTruck.modelo && (
+                <Text style={[s.vehiclePlate, { marginBottom: 12 }]}>
+                  {assignedTruck.modelo}{assignedTruck.anio ? ` · ${assignedTruck.anio}` : ''}
+                </Text>
+              )}
+              <View style={s.specsRow}>
+                {[
+                  { val: `${assignedTruck.max_weight_kg} kg`, lbl: 'PESO MÁX' },
+                  { val: `${assignedTruck.max_height_m} m`,   lbl: 'ALTURA MÁX' },
+                  { val: `${assignedTruck.max_width_m} m`,    lbl: 'ANCHO MÁX' },
+                ].map(spec => (
+                  <View key={spec.lbl} style={s.spec}>
+                    <Text style={[s.specVal, { color: t.success }]}>{spec.val}</Text>
+                    <Text style={s.specLbl}>{spec.lbl}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : (
+            <View style={s.card}>
+              <Text style={{ color: t.textMuted, fontSize: 13 }}>
+                Tu empresa aún no te asignó un camión.
+              </Text>
+            </View>
+          )}
         </View>
       )}
 

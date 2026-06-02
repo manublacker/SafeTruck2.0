@@ -201,6 +201,29 @@ router.delete("/:id", async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/drivers/me/truck — Conductor consulta el camión que le asignó el admin
+// ---------------------------------------------------------------------------
+router.get('/me/truck', async (req: Request, res: Response) => {
+  const appUserId = req.user!.id
+  try {
+    const result = await pool.query(
+      `SELECT t.id, t.name, t.patente, t.modelo, t.anio,
+              t.max_weight_kg, t.max_height_m, t.max_width_m, t.max_length_m, t.estado
+       FROM drivers d
+       JOIN truck_drivers td ON td.driver_id = d.id
+       JOIN trucks t         ON t.id = td.truck_id AND t.is_active = true
+       WHERE d.app_user_id = $1 AND d.is_active = true
+       LIMIT 1`,
+      [appUserId]
+    )
+    res.json(result.rows[0] ?? null)
+  } catch (err: any) {
+    console.error('Error en GET /api/drivers/me/truck:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ---------------------------------------------------------------------------
 // PATCH /api/drivers/me — Conductor actualiza sus propios datos desde el mobile
 // (usa app_user_id del JWT en lugar de admin user_id)
 // ---------------------------------------------------------------------------

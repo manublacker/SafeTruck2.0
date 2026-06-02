@@ -191,6 +191,14 @@ export default function TripsScreen() {
                   </View>
                 </View>
 
+                {(item.truck_patente || item.truck_name) && (
+                  <View style={s.truckBadge}>
+                    <Text style={s.truckBadgeText}>
+                      🚛 {item.truck_name ?? ''}{item.truck_patente ? ` · ${item.truck_patente}` : ''}
+                    </Text>
+                  </View>
+                )}
+
                 {isUpdating ? (
                   <ActivityIndicator color={t.accent} style={{ marginTop: 10 }} />
                 ) : (
@@ -274,6 +282,13 @@ function makeStyles(t: Theme) {
     routeDot: { width: 9, height: 9, borderRadius: 5, marginRight: 10, flexShrink: 0 },
     routeText: { color: t.text, fontSize: 14, flex: 1 },
     routeLine: { width: 1, height: 12, backgroundColor: t.border, marginLeft: 4, marginVertical: 1 },
+
+    truckBadge: {
+      backgroundColor: t.surface2,
+      borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
+      alignSelf: 'flex-start', marginBottom: 10,
+    },
+    truckBadgeText: { color: t.textSoft, fontSize: 12 },
 
     actions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
     actionBtn: {
