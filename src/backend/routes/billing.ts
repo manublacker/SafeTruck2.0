@@ -126,7 +126,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
   try {
     const payment = await paymentClient.get({ id: Number(body.data.id) })
 
-    if (payment.status !== 'approved') {
+    if (!['approved', 'pending'].includes(payment.status ?? '')) {
       return res.json({ received: true })
     }
 

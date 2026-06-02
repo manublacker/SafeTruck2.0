@@ -26,6 +26,7 @@ interface AuthContextValue {
   drivers: Driver[];
   refreshDrivers: () => Promise<void>;
   refreshTrucks: () => Promise<void>;
+  refreshPlan: () => Promise<void>;
   login: (token: string, user: AuthUser) => void;
   logout: () => Promise<void>;
 }
@@ -172,6 +173,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const refreshPlan = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const res = await fetchUserProfile(session.access_token, {})
+      setUser(u => u ? { ...u, plan: res.user.plan } : u)
+    } catch {}
+  }, [])
+
   const login = useCallback((newToken: string, newUser: AuthUser) => {
     setToken(newToken);
     setTokenState(newToken);
@@ -193,7 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, authReady, drivers, refreshDrivers, refreshTrucks, login, logout }}
+      value={{ user, token, authReady, drivers, refreshDrivers, refreshTrucks, refreshPlan, login, logout }}
     >
       {children}
     </AuthContext.Provider>
