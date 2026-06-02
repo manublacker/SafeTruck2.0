@@ -18,6 +18,12 @@ export interface CalculateResult {
   destinationLon: number;
 }
 
+export interface PinPreview {
+  lat: number;
+  lon: number;
+  label: string;
+}
+
 export interface RouteCalculatorHandle {
   calculate: () => Promise<CalculateResult | null>;
 }
@@ -45,10 +51,12 @@ function emptyField(): Field {
 interface Props {
   selectedTruck: Truck | null;
   onRouteCalculated: (result: RouteResponse) => void;
+  onOriginPinned?: (pin: PinPreview | null) => void;
+  onDestinationPinned?: (pin: PinPreview | null) => void;
 }
 
 const RouteCalculator = forwardRef<RouteCalculatorHandle, Props>(function RouteCalculator(
-  { selectedTruck, onRouteCalculated },
+  { selectedTruck, onRouteCalculated, onOriginPinned, onDestinationPinned },
   ref,
 ) {
   const [origin, setOrigin] = useState<Field>(emptyField());
@@ -117,6 +125,7 @@ const RouteCalculator = forwardRef<RouteCalculatorHandle, Props>(function RouteC
         field={origin}
         setField={setOrigin}
         timerRef={originTimerRef}
+        onPinned={onOriginPinned}
       />
 
       <AutocompleteField
@@ -125,6 +134,7 @@ const RouteCalculator = forwardRef<RouteCalculatorHandle, Props>(function RouteC
         field={destination}
         setField={setDestination}
         timerRef={destTimerRef}
+        onPinned={onDestinationPinned}
       />
 
       {error && <ErrorMessage message={error} />}
@@ -163,6 +173,7 @@ interface AutocompleteFieldProps {
   field: Field;
   setField: React.Dispatch<React.SetStateAction<Field>>;
   timerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  onPinned?: (pin: PinPreview | null) => void;
 }
 
 function AutocompleteField({
@@ -171,6 +182,7 @@ function AutocompleteField({
   field,
   setField,
   timerRef,
+  onPinned,
 }: AutocompleteFieldProps) {
   return (
     <div style={{ position: "relative" }}>
@@ -179,7 +191,10 @@ function AutocompleteField({
         className="st-input"
         placeholder={placeholder}
         value={field.value}
-        onChange={(e) => handleInput(setField, timerRef, e.target.value)}
+        onChange={(e) => {
+          handleInput(setField, timerRef, e.target.value);
+          if (!e.target.value.trim()) onPinned?.(null);
+        }}
         onBlur={() => handleBlur(setField)}
         autoComplete="off"
         required
@@ -197,6 +212,7 @@ function AutocompleteField({
               onMouseDown={(ev) => {
                 ev.preventDefault();
                 handleSelect(setField, s);
+                onPinned?.({ lat: s.lat, lon: s.lon, label: s.label });
               }}
             >
               {s.label}

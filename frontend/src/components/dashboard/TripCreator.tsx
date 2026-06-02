@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
-import RouteCalculator, { type RouteCalculatorHandle } from "./RouteCalculator";
+import RouteCalculator, { type RouteCalculatorHandle, type PinPreview } from "./RouteCalculator";
 import { createAssignedTrip } from "@/services/api";
 
 const FLASH_DURATION_MS = 4000;
@@ -16,6 +16,8 @@ interface Props {
   onSelectDriver: (id: number | null) => void;
   onRouteCalculated: (result: RouteResponse) => void;
   onTripCreated?: () => void;
+  onOriginPinned?: (pin: PinPreview | null) => void;
+  onDestinationPinned?: (pin: PinPreview | null) => void;
 }
 
 interface DraftTrip { date: string; time: string }
@@ -29,6 +31,8 @@ export default function TripCreator({
   onSelectDriver,
   onRouteCalculated,
   onTripCreated,
+  onOriginPinned,
+  onDestinationPinned,
 }: Props) {
   const [draft, setDraft]       = useState<DraftTrip>(EMPTY_DRAFT);
   const [flash, setFlash]       = useState<{ msg: string; ok: boolean }>({ msg: "", ok: true });
@@ -96,7 +100,13 @@ export default function TripCreator({
           </div>
         </div>
 
-        <RouteCalculator ref={routeRef} selectedTruck={assignedTruck} onRouteCalculated={onRouteCalculated} />
+        <RouteCalculator
+          ref={routeRef}
+          selectedTruck={assignedTruck}
+          onRouteCalculated={onRouteCalculated}
+          onOriginPinned={onOriginPinned}
+          onDestinationPinned={onDestinationPinned}
+        />
 
         {routeResult?.found && assignedTruck && (
           <RouteSummary route={routeResult} truckName={assignedTruck.modelo ?? assignedTruck.name} />
