@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { supabase } from './supabase'
 
 export interface AssignedTrip {
@@ -45,7 +46,8 @@ async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export async function fetchAllMyTrips(): Promise<AssignedTrip[]> {
-  return apiRequest<AssignedTrip[]>('/api/assigned-trips/mine')
+  const data = await apiRequest<AssignedTrip[]>('/api/assigned-trips/mine')
+  return Array.isArray(data) ? data : []
 }
 
 export async function updateTripStatus(

@@ -169,8 +169,10 @@ export default function TripsScreen() {
 
   const loadTrips = useCallback(async () => {
     if (!profile) return
-    try { setTrips(await fetchAllMyTrips()) }
-    catch {}
+    try {
+      const data = await fetchAllMyTrips()
+      setTrips(Array.isArray(data) ? data : [])
+    } catch {}
     setLoading(false)
   }, [profile])
 
