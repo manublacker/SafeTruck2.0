@@ -181,6 +181,48 @@ export default function ProfileScreen() {
     loadVehicles()
   }
 
+  const deleteVehicle = async () => {
+    if (!editingVehicle || !profile) return
+    setLoading(true)
+    try {
+      const deletedId = editingVehicle.id
+      const wasDefault = editingVehicle.is_default
+      const { error } = await supabase.from('st_vehicles').delete().eq('id', deletedId)
+      if (error) throw error
+
+      const remaining = vehicles.filter(v => v.id !== deletedId)
+      setVehicles(remaining)
+
+      // Si borramos el vehículo activo, elegir otro (default o el primero) o ninguno
+      if (activeVehicle?.id === deletedId) {
+        const next = remaining.find(v => v.is_default) ?? remaining[0] ?? null
+        setActiveVehicle(next)
+        // Si el borrado era el predeterminado y queda otro, marcarlo como default
+        if (wasDefault && next) {
+          await supabase.from('st_vehicles').update({ is_default: true }).eq('id', next.id)
+        }
+      }
+      cancelEdit()
+      Alert.alert('Vehículo eliminado')
+    } catch (e: any) {
+      Alert.alert('Error', e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Prevención de errores: confirmar una acción destructiva e irreversible
+  const confirmDelete = () => {
+    Alert.alert(
+      'Eliminar vehículo',
+      `¿Seguro que querés eliminar "${editingVehicle?.name || editingVehicle?.plate}"?\n\nEsta acción no se puede revertir.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Eliminar', style: 'destructive', onPress: deleteVehicle },
+      ],
+    )
+  }
+
   const logout = async () => {
     await supabase.auth.signOut()
     setProfile(null)
@@ -370,10 +412,16 @@ export default function ProfileScreen() {
                 >
                   {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Guardar</Text>}
                 </TouchableOpacity>
-                <TouchableOpacity style={[s.btnGhost, { flex: 1 }]} onPress={cancelEdit}>
+                <TouchableOpacity style={[s.btnGhost, { flex: 1 }]} onPress={cancelEdit} disabled={loading}>
                   <Text style={s.btnGhostText}>Cancelar</Text>
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                style={[s.btnDanger, loading && s.btnDisabled]}
+                onPress={confirmDelete} disabled={loading}
+              >
+                <Text style={s.btnDangerText}>Eliminar vehículo</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <View style={s.vehicleCard}>
@@ -667,5 +715,11 @@ function makeStyles(t: Theme) {
       padding: 14, alignItems: 'center',
     },
     btnGhostText: { color: t.text, fontSize: 15, fontWeight: '600' },
+    btnDanger: {
+      backgroundColor: t.dangerSoft, borderRadius: 10,
+      borderWidth: 1, borderColor: t.danger,
+      padding: 14, alignItems: 'center', marginTop: 10,
+    },
+    btnDangerText: { color: t.danger, fontSize: 15, fontWeight: '600' },
   })
 }

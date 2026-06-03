@@ -8,7 +8,12 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "safetruck",
-    "plugins": ["expo-router", "expo-maps"],
+    "plugins": [
+      "expo-router",
+      "expo-maps",
+      "expo-font",
+      "expo-secure-store"
+    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
