@@ -227,6 +227,21 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 })
 
+// DELETE /:id — Admin elimina una invitación pendiente
+router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+  const adminId = req.user!.id
+  try {
+    const result = await pool.query(
+      `DELETE FROM driver_invitations WHERE id = $1 AND admin_id = $2 AND redeemed_at IS NULL`,
+      [req.params.id, adminId]
+    )
+    if (!result.rowCount) return res.status(404).json({ error: 'Invitación no encontrada o ya canjeada' })
+    res.status(204).send()
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /bulk — Admin genera códigos en masa (sin drivers existentes)
 router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
   const adminId = req.user!.id

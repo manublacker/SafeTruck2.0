@@ -21,6 +21,8 @@ export interface AssignedTrip {
   started_at: string | null
   completed_at: string | null
   created_at: string
+  truck_patente?: string | null
+  truck_name?: string | null
 }
 
 // Mismo backend que usan index.tsx y billing.ts. La env var permite overridearlo
@@ -91,4 +93,35 @@ export async function registerPushToken(token: string): Promise<void> {
     method: 'POST',
     body: JSON.stringify({ token }),
   }).catch(() => null) // no bloqueante
+}
+
+export interface AssignedTruck {
+  id: number
+  name: string
+  patente: string | null
+  modelo: string | null
+  anio: number | null
+  max_weight_kg: number
+  max_height_m: number
+  max_width_m: number
+  max_length_m: number
+  estado: string
+}
+
+export async function fetchMyAssignedTruck(): Promise<AssignedTruck | null> {
+  return apiRequest<AssignedTruck | null>('/api/drivers/me/truck')
+}
+
+export interface DriverProfile {
+  id: number
+  nombre: string
+  telefono: string | null
+  licencia: string | null
+  categoria_licencia: string | null
+  vencimiento_licencia: string | null
+  estado: string
+}
+
+export async function fetchMyDriverProfile(): Promise<DriverProfile | null> {
+  return apiRequest<DriverProfile | null>('/api/drivers/me')
 }

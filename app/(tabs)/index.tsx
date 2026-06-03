@@ -1,17 +1,19 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator,
   Modal, ScrollView, TextInput, Keyboard,
 } from 'react-native'
 import { WebView } from 'react-native-webview'
 import * as Location from 'expo-location'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
-import React from 'react';
+import React from 'react'
+import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, type AssignedTrip } from '../../src/services/assignedTrips'
 
-const BACKEND = "https://safetruck20-production.up.railway.app";
+const BACKEND = "https://safetruck20-production.up.railway.app"
 
 const INCIDENT_TYPES = [
   { key: 'fine',         label: '💸 Multa a camión',    creates_block: true  },
@@ -23,7 +25,6 @@ const INCIDENT_TYPES = [
   { key: 'weight_check', label: '⚖️ Control de peso',  creates_block: false },
 ]
 
-// El modo noche aplica filtro CSS sobre tiles OSM — fondo oscuro, calles visibles, parques verdes
 const MAP_HTML = `
 <!DOCTYPE html>
 <html>
@@ -42,11 +43,12 @@ html,body,#map { width:100%;height:100%; }
 <body>
 <div id="map"></div>
 <script>
-  var map = L.map('map',{zoomControl:true}).setView([-34.6037,-58.3816],13);
+  var map = L.map('map',{zoomControl:false}).setView([-34.6037,-58.3816],13);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'© OSM', maxZoom:19
   }).addTo(map);
   var userMarker=null, originMarker=null, destMarker=null, routeLayers=[], incidentMarkers=[];
+  var navActive=false, headingMarker=null;
 
   function setMapTheme(dark) {
     if (dark) map.getContainer().classList.add('night-mode');
@@ -55,15 +57,17 @@ html,body,#map { width:100%;height:100%; }
 
   // El marcador concreto lo decide React Native segun el campo activo (origen/destino)
   map.on('click', function(e) {
+    if (navActive) return;
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'mapClick', lat: e.latlng.lat, lng: e.latlng.lng
     }));
+    // El marcador (origen o destino) lo coloca React Native segun el campo activo.
   });
 
   function setUserLocation(lat, lng) {
     if (userMarker) map.removeLayer(userMarker);
     userMarker = L.circleMarker([lat, lng], {
-      radius: 7, fillColor: '#FF6B35', color: 'white', weight: 2, fillOpacity: 1
+      radius: 7, fillColor: '#E5342B', color: 'white', weight: 2, fillOpacity: 1
     }).addTo(map);
     map.setView([lat, lng], 14);
   }
@@ -151,6 +155,72 @@ html,body,#map { width:100%;height:100%; }
       if (lat && lng) addIncidentMarker(lat, lng, inc.incident_type);
     });
   }
+
+  function enterNavMode(lat, lng, heading) {
+    navActive = true;
+    map.setView([lat, lng], 18, { animate: true, duration: 0.6 });
+    updateNavMarker(lat, lng, heading);
+  }
+
+  function navUpdate(lat, lng, heading) {
+    if (!navActive) return;
+    map.panTo([lat, lng], { animate: true, duration: 0.4 });
+    updateNavMarker(lat, lng, heading);
+    if (heading !== null) map.setBearing(heading);
+  }
+
+  function updateNavMarker(lat, lng, heading) {
+    if (userMarker) map.removeLayer(userMarker);
+    if (headingMarker) map.removeLayer(headingMarker);
+    userMarker = L.circleMarker([lat, lng], {
+      radius: 9, fillColor: '#E5342B', color: 'white', weight: 3, fillOpacity: 1
+    }).addTo(map);
+    if (heading !== null) {
+      var rad = (heading - 90) * Math.PI / 180;
+      var r = 0.0003;
+      var tipLat = lat + r * Math.cos((heading - 90) * Math.PI / 180) * 0.7;
+      var tipLng = lng + r * Math.sin((heading - 90) * Math.PI / 180) * 0.7 / Math.cos(lat * Math.PI / 180);
+      headingMarker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: '',
+          html: '<div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:18px solid #007AFF;transform:rotate(' + heading + 'deg);transform-origin:center bottom;margin-left:-7px;margin-top:-18px;filter:drop-shadow(0 1px 4px rgba(0,122,255,0.5))"></div>',
+          iconAnchor: [0, 0]
+        })
+      }).addTo(map);
+    }
+  }
+
+  function exitNavMode(lat, lng) {
+    navActive = false;
+    if (headingMarker) { map.removeLayer(headingMarker); headingMarker = null; }
+    if (lat !== null) {
+      map.setView([lat, lng], 14, { animate: true, duration: 0.5 });
+    }
+    if (userMarker) map.removeLayer(userMarker);
+    if (lat !== null) {
+      userMarker = L.circleMarker([lat, lng], {
+        radius: 7, fillColor: '#E5342B', color: 'white', weight: 2, fillOpacity: 1
+      }).addTo(map);
+    }
+    try { map.setBearing(0); } catch(e) {}
+  }
+
+  function drawTripPath(points, originLat, originLng, destLat, destLng) {
+    clearRoute();
+    var latlngs = [];
+    if (points && points.length > 1) {
+      latlngs = points.map(function(p) { return [p.lat, p.lon !== undefined ? p.lon : p.lng]; });
+    } else if (originLat && destLat) {
+      latlngs = [[originLat, originLng], [destLat, destLng]];
+    }
+    if (latlngs.length < 2) return;
+    var poly = L.polyline(latlngs, { color: '#E5342B', weight: 5, opacity: 0.9, lineCap: 'round' }).addTo(map);
+    routeLayers.push(poly);
+    L.circleMarker(latlngs[0], { radius: 8, fillColor: '#1F9D57', color: 'white', weight: 2.5, fillOpacity: 1 }).addTo(map);
+    var dest = latlngs[latlngs.length - 1];
+    L.circleMarker(dest, { radius: 8, fillColor: '#E5342B', color: 'white', weight: 2.5, fillOpacity: 1 }).addTo(map);
+    map.fitBounds(poly.getBounds(), { padding: [80, 80] });
+  }
 </script>
 </body>
 </html>`
@@ -204,6 +274,80 @@ export default function MapScreen() {
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
+  const [navMode, setNavMode] = useState(false)
+  const watchRef = useRef<any>(null)
+
+  // ── Trip visualization (navegado desde Viajes) ─────────────────────────
+  const { tripId } = useLocalSearchParams<{ tripId?: string }>()
+  const router = useRouter()
+  const [tripSheet, setTripSheet] = useState<AssignedTrip | null>(null)
+  const [tripUpdating, setTripUpdating] = useState(false)
+  const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const loadTripById = useCallback(async (id: string) => {
+    try {
+      const all = await fetchAllMyTrips()
+      const found = all.find(t => String(t.id) === id)
+      if (found) {
+        setTripSheet(found)
+        // Draw trip route on map
+        const path = (() => {
+          try {
+            const p = typeof found.path === 'string' ? JSON.parse(found.path) : found.path
+            return (p?.path || p?.polyline || p?.segments?.flatMap((s: any) => s.coordinates) || []) as { lat: number; lon?: number; lng?: number }[]
+          } catch { return [] }
+        })()
+        webRef.current?.injectJavaScript(
+          `drawTripPath(${JSON.stringify(path)}, ${found.origin_lat ?? 'null'}, ${found.origin_lon ?? 'null'}, ${found.destination_lat ?? 'null'}, ${found.destination_lon ?? 'null'}); true;`
+        )
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (tripId) {
+      void loadTripById(tripId)
+    } else {
+      setTripSheet(null)
+      if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
+    }
+  }, [tripId])
+
+  // GPS tracking for in_progress trip
+  useEffect(() => {
+    if (!tripSheet || tripSheet.status !== 'in_progress') {
+      if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
+      return
+    }
+    const sendGps = async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync()
+      if (status !== 'granted') return
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      await sendLocation(loc.coords.latitude, loc.coords.longitude, String(tripSheet.id), profile?.full_name ?? 'Conductor', tripSheet.truck_patente ?? undefined).catch(() => null)
+    }
+    void sendGps()
+    gpsIntervalRef.current = setInterval(() => void sendGps(), 15_000)
+    return () => { if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null } }
+  }, [tripSheet?.id, tripSheet?.status])
+
+  const handleTripAction = async (newStatus: AssignedTrip['status']) => {
+    if (!tripSheet) return
+    setTripUpdating(true)
+    try {
+      await updateTripStatus(String(tripSheet.id), newStatus)
+      if (newStatus === 'completed') await clearLocation().catch(() => null)
+      if (newStatus === 'in_progress' && location) {
+        webRef.current?.injectJavaScript(
+          `map.flyTo([${location.lat}, ${location.lng}], 16, { animate: true, duration: 1.2 }); true;`
+        )
+      }
+      setTripSheet(prev => prev ? { ...prev, status: newStatus } : null)
+    } catch (e: any) {
+      Alert.alert('Error', e.message)
+    } finally {
+      setTripUpdating(false)
+    }
+  }
 
   // Origen — por defecto el GPS ("Mi ubicación"); editable a mano
   const [originText, setOriginText] = useState('Mi ubicación')
@@ -239,6 +383,23 @@ export default function MapScreen() {
       { headers: { 'User-Agent': 'SafeTruck/1.0' } }
     )
     return res.json()
+  }
+
+  const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        { headers: { 'User-Agent': 'SafeTruck/1.0' } }
+      )
+      const data = await res.json()
+      if (data.address) {
+        const { road, house_number, suburb, city_district, city, town } = data.address
+        const street = road ? (house_number ? `${road} ${house_number}` : road) : null
+        const area = suburb || city_district || city || town
+        return [street, area].filter(Boolean).join(', ')
+      }
+    } catch {}
+    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
   }
 
   // ── Destino ──────────────────────────────────────────────
@@ -442,10 +603,42 @@ export default function MapScreen() {
   }
 
   const clearRoute = () => {
+    stopNavigation()
     setCurrentRoute(null)
     setShowInfo(false)
     setSearchText('')
     webRef.current?.injectJavaScript(`clearRoute(); true;`)
+  }
+
+  const startNavigation = async () => {
+    if (!location) return
+    setNavMode(true)
+    setShowInfo(false)
+    const heading = null
+    webRef.current?.injectJavaScript(`enterNavMode(${location.lat}, ${location.lng}, null); true;`)
+    watchRef.current = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 5 },
+      (pos) => {
+        const c = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        const hdg = pos.coords.heading != null && pos.coords.heading >= 0 ? pos.coords.heading : null
+        setLocation(c)
+        webRef.current?.injectJavaScript(`navUpdate(${c.lat}, ${c.lng}, ${hdg}); true;`)
+      }
+    )
+  }
+
+  const stopNavigation = () => {
+    if (!watchRef.current) return
+    setNavMode(false)
+    watchRef.current.remove()
+    watchRef.current = null
+    setLocation(loc => {
+      const latVal = loc ? loc.lat : null
+      const lngVal = loc ? loc.lng : null
+      webRef.current?.injectJavaScript(`exitNavMode(${latVal}, ${lngVal}); true;`)
+      return loc
+    })
+    setShowInfo(true)
   }
 
   const onMessage = (e: any) => {
@@ -462,9 +655,10 @@ export default function MapScreen() {
           setShowOriginSearch(false)
           setOrigin(applyOrigin({ lat: msg.lat, lng: msg.lng }))
         } else {
-          // El tap fija el destino
+          // El tap fija el destino: marcador inmediato + direccion linda via reverseGeocode
           setSearchText(`${msg.lat.toFixed(5)}, ${msg.lng.toFixed(5)}`)
           webRef.current?.injectJavaScript(`setDestMarker(${msg.lat}, ${msg.lng}); true;`)
+          reverseGeocode(msg.lat, msg.lng).then(setSearchText)
           calculateRoute(msg.lat, msg.lng)
         }
       }
@@ -630,7 +824,7 @@ export default function MapScreen() {
       )}
 
       {/* Tarjeta de ruta */}
-      {showInfo && currentRoute && (
+      {showInfo && currentRoute && !navMode && (
         <View style={s.routeCard}>
           <View style={s.routeCardHeader}>
             <View>
@@ -641,8 +835,8 @@ export default function MapScreen() {
                 </View>
               )}
             </View>
-            <TouchableOpacity onPress={() => setShowInfo(false)}>
-              <Text style={s.routeCardClose}>▼</Text>
+            <TouchableOpacity style={s.playBtn} onPress={startNavigation}>
+              <Ionicons name="play" size={18} color="#fff" />
             </TouchableOpacity>
           </View>
 
@@ -675,17 +869,30 @@ export default function MapScreen() {
         </View>
       )}
 
+      {/* HUD de navegación */}
+      {navMode && currentRoute && (
+        <View style={s.navHUD}>
+          <View style={{ flex: 1, marginRight: 16 }}>
+            <Text style={s.navDest} numberOfLines={1}>{searchText || 'Destino'}</Text>
+            <View style={s.navStats}>
+              <Text style={s.navStat}>{currentRoute.total_distance_km} km</Text>
+              <Text style={s.navStatDot}>·</Text>
+              <Text style={s.navStat}>{currentRoute.total_duration_min} min</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={s.navStopBtn} onPress={stopNavigation}>
+            <Ionicons name="stop" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* FAB de reporte */}
       <TouchableOpacity
-        style={[s.fab, reportMode && s.fabActive, showInfo && currentRoute && s.fabRaised]}
+        style={[s.fab, reportMode && s.fabActive, showInfo && currentRoute && !navMode && s.fabRaised, navMode && s.fabNavRaised]}
         onPress={toggleReportMode}
         activeOpacity={0.85}
       >
-        <Ionicons
-          name={reportMode ? 'close' : 'warning'}
-          size={32}
-          color="#fff"
-        />
+        <Ionicons name={reportMode ? 'close' : 'warning'} size={32} color="#fff" />
       </TouchableOpacity>
 
       {/* Modal de incidente */}
@@ -724,6 +931,85 @@ export default function MapScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Trip Sheet (Google Maps style bottom panel) ─────────────── */}
+      {tripSheet && !navMode && !showInfo && (
+        <View style={s.tripSheet}>
+          {/* Handle */}
+          <View style={s.tripSheetHandle} />
+
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+            <View style={{ flex: 1 }}>
+              {/* Status badge */}
+              {(() => {
+                const cfg: Record<string, { label: string; color: string; bg: string }> = {
+                  pending:     { label: 'Pendiente',  color: '#D9881A', bg: '#FBF1E0' },
+                  accepted:    { label: 'Aceptado',   color: '#1A56C4', bg: '#EFF4FF' },
+                  in_progress: { label: 'En curso',   color: '#1F9D57', bg: '#E7F6EE' },
+                  completed:   { label: 'Completado', color: '#9AA3AD', bg: '#F2F4F7' },
+                  cancelled:   { label: 'Cancelado',  color: t.accent,  bg: t.accentSoft },
+                }
+                const c = cfg[tripSheet.status] ?? cfg.pending
+                return (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: c.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, alignSelf: 'flex-start', marginBottom: 12 }}>
+                    <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: c.color }} />
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: c.color }}>{c.label}</Text>
+                  </View>
+                )
+              })()}
+
+              {/* Route */}
+              <View style={{ position: 'relative' }}>
+                <View style={{ position: 'absolute', left: 5, top: 14, bottom: 14, borderLeftWidth: 2, borderLeftColor: t.borderStrong, borderStyle: 'dashed' }} />
+                <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', marginBottom: 12 }}>
+                  <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2.5, borderColor: t.textSoft, backgroundColor: 'transparent', marginTop: 2, flexShrink: 0 }} />
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: t.text, flex: 1 }} numberOfLines={1}>{tripSheet.origin_label ?? 'Origen'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
+                  <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: t.accent, marginTop: 2, flexShrink: 0 }} />
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: t.text, flex: 1 }} numberOfLines={1}>{tripSheet.destination_label ?? 'Destino'}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Close */}
+            <TouchableOpacity onPress={() => { setTripSheet(null); webRef.current?.injectJavaScript('clearRoute(); true;'); router.replace('/(tabs)/') }} style={{ backgroundColor: t.surface2, borderRadius: 8, padding: 8, marginLeft: 12 }}>
+              <Text style={{ color: t.textMuted, fontSize: 14, fontWeight: '700' }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Truck badge */}
+          {(tripSheet.truck_patente || tripSheet.truck_name) && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+              <Text style={{ fontSize: 14, color: t.textMuted }}>🚛</Text>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: t.textMuted }}>{tripSheet.truck_name ?? ''}</Text>
+              {tripSheet.truck_patente && (
+                <View style={{ backgroundColor: t.surface2, borderRadius: 4, borderWidth: 1, borderColor: t.border, paddingHorizontal: 6, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: t.textMuted }}>{tripSheet.truck_patente}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Actions */}
+          {tripUpdating ? (
+            <ActivityIndicator color={t.accent} />
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(tripSheet.status === 'pending' || tripSheet.status === 'accepted') && (
+                <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: t.success, flex: 1 }]} onPress={() => handleTripAction('in_progress')}>
+                  <Text style={s.tripSheetBtnText}>Iniciar viaje</Text>
+                </TouchableOpacity>
+              )}
+              {tripSheet.status === 'in_progress' && (
+                <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: t.accent, flex: 1 }]} onPress={() => handleTripAction('completed')}>
+                  <Text style={s.tripSheetBtnText}>Llegué al destino</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   )
 }
@@ -733,14 +1019,12 @@ function makeStyles(t: Theme) {
     container: { flex: 1, backgroundColor: t.bg },
     map: { flex: 1 },
 
-    // Header
     header: { position: 'absolute', top: 52, left: 16, right: 16 },
     searchRow: {
       flexDirection: 'row', alignItems: 'center', gap: 8,
       backgroundColor: t.card, borderRadius: 12,
       borderWidth: 1, borderColor: t.cardBorder,
       paddingHorizontal: 12, paddingVertical: 8,
-      // Sombra solo en este elemento (es el modal de la web)
       shadowColor: '#000', shadowOpacity: isDarkTheme(t) ? 0.4 : 0.1,
       shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
     },
@@ -756,14 +1040,12 @@ function makeStyles(t: Theme) {
     searchInput: { flex: 1, color: t.text, fontSize: 15, height: 36 },
     searchClear: { color: t.textMuted, fontSize: 14, paddingHorizontal: 4 },
 
-    // Botones icono del header (ghost style)
     iconBtn: {
       backgroundColor: t.surface2, borderRadius: 8,
       paddingHorizontal: 10, paddingVertical: 7,
     },
     iconBtnDanger: { backgroundColor: t.dangerSoft },
 
-    // FAB de reporte (bottom right)
     fab: {
       position: 'absolute', bottom: 24, right: 16,
       width: 62, height: 62, borderRadius: 31,
@@ -774,8 +1056,35 @@ function makeStyles(t: Theme) {
     },
     fabActive: { backgroundColor: t.danger, shadowColor: t.danger },
     fabRaised: { bottom: 210 },
+    fabNavRaised: { bottom: 105 },
 
-    // Dropdown de resultados
+    playFab: {
+      position: 'absolute', bottom: 284, right: 16,
+      width: 52, height: 52, borderRadius: 26,
+      backgroundColor: t.accent,
+      alignItems: 'center', justifyContent: 'center',
+      shadowColor: '#000', shadowOpacity: 0.25,
+      shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 7,
+    },
+
+    navHUD: {
+      position: 'absolute', bottom: 0, left: 0, right: 0,
+      backgroundColor: t.card,
+      borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      borderTopWidth: 1, borderColor: t.border,
+      padding: 20, paddingBottom: 32,
+      flexDirection: 'row', alignItems: 'center',
+    },
+    navDest: { color: t.textMuted, fontSize: 12, marginBottom: 4 },
+    navStats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    navStat: { color: t.accent, fontSize: 24, fontWeight: '700' },
+    navStatDot: { color: t.textMuted, fontSize: 20 },
+    navStopBtn: {
+      backgroundColor: t.danger, borderRadius: 999,
+      width: 50, height: 50, alignItems: 'center', justifyContent: 'center',
+      marginRight: 2,
+    },
+
     searchResults: {
       backgroundColor: t.card, borderRadius: 10,
       borderWidth: 1, borderColor: t.border,
@@ -812,7 +1121,6 @@ function makeStyles(t: Theme) {
     },
     hintPillText: { color: t.text, fontSize: 13, textAlign: 'center', fontWeight: '500' },
 
-    // Loading overlay
     loadingOverlay: {
       position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
       backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center',
@@ -825,7 +1133,6 @@ function makeStyles(t: Theme) {
     },
     loadingText: { color: t.text, fontSize: 14, fontWeight: '500' },
 
-    // Tarjeta de ruta (flat bottom sheet)
     routeCard: {
       position: 'absolute', bottom: 0, left: 0, right: 0,
       backgroundColor: t.card,
@@ -835,7 +1142,11 @@ function makeStyles(t: Theme) {
     },
     routeCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     routeCardTitle: { color: t.text, fontSize: 16, fontWeight: '700' },
-    routeCardClose: { color: t.textMuted, fontSize: 18, paddingLeft: 16 },
+    playBtn: {
+      backgroundColor: t.accent, borderRadius: 20,
+      width: 40, height: 40, alignItems: 'center', justifyContent: 'center',
+      marginRight: 7,
+    },
     divider: { height: 1, backgroundColor: t.border, marginVertical: 14 },
     stats: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
     stat: { flex: 1, alignItems: 'center' },
@@ -847,7 +1158,6 @@ function makeStyles(t: Theme) {
     legendDot: { width: 8, height: 8, borderRadius: 4 },
     legendText: { color: t.textMuted, fontSize: 11 },
 
-    // Badge de advertencia (pill)
     warnBadge: {
       marginTop: 4, alignSelf: 'flex-start',
       backgroundColor: t.warningSoft, borderRadius: 999,
@@ -855,7 +1165,25 @@ function makeStyles(t: Theme) {
     },
     warnBadgeText: { color: t.warning, fontSize: 11, fontWeight: '600' },
 
-    // Modal de incidente
+    tripSheet: {
+      position: 'absolute', bottom: 0, left: 0, right: 0,
+      backgroundColor: t.card,
+      borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      borderTopWidth: 1, borderTopColor: t.border,
+      padding: 20, paddingBottom: 36,
+      shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16,
+      shadowOffset: { width: 0, height: -4 }, elevation: 12,
+    },
+    tripSheetHandle: {
+      width: 36, height: 4, borderRadius: 2,
+      backgroundColor: t.borderStrong, alignSelf: 'center', marginBottom: 16,
+    },
+    tripSheetBtn: {
+      paddingVertical: 12, paddingHorizontal: 16,
+      borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+    },
+    tripSheetBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
     modalCard: {
       backgroundColor: t.card,
@@ -883,5 +1211,4 @@ function makeStyles(t: Theme) {
   })
 }
 
-// Helper para saber si el tema es dark (para ajustar sombras)
 function isDarkTheme(t: Theme) { return t.bg === '#1C1C1E' }

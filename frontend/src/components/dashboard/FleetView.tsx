@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Truck, Driver } from "@/types/auth";
-import { fetchTrucks, fetchDrivers, updateDriver, startCheckout, fetchInvitations, type DriverInvitation } from "@/services/api";
+import { fetchTrucks, fetchDrivers, deleteDriver, updateDriver, startCheckout, fetchInvitations, deleteInvitation, fetchAssignedTrips, type DriverInvitation } from "@/services/api";
 import { Icons } from "./DashboardIcons";
 import TruckEditModal from "./TruckEditModal";
-import DriverEditModal from "./DriverEditModal";
 import AssignDriverModal from "./AssignDriverModal";
 import InviteDriverModal from "./InviteDriverModal";
 import TruckTemplateModal from "./TruckTemplateModal";
@@ -102,229 +101,251 @@ function Tabs({ current, onChange }: { current: FleetTab; onChange: (t: FleetTab
 
 // ── Tab: Camiones ──────────────────────────────────────────────────────────
 
+function TruckStatusBadge({ estado }: { estado: string }) {
+  const cfg: Record<string, { label: string; bg: string; color: string; dot: string }> = {
+    "Activo":        { label: "Activo",        bg: "#E7F6EE", color: "#1F9D57", dot: "#1F9D57" },
+    "En ruta":       { label: "En ruta",       bg: "#FDECEA", color: "#e53935", dot: "#e53935" },
+    "Mantenimiento": { label: "Mantenimiento", bg: "#FBF1E0", color: "#D9881A", dot: "#D9881A" },
+    "Inactivo":      { label: "Inactivo",      bg: "#F2F4F7", color: "#69727E", dot: "#9AA3AD" },
+  };
+  const c = cfg[estado] ?? cfg["Inactivo"];
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: c.bg, borderRadius: 999, padding: "3px 9px", fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: c.color }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: c.dot }} />
+      {c.label}
+    </span>
+  );
+}
+
+function TruckListCard({ truck, onClick }: { truck: Truck; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  const driverActive = truck.driver?.id != null;
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        background: "#fff",
+        border: `1px solid ${hover ? "#d0d5dd" : "#f0f0f0"}`,
+        borderRadius: 14, padding: "20px 18px", cursor: "pointer",
+        transform: hover ? "translateY(-2px)" : "none",
+        boxShadow: hover
+          ? "0 8px 24px -8px rgba(16,24,40,0.14), 0 2px 6px rgba(16,24,40,0.05)"
+          : "0 1px 3px rgba(16,24,40,0.06)",
+        transition: "all 160ms ease",
+        display: "flex", flexDirection: "column", gap: 14,
+      }}
+    >
+      {/* Header: nombre + estado + chevron */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0d0d0d", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {truck.name}
+          </div>
+          {truck.patente && (
+            <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.82rem", fontWeight: 700, color: "#0d0d0d", letterSpacing: 0.4, marginBottom: 6 }}>
+              {truck.patente}
+            </div>
+          )}
+          <TruckStatusBadge estado={truck.estado} />
+        </div>
+        <span style={{ color: hover ? "#e53935" : "#d0d5dd", transition: "color 150ms", fontSize: "1.1rem", flexShrink: 0, marginTop: 2 }}>›</span>
+      </div>
+
+      {/* Conductor */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 12, borderTop: "1px solid #f5f5f5" }}>
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: driverActive ? "#1F9D57" : "#9AA3AD", flexShrink: 0 }} />
+        <span style={{ fontSize: "0.82rem", color: driverActive ? "#0d0d0d" : "#9AA3AD", fontWeight: driverActive ? 600 : 400 }}>
+          {truck.driver?.nombre ?? "Sin conductor asignado"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function TruckDetailPanel({
+  truck,
+  drivers,
+  onClose,
+  onSaved,
+  onDeleted,
+}: {
+  truck: Truck;
+  drivers: Driver[];
+  onClose: () => void;
+  onSaved: () => void;
+  onDeleted: () => void;
+}) {
+  const [deleting, setDeleting]       = useState(false);
+  const [editing, setEditing]         = useState(false);
+  const [assigning, setAssigning]     = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const serviceStyle = nextServiceStyle(truck.proximo_service);
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const { deleteTruck } = await import("@/services/api");
+      await deleteTruck(truck.id);
+      onDeleted();
+    } catch (e: any) {
+      alert(e.message ?? "Error al eliminar");
+    } finally {
+      setDeleting(false);
+      setShowConfirm(false);
+    }
+  }
+
+  const rows: { label: string; value: string; style?: React.CSSProperties }[] = [
+    { label: "Modelo", value: truck.modelo ?? "—" },
+    { label: "Año", value: truck.anio ? String(truck.anio) : "—" },
+    { label: "Peso máx.", value: truck.max_weight_kg ? `${truck.max_weight_kg.toLocaleString("es-AR")} kg` : "—" },
+    { label: "Altura máx.", value: truck.max_height_m ? `${truck.max_height_m} m` : "—" },
+    { label: "Ancho máx.", value: truck.max_width_m ? `${truck.max_width_m} m` : "—" },
+    { label: "Largo máx.", value: truck.max_length_m ? `${truck.max_length_m} m` : "—" },
+    { label: "Km actual", value: truck.km_actual != null ? formatKm(truck.km_actual) + " km" : "—" },
+    { label: "Próx. service", value: formatServiceDate(truck.proximo_service), style: { color: serviceStyle.color, fontWeight: serviceStyle.bold ? 700 : undefined } },
+    { label: "Conductor", value: truck.driver?.nombre ?? "Sin asignar" },
+  ];
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", alignItems: "flex-end", justifyContent: "flex-end" }} onClick={onClose}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(15,27,45,0.35)", backdropFilter: "blur(2px)" }} />
+      <div onClick={e => e.stopPropagation()} style={{
+        position: "relative", zIndex: 1, width: 380, height: "100%",
+        background: "#fff", boxShadow: "-8px 0 32px rgba(15,27,45,0.12)",
+        display: "flex", flexDirection: "column", animation: "slideInRight 200ms ease",
+      }}>
+        {/* Header navy */}
+        <div style={{ background: "#0F1B2D", padding: "28px 24px 24px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+            <span style={{ fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#AEB8C4" }}>Camión</span>
+            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: "#AEB8C4", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.02em", marginBottom: 6 }}>{truck.name}</div>
+            {truck.patente && <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.9rem", fontWeight: 700, color: "#AEB8C4", letterSpacing: "0.08em", marginBottom: 10 }}>{truck.patente}</div>}
+            <TruckStatusBadge estado={truck.estado} />
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          <div style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#9AA3AD", marginBottom: 12 }}>DETALLES</div>
+          <div style={{ border: "1px solid #E6E8EC", borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
+            {rows.map((row, i) => (
+              <div key={row.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: i < rows.length - 1 ? "1px solid #F2F4F7" : "none" }}>
+                <span style={{ fontSize: "0.85rem", color: "#69727E" }}>{row.label}</span>
+                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#0d0d0d", ...row.style }}>{row.value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="st-btn-secondary" style={{ flex: 1, padding: "10px 14px", fontSize: "0.85rem" }} onClick={() => setEditing(true)}>
+                <Icons.Edit size={14} /> Editar
+              </button>
+              <button className="st-btn-secondary" style={{ flex: 1, padding: "10px 14px", fontSize: "0.85rem" }} onClick={() => setAssigning(true)}>
+                <Icons.People size={14} /> Conductor
+              </button>
+            </div>
+            <button onClick={() => setShowConfirm(true)} style={{ width: "100%", padding: "10px 16px", borderRadius: 10, border: "1px solid #fecaca", background: "#fff5f5", color: "#e53935", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer", fontFamily: "inherit" }}>
+              Eliminar camión
+            </button>
+            {showConfirm && (
+              <ConfirmModal
+                title="Eliminar camión"
+                message={`¿Estás seguro que querés eliminar ${truck.name}${truck.patente ? ` (${truck.patente})` : ""}? Esta acción no se puede deshacer.`}
+                confirmLabel="Sí, eliminar"
+                loading={deleting}
+                onConfirm={handleDelete}
+                onCancel={() => setShowConfirm(false)}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {editing && <TruckEditModal truck={truck} onSave={() => { setEditing(false); onSaved(); }} onClose={() => setEditing(false)} />}
+      {assigning && <AssignDriverModal truck={truck} drivers={drivers} onDone={() => { setAssigning(false); onSaved(); }} onClose={() => setAssigning(false)} />}
+    </div>
+  );
+}
+
 function TrucksTab() {
   const { user, drivers, refreshTrucks } = useAuth();
-  const [trucks, setTrucks] = useState<Truck[]>(user?.trucks ?? []);
-  const [loading, setLoading] = useState(user === null);
-  const [error, setError] = useState("");
-
-  const [editing, setEditing]         = useState<Truck | null>(null);
-  const [creating, setCreating]       = useState(false);
+  const [trucks, setTrucks]       = useState<Truck[]>(user?.trucks ?? []);
+  const [loading, setLoading]     = useState(user === null);
+  const [error, setError]         = useState("");
+  const [creating, setCreating]   = useState(false);
   const [fromTemplate, setFromTemplate] = useState(false);
-  const [assigning, setAssigning]     = useState<Truck | null>(null);
+  const [selected, setSelected]   = useState<Truck | null>(null);
 
-  // ── Límite de flota por plan ─────────────────────────────────────────────
   const plan = user?.plan ?? "starter";
   const truckLimit = PLAN_TRUCK_LIMITS[plan] ?? 5;
   const atLimit = Number.isFinite(truckLimit) && trucks.length >= truckLimit;
-  // ─────────────────────────────────────────────────────────────────────────
 
   const loadTrucks = useCallback(async () => {
     setError("");
-    try {
-      const list = await fetchTrucks();
-      setTrucks(list);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al cargar camiones.");
-    } finally {
-      setLoading(false);
-    }
+    try { setTrucks(await fetchTrucks()); }
+    catch (err) { setError(err instanceof Error ? err.message : "Error al cargar camiones."); }
+    finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    void loadTrucks();
-  }, [loadTrucks]);
+  useEffect(() => { void loadTrucks(); }, [loadTrucks]);
 
   function handleSaved() {
-    setEditing(null);
     setCreating(false);
-    void loadTrucks();
-    void refreshTrucks();
-  }
-
-  function handleAssignDone() {
-    setAssigning(null);
+    setSelected(null);
     void loadTrucks();
     void refreshTrucks();
   }
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>Camiones</h3>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>
+          Camiones
+          <span style={{ marginLeft: 8, fontSize: "0.82rem", fontWeight: 600, color: "#9AA3AD" }}>{trucks.length}</span>
+        </h3>
         <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="st-btn-secondary"
-            style={{ padding: "10px 14px", fontSize: "0.82rem", opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }}
-            onClick={atLimit ? undefined : () => setFromTemplate(true)}
-            disabled={atLimit}
-          >
+          <button className="st-btn-secondary" style={{ padding: "10px 14px", fontSize: "0.82rem", opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }} onClick={atLimit ? undefined : () => setFromTemplate(true)} disabled={atLimit}>
             Desde plantilla
           </button>
-          <button
-            className="st-btn-primary"
-            style={{ padding: "10px 16px", opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }}
-            onClick={atLimit ? undefined : () => setCreating(true)}
-            disabled={atLimit}
-            title={atLimit ? "Alcanzaste el límite de camiones de tu plan" : undefined}
-          >
+          <button className="st-btn-primary" style={{ padding: "10px 16px", opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }} onClick={atLimit ? undefined : () => setCreating(true)} disabled={atLimit}>
             <Icons.Plus size={14} /> Agregar camión
           </button>
         </div>
       </div>
 
-      {/* Indicador de uso del plan */}
-      {Number.isFinite(truckLimit) && (
-        <FleetUsageBar current={trucks.length} limit={truckLimit} plan={plan} />
-      )}
-
+      {Number.isFinite(truckLimit) && <FleetUsageBar current={trucks.length} limit={truckLimit} plan={plan} />}
       {loading && <Hint>Cargando camiones…</Hint>}
       {error && <Hint tone="error">{error}</Hint>}
-
       {!loading && !error && trucks.length === 0 && (
-        <EmptyState
-          title="No tenés camiones registrados"
-          actionLabel="Agregar camión"
-          onAction={() => setCreating(true)}
-          disabled={atLimit}
-        />
+        <EmptyState title="No tenés camiones registrados" actionLabel="Agregar camión" onAction={() => setCreating(true)} disabled={atLimit} />
       )}
 
       {!loading && !error && trucks.length > 0 && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-            gap: 16,
-            paddingBottom: 48,
-          }}
-        >
-          {trucks.map((t) => (
-            <TruckCard
-              key={t.id}
-              truck={t}
-              onEdit={() => setEditing(t)}
-              onAssign={() => setAssigning(t)}
-            />
-          ))}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14, paddingBottom: 48 }}>
+          {trucks.map(t => <TruckListCard key={t.id} truck={t} onClick={() => setSelected(t)} />)}
         </div>
       )}
 
-      {creating && (
-        <TruckEditModal truck={null} onSave={handleSaved} onClose={() => setCreating(false)} />
-      )}
-      {editing && (
-        <TruckEditModal truck={editing} onSave={handleSaved} onClose={() => setEditing(null)} />
-      )}
-      {assigning && (
-        <AssignDriverModal
-          truck={assigning}
+      {selected && (
+        <TruckDetailPanel
+          truck={selected}
           drivers={drivers}
-          onDone={handleAssignDone}
-          onClose={() => setAssigning(null)}
+          onClose={() => setSelected(null)}
+          onSaved={() => { setSelected(null); handleSaved(); }}
+          onDeleted={() => { setSelected(null); void loadTrucks(); void refreshTrucks(); }}
         />
       )}
-      {fromTemplate && (
-        <TruckTemplateModal
-          onSaved={handleSaved}
-          onClose={() => setFromTemplate(false)}
-        />
-      )}
-    </div>
-  );
-}
-
-interface TruckCardProps {
-  truck: Truck;
-  onEdit: () => void;
-  onAssign: () => void;
-}
-
-function TruckCard({ truck, onEdit, onAssign }: TruckCardProps) {
-  const estadoStyle = truckEstadoStyle(truck.estado);
-  const serviceStyle = nextServiceStyle(truck.proximo_service);
-  const driverActive = (truck.driver?.id ?? null) !== null;
-
-  return (
-    <div
-      style={{
-        border: "1px solid #f0f0f0",
-        borderRadius: 14,
-        padding: 18,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-        background: "#fff",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0d0d0d" }}>
-          {truck.name}
-        </h3>
-        <span className={`st-badge ${estadoStyle.className}`}>
-          <span className="dot" style={{ background: estadoStyle.dotColor }} />
-          {truck.estado}
-        </span>
-      </div>
-
-      {truck.patente && (
-        <div
-          style={{
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-            fontWeight: 700,
-            color: "#0d0d0d",
-            fontSize: "0.95rem",
-            letterSpacing: 0.4,
-          }}
-        >
-          {truck.patente}
-        </div>
-      )}
-
-      <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-        {truck.modelo ?? "Modelo no informado"}
-        {truck.anio ? ` · ${truck.anio}` : ""}
-      </div>
-
-      <div style={{ display: "flex", gap: 12, fontSize: "0.85rem", flexWrap: "wrap" }}>
-        <span style={{ color: "#6b7280" }}>
-          {truck.km_actual != null ? `${formatKm(truck.km_actual)} km` : "Km s/d"}
-        </span>
-        <span style={{ color: serviceStyle.color, fontWeight: serviceStyle.bold ? 700 : 500 }}>
-          Próx. service: {formatServiceDate(truck.proximo_service)}
-        </span>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.85rem" }}>
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: 999,
-            background: driverActive ? "#22c55e" : "#9ca3af",
-          }}
-        />
-        <span style={{ color: driverActive ? "#0d0d0d" : "#9ca3af" }}>
-          {truck.driver?.nombre ?? "Sin conductor"}
-        </span>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-        <button
-          className="st-btn-secondary"
-          style={{ padding: "8px 14px", fontSize: "0.82rem" }}
-          onClick={onEdit}
-        >
-          <Icons.Edit size={14} /> Editar
-        </button>
-        <button
-          className="st-btn-secondary"
-          style={{ padding: "8px 14px", fontSize: "0.82rem" }}
-          onClick={onAssign}
-        >
-          <Icons.People size={14} /> Conductor
-        </button>
-      </div>
+      {creating && <TruckEditModal truck={null} onSave={handleSaved} onClose={() => setCreating(false)} />}
+      {fromTemplate && <TruckTemplateModal onSaved={handleSaved} onClose={() => setFromTemplate(false)} />}
     </div>
   );
 }
@@ -336,182 +357,484 @@ interface DriversTabProps {
   refreshDrivers: () => Promise<void>;
 }
 
-function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
-  const [editing, setEditing] = useState<Driver | null>(null);
-  const [inviting, setInviting] = useState(false);
-  const [error, setError]      = useState("");
-  const [trucks, setTrucks]             = useState<Truck[]>([]);
-  const [pendingInvitations, setPendingInvitations] = useState<DriverInvitation[]>([]);
+function driverInitials(name: string) {
+  return name.split(" ").filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("");
+}
 
-  const loadTrucks = useCallback(async () => {
+function DriverCard({
+  driver,
+  isOnTrip,
+  truck,
+  onClick,
+}: {
+  driver: Driver;
+  isOnTrip: boolean;
+  truck: string | undefined;
+  onClick: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const venceStyle = licenseExpiryStyle(driver.vencimiento_licencia);
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        background: "#fff",
+        border: `1px solid ${hover ? "#d0d5dd" : "#f0f0f0"}`,
+        borderRadius: 14,
+        padding: "20px 18px",
+        cursor: "pointer",
+        transform: hover ? "translateY(-2px)" : "none",
+        boxShadow: hover
+          ? "0 8px 24px -8px rgba(16,24,40,0.14), 0 2px 6px rgba(16,24,40,0.05)"
+          : "0 1px 3px rgba(16,24,40,0.06)",
+        transition: "all 160ms ease",
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+      }}
+    >
+      {/* Avatar + nombre + estado */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+          background: "#0F1B2D", color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontWeight: 800, fontSize: "0.88rem", letterSpacing: "0.04em",
+        }}>
+          {driverInitials(driver.nombre)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#0d0d0d", lineHeight: 1.25, marginBottom: 6 }}>
+            {driver.nombre}
+          </div>
+          {isOnTrip ? (
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              background: "#E7F6EE", borderRadius: 999,
+              padding: "3px 9px", fontSize: "0.72rem", fontWeight: 700,
+              letterSpacing: "0.08em", textTransform: "uppercase", color: "#1F9D57",
+            }}>
+              <span style={{ position: "relative", display: "inline-flex", width: 6, height: 6 }}>
+                <span style={{
+                  position: "absolute", inset: 0, borderRadius: "50%",
+                  background: "#1F9D57", opacity: 0.4,
+                  animation: "st-pulse 1.8s ease-out infinite",
+                }} />
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#1F9D57" }} />
+              </span>
+              En viaje
+            </span>
+          ) : (
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              background: "#F2F4F7", borderRadius: 999,
+              padding: "3px 9px", fontSize: "0.72rem", fontWeight: 700,
+              letterSpacing: "0.08em", textTransform: "uppercase", color: "#69727E",
+            }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#9AA3AD" }} />
+              Descansando
+            </span>
+          )}
+        </div>
+        <span style={{ color: hover ? "#e53935" : "#d0d5dd", transition: "color 150ms", fontSize: "1.1rem", flexShrink: 0 }}>›</span>
+      </div>
+
+      {/* Camión */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 12, borderTop: "1px solid #f5f5f5" }}>
+        <span style={{ fontSize: "0.85rem", color: "#9AA3AD" }}>🚛</span>
+        <span style={{ fontSize: "0.82rem", color: truck ? "#0d0d0d" : "#9AA3AD", fontWeight: truck ? 600 : 400 }}>
+          {truck ?? "Sin camión asignado"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmModal({
+  title,
+  message,
+  confirmLabel = "Eliminar",
+  onConfirm,
+  onCancel,
+  loading = false,
+}: {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  loading?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(15,27,45,0.45)", backdropFilter: "blur(3px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 24,
+      }}
+      onClick={onCancel}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "#fff", borderRadius: 16, padding: "28px 28px 24px",
+          width: "100%", maxWidth: 400,
+          boxShadow: "0 20px 60px -12px rgba(15,27,45,0.28), 0 4px 16px rgba(15,27,45,0.08)",
+          animation: "fadeScaleIn 150ms ease",
+        }}
+      >
+        <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0d0d0d", marginBottom: 10 }}>
+          {title}
+        </div>
+        <div style={{ fontSize: "0.9rem", color: "#69727E", lineHeight: 1.55, marginBottom: 24 }}>
+          {message}
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button
+            onClick={onCancel}
+            style={{
+              padding: "10px 18px", borderRadius: 10,
+              border: "1px solid #E6E8EC", background: "#fff",
+              color: "#16202C", fontWeight: 600, fontSize: "0.88rem",
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            style={{
+              padding: "10px 18px", borderRadius: 10,
+              border: "none", background: "#e53935",
+              color: "#fff", fontWeight: 700, fontSize: "0.88rem",
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.65 : 1, fontFamily: "inherit",
+            }}
+          >
+            {loading ? "Eliminando…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+      <style>{`
+        @keyframes fadeScaleIn {
+          from { opacity: 0; transform: scale(0.94); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function InvitationCard({ inv, onDeleteClick }: { inv: DriverInvitation; onDeleteClick: () => void }) {
+  const expiresIn = Math.ceil((new Date(inv.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+
+  return (
+    <div style={{
+      background: "#fffbeb", border: "1px dashed #fde68a",
+      borderRadius: 14, padding: "20px 18px",
+      display: "flex", flexDirection: "column", gap: 10, opacity: 0.85,
+      position: "relative",
+    }}>
+      <button
+        onClick={e => { e.stopPropagation(); onDeleteClick(); }}
+        title="Eliminar invitación"
+        style={{
+          position: "absolute", top: 10, right: 10,
+          background: "rgba(0,0,0,0.06)", border: "none", borderRadius: 6,
+          width: 26, height: 26, cursor: "pointer", color: "#92400e",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "0.75rem", fontWeight: 700,
+        }}
+      >✕</button>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+          background: "#fef3c7", color: "#92400e",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "1.2rem",
+        }}>⏳</div>
+        <div>
+          <div style={{ fontSize: "0.92rem", fontWeight: 700, color: "#92400e", marginBottom: 4 }}>
+            {inv.hint_name ?? "Invitación pendiente"}
+          </div>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            background: "#fffbeb", border: "1px solid #fde68a",
+            borderRadius: 999, padding: "3px 9px",
+            fontSize: "0.72rem", fontWeight: 700, color: "#92400e",
+          }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#f59e0b" }} />
+            Vence en {expiresIn}d
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DriverDetailPanel({
+  driver,
+  truck,
+  isOnTrip,
+  onClose,
+  onDeleted,
+}: {
+  driver: Driver;
+  truck: string | undefined;
+  isOnTrip: boolean;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [deleting, setDeleting]       = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  async function handleDelete() {
+    setDeleting(true);
     try {
-      const list = await fetchTrucks();
-      setTrucks(list);
-    } catch (err) {
-      console.error("Error al cargar camiones para conductores:", err);
+      await deleteDriver(driver.id);
+      onDeleted();
+    } catch (e: any) {
+      alert(e.message ?? "Error al eliminar");
+    } finally {
+      setDeleting(false);
+      setShowConfirm(false);
     }
-  }, []);
+  }
 
-  const loadPendingInvitations = useCallback(async () => {
+  const venceStyle = licenseExpiryStyle(driver.vencimiento_licencia);
+
+  const rows: { label: string; value: string; style?: React.CSSProperties }[] = [
+    { label: "Teléfono", value: driver.telefono ?? "—" },
+    { label: "Licencia", value: driver.licencia ?? "—" },
+    { label: "Categoría", value: driver.categoria_licencia ?? "—" },
+    { label: "Vencimiento", value: venceStyle.text, style: { color: venceStyle.color, fontWeight: venceStyle.bold ? 700 : undefined } },
+    { label: "Camión asignado", value: truck ?? "Sin asignar" },
+  ];
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 900,
+        display: "flex", alignItems: "flex-end", justifyContent: "flex-end",
+      }}
+      onClick={onClose}
+    >
+      {/* Backdrop */}
+      <div style={{ position: "absolute", inset: 0, background: "rgba(15,27,45,0.35)", backdropFilter: "blur(2px)" }} />
+
+      {/* Panel */}
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: "relative", zIndex: 1,
+          width: 380, height: "100%",
+          background: "#fff", boxShadow: "-8px 0 32px rgba(15,27,45,0.12)",
+          display: "flex", flexDirection: "column",
+          animation: "slideInRight 200ms ease",
+        }}
+      >
+        {/* Header navy */}
+        <div style={{ background: "#0F1B2D", padding: "28px 24px 24px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+            <span style={{ fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#AEB8C4" }}>Conductor</span>
+            <button
+              onClick={onClose}
+              style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: "#AEB8C4", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >✕</button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: "50%",
+              background: "#e53935", color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 800, fontSize: "1.1rem",
+            }}>
+              {driverInitials(driver.nombre)}
+            </div>
+            <div>
+              <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>{driver.nombre}</div>
+              <div style={{ marginTop: 6 }}>
+                {isOnTrip ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(31,157,87,0.18)", borderRadius: 999, padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700, color: "#34C97A", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#34C97A" }} />
+                    En viaje
+                  </span>
+                ) : (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.08)", borderRadius: 999, padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700, color: "#AEB8C4", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#637482" }} />
+                    Descansando
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          <div style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#9AA3AD", marginBottom: 12 }}>
+            INFORMACIÓN DEL CONDUCTOR
+          </div>
+          <div style={{ border: "1px solid #E6E8EC", borderRadius: 10, overflow: "hidden", marginBottom: 24 }}>
+            {rows.map((row, i) => (
+              <div key={row.label} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "13px 16px",
+                borderBottom: i < rows.length - 1 ? "1px solid #F2F4F7" : "none",
+              }}>
+                <span style={{ fontSize: "0.85rem", color: "#69727E" }}>{row.label}</span>
+                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#0d0d0d", ...row.style }}>
+                  {row.value}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => setShowConfirm(true)}
+            style={{
+              width: "100%", padding: "11px 16px", borderRadius: 10,
+              border: "1px solid #fecaca", background: "#fff5f5",
+              color: "#e53935", fontWeight: 700, fontSize: "0.88rem",
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            Eliminar conductor
+          </button>
+
+          {showConfirm && (
+            <ConfirmModal
+              title="Eliminar conductor"
+              message={`¿Estás seguro que querés eliminar a ${driver.nombre}? Se perderán todos sus datos y no podrá ingresar a la plataforma.`}
+              confirmLabel="Sí, eliminar"
+              loading={deleting}
+              onConfirm={handleDelete}
+              onCancel={() => setShowConfirm(false)}
+            />
+          )}
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
+        }
+        @keyframes st-pulse {
+          0%   { transform: scale(1);   opacity: 0.4; }
+          70%  { transform: scale(2.2); opacity: 0; }
+          100% { transform: scale(1);   opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
+  const [inviting, setInviting]   = useState(false);
+  const [selected, setSelected]   = useState<Driver | null>(null);
+  const [trucks, setTrucks]       = useState<Truck[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<DriverInvitation[]>([]);
+  const [onTripDriverIds, setOnTripDriverIds]        = useState<Set<number>>(new Set());
+  const [confirmDeleteInv, setConfirmDeleteInv]      = useState<DriverInvitation | null>(null);
+  const [deletingInv, setDeletingInv]                = useState(false);
+
+  const loadData = useCallback(async () => {
     try {
-      const all = await fetchInvitations();
-      const now = Date.now();
-      setPendingInvitations(
-        all.filter((i) => !i.redeemed_at && new Date(i.expires_at).getTime() > now)
-      );
+      const [truckList, invList, tripList] = await Promise.allSettled([
+        fetchTrucks(),
+        fetchInvitations(),
+        fetchAssignedTrips(),
+      ]);
+      if (truckList.status === "fulfilled") setTrucks(truckList.value);
+      if (invList.status === "fulfilled") {
+        const now = Date.now();
+        setPendingInvitations(invList.value.filter(i => !i.redeemed_at && new Date(i.expires_at).getTime() > now));
+      }
+      if (tripList.status === "fulfilled") {
+        const ids = new Set(tripList.value.filter(t => t.status === "in_progress").map(t => t.driver_id));
+        setOnTripDriverIds(ids);
+      }
     } catch { /* silencioso */ }
   }, []);
 
-  useEffect(() => {
-    void loadTrucks();
-    void loadPendingInvitations();
-  }, [loadTrucks, loadPendingInvitations]);
+  useEffect(() => { void loadData(); }, [loadData]);
 
-  const driverIdToTruckName = useMemo(() => {
+  const driverIdToTruck = useMemo(() => {
     const map = new Map<number, string>();
     for (const t of trucks) {
-      if (t.driver?.id != null) map.set(t.driver.id, t.name);
+      if (t.driver?.id != null) map.set(t.driver.id, `${t.name}${t.patente ? ` · ${t.patente}` : ""}`);
     }
     return map;
   }, [trucks]);
 
-  function handleSaved() {
-    setEditing(null);
-    void loadTrucks();
-    void refreshDrivers();
-  }
-
-  async function handleToggleStatus(driver: Driver) {
-    setError("");
-    const nextEstado =
-      driver.estado === DRIVER_ESTADO_ACTIVO ? DRIVER_ESTADO_INACTIVO : DRIVER_ESTADO_ACTIVO;
-    try {
-      await updateDriver(driver.id, { estado: nextEstado });
-      await refreshDrivers();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al actualizar el conductor.");
-    }
-  }
-
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>Conductores</h3>
-        <button
-          className="st-btn-primary"
-          style={{ padding: "10px 16px" }}
-          onClick={() => setInviting(true)}
-        >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>
+          Conductores
+          <span style={{ marginLeft: 8, fontSize: "0.82rem", fontWeight: 600, color: "#9AA3AD" }}>
+            {drivers.length}
+          </span>
+        </h3>
+        <button className="st-btn-primary" style={{ padding: "10px 16px" }} onClick={() => setInviting(true)}>
           Invitar conductor
         </button>
       </div>
 
-      {error && <Hint tone="error">{error}</Hint>}
-
       {drivers.length === 0 && pendingInvitations.length === 0 ? (
-        <EmptyState
-          title="No tenés conductores registrados"
-          actionLabel="Invitar conductor"
-          onAction={() => setInviting(true)}
-        />
+        <EmptyState title="No tenés conductores registrados" actionLabel="Invitar conductor" onAction={() => setInviting(true)} />
       ) : (
-        <table className="st-table">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Teléfono</th>
-              <th>Licencia</th>
-              <th>Categoría</th>
-              <th>Vence</th>
-              <th>Estado</th>
-              <th>Camión asignado</th>
-              <th style={{ textAlign: "right" }}>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pendingInvitations.map((inv) => (
-              <tr key={`inv-${inv.id}`} style={{ opacity: 0.75 }}>
-                <td style={{ fontWeight: 600, color: "#6b7280" }}>
-                  {inv.hint_name || "Invitación pendiente"}
-                </td>
-                <td style={{ color: "#9ca3af" }}>—</td>
-                <td style={{ color: "#9ca3af" }}>—</td>
-                <td style={{ color: "#9ca3af" }}>—</td>
-                <td style={{ color: "#9ca3af" }}>—</td>
-                <td>
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", gap: 5,
-                    background: "#fffbeb", border: "1px solid #fde68a",
-                    borderRadius: 999, padding: "3px 10px",
-                    fontSize: "0.78rem", fontWeight: 700, color: "#92400e",
-                  }}>
-                    <span style={{ width: 6, height: 6, borderRadius: 999, background: "#f59e0b", display: "inline-block" }} />
-                    Pendiente
-                  </span>
-                </td>
-                <td style={{ color: "#9ca3af" }}>—</td>
-                <td />
-              </tr>
-            ))}
-            {drivers.map((d) => {
-              const venceStyle = licenseExpiryStyle(d.vencimiento_licencia);
-              const truckName = driverIdToTruckName.get(d.id) ?? "—";
-              const isActive = d.estado === DRIVER_ESTADO_ACTIVO;
-              return (
-                <tr key={d.id}>
-                  <td style={{ fontWeight: 600 }}>{d.nombre}</td>
-                  <td style={{ color: "#6b7280", fontVariantNumeric: "tabular-nums" }}>
-                    {d.telefono ?? "—"}
-                  </td>
-                  <td style={{ color: "#6b7280", fontVariantNumeric: "tabular-nums" }}>
-                    {d.licencia ?? "—"}
-                  </td>
-                  <td style={{ color: "#6b7280" }}>{d.categoria_licencia ?? "—"}</td>
-                  <td style={{ color: venceStyle.color, fontWeight: venceStyle.bold ? 700 : 500 }}>
-                    {venceStyle.text}
-                  </td>
-                  <td>
-                    <span className={`st-badge ${isActive ? "st-badge-activo" : "st-badge-inactivo"}`}>
-                      <span
-                        className="dot"
-                        style={{ background: isActive ? "#22c55e" : "#9ca3af" }}
-                      />
-                      {d.estado}
-                    </span>
-                  </td>
-                  <td style={{ color: truckName === "—" ? "#9ca3af" : "#0d0d0d" }}>
-                    {truckName}
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                      <button
-                        className="st-action-btn"
-                        title="Editar"
-                        onClick={() => setEditing(d)}
-                      >
-                        <Icons.Edit />
-                      </button>
-                      <button
-                        className="st-action-btn danger"
-                        title={isActive ? "Desactivar" : "Activar"}
-                        onClick={() => handleToggleStatus(d)}
-                      >
-                        <Icons.Power />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14, paddingBottom: 48 }}>
+          {pendingInvitations.map(inv => <InvitationCard key={`inv-${inv.id}`} inv={inv} onDeleteClick={() => setConfirmDeleteInv(inv)} />)}
+          {drivers.map(d => (
+            <DriverCard
+              key={d.id}
+              driver={d}
+              isOnTrip={onTripDriverIds.has(d.id)}
+              truck={driverIdToTruck.get(d.id)}
+              onClick={() => setSelected(d)}
+            />
+          ))}
+        </div>
       )}
 
-      {editing && (
-        <DriverEditModal driver={editing} onSave={handleSaved} onClose={() => setEditing(null)} />
+      {selected && (
+        <DriverDetailPanel
+          driver={selected}
+          truck={driverIdToTruck.get(selected.id)}
+          isOnTrip={onTripDriverIds.has(selected.id)}
+          onClose={() => setSelected(null)}
+          onDeleted={() => { setSelected(null); void refreshDrivers(); void loadData(); }}
+        />
       )}
       {inviting && (
-        <InviteDriverModal onClose={() => { setInviting(false); void loadPendingInvitations(); }} />
+        <InviteDriverModal onClose={() => { setInviting(false); void loadData(); }} />
+      )}
+
+      {confirmDeleteInv && (
+        <ConfirmModal
+          title="Eliminar invitación"
+          message={`¿Estás seguro que querés eliminar la invitación${confirmDeleteInv.hint_name ? ` de ${confirmDeleteInv.hint_name}` : ""}? Una vez eliminada, el conductor no podrá usarla para unirse a tu empresa.`}
+          confirmLabel="Sí, eliminar"
+          loading={deletingInv}
+          onConfirm={async () => {
+            setDeletingInv(true);
+            try {
+              await deleteInvitation(String(confirmDeleteInv.id));
+              setConfirmDeleteInv(null);
+              void loadData();
+            } catch { /* silencioso */ } finally {
+              setDeletingInv(false);
+            }
+          }}
+          onCancel={() => setConfirmDeleteInv(null)}
+        />
       )}
     </div>
   );

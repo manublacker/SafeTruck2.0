@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAvailability, type Trip } from "./useAvailability";
-import MapDisplay, { type DriverLocation } from "./MapDisplay";
+import MapDisplay, { type DriverLocation, type MapPin } from "./MapDisplay";
 import EmptyStateManager from "./EmptyStateManager";
 import TripCreator from "./TripCreator";
 import UpcomingTripsPanel from "./UpcomingTripsPanel";
@@ -31,6 +31,8 @@ export default function LiveMapContainer({ onNavigate }: Props) {
 
   const [routeResult, setRouteResult]           = useState<RouteResponse | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
+  const [originPin, setOriginPin]               = useState<MapPin | null>(null);
+  const [destinationPin, setDestinationPin]     = useState<MapPin | null>(null);
   const [driverLocations, setDriverLocations]   = useState<DriverLocation[]>([]);
   const [assignedTrips, setAssignedTrips]       = useState<AssignedTrip[]>([]);
   const [tripsLoading, setTripsLoading]         = useState(true);
@@ -99,7 +101,12 @@ export default function LiveMapContainer({ onNavigate }: Props) {
     >
       {/* Columna mapa */}
       <div style={{ position: "relative", padding: 20, background: "#fff", minHeight: 0 }}>
-        <MapDisplay routeResponse={routeResult} driverLocations={driverLocations} />
+        <MapDisplay
+          routeResponse={routeResult}
+          driverLocations={driverLocations}
+          originPin={originPin}
+          destinationPin={destinationPin}
+        />
       </div>
 
       {/* Panel derecho */}
@@ -142,8 +149,10 @@ export default function LiveMapContainer({ onNavigate }: Props) {
                 assignedTruck={assignedTruck}
                 selectedDriverId={selectedDriverId}
                 onSelectDriver={setSelectedDriverId}
-                onRouteCalculated={setRouteResult}
+                onRouteCalculated={(r) => { setRouteResult(r); setOriginPin(null); setDestinationPin(null); }}
                 onTripCreated={refreshTrips}
+                onOriginPinned={(p) => setOriginPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
+                onDestinationPinned={(p) => setDestinationPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
               />
             </section>
 

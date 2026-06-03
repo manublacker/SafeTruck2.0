@@ -24,9 +24,17 @@ export interface DriverLocation {
   lng: number;
 }
 
+export interface MapPin {
+  lat: number;
+  lon: number;
+  label: string;
+}
+
 interface Props {
   routeResponse: RouteResponse | null;
   driverLocations?: DriverLocation[];
+  originPin?: MapPin | null;
+  destinationPin?: MapPin | null;
 }
 
 function buildDestinationIcon(): L.DivIcon {
@@ -52,11 +60,22 @@ function buildDriverIcon(label: string): L.DivIcon {
   });
 }
 
-export default function MapDisplay({ routeResponse, driverLocations = [] }: Props) {
+function buildOriginIcon(): L.DivIcon {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:#16a34a;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.25);"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  });
+}
+
+export default function MapDisplay({ routeResponse, driverLocations = [], originPin, destinationPin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const polylineRef = useRef<L.Polyline | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const originPinRef = useRef<L.Marker | null>(null);
+  const destPinRef = useRef<L.Marker | null>(null);
   const driverMarkersRef = useRef<Map<string, L.Marker>>(new Map());
 
   // Inicialización + cleanup del mapa
@@ -130,12 +149,51 @@ export default function MapDisplay({ routeResponse, driverLocations = [] }: Prop
     });
   }, [driverLocations]);
 
+  // Pin de origen (preview antes de calcular ruta)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    originPinRef.current?.remove();
+    originPinRef.current = null;
+    if (!originPin) return;
+    originPinRef.current = L.marker([originPin.lat, originPin.lon], {
+      icon: buildOriginIcon(),
+      title: originPin.label,
+    }).addTo(map).bindPopup(`<strong>Origen</strong><br/>${originPin.label}`);
+    map.flyTo([originPin.lat, originPin.lon], 14, { duration: 0.8 });
+  }, [originPin]);
+
+  // Pin de destino (preview antes de calcular ruta)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    destPinRef.current?.remove();
+    destPinRef.current = null;
+    if (!destinationPin) return;
+    destPinRef.current = L.marker([destinationPin.lat, destinationPin.lon], {
+      icon: buildDestinationIcon(),
+      title: destinationPin.label,
+    }).addTo(map).bindPopup(`<strong>Destino</strong><br/>${destinationPin.label}`);
+    // Si ya hay origen, hacer fitBounds entre los dos puntos
+    if (originPin) {
+      map.flyToBounds(
+        [[originPin.lat, originPin.lon], [destinationPin.lat, destinationPin.lon]],
+        { padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM, duration: 0.8 }
+      );
+    } else {
+      map.flyTo([destinationPin.lat, destinationPin.lon], 14, { duration: 0.8 });
+    }
+  }, [destinationPin]);
+
   // Render de la ruta
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     clearRouteLayers(polylineRef, markerRef);
+    // Los pins de preview se reemplazan con la ruta real
+    originPinRef.current?.remove(); originPinRef.current = null;
+    destPinRef.current?.remove();   destPinRef.current = null;
 
     if (!routeResponse?.found || routeResponse.path.length === 0) return;
 

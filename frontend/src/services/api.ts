@@ -44,7 +44,7 @@ function authHeaders(): Record<string, string> {
 }
 
 // On 401, try to refresh the Supabase session before logging the user out.
-// Returning from Stripe Checkout can take long enough that the cached JWT
+// Returning from MercadoPago Checkout can take long enough that the cached JWT
 // expires; we shouldn't kick the user to /login if a valid refresh_token
 // is still available.
 let _refreshInFlight: Promise<boolean> | null = null;
@@ -213,127 +213,17 @@ export async function unassignDriver(truckId: number): Promise<void> {
   }
 }
 
-// ── Viajes asignados ──────────────────────────────────────────
-
-export interface AssignedTripPayload {
-  driver_id: number;
-  truck_id?: number | null;
-  origin_address?: string;   // se mapea a origin_label en la BD
-  destination_address?: string;
-  origin_lat?: number;
-  origin_lng?: number;       // se mapea a origin_lon en la BD
-  destination_lat?: number;
-  destination_lng?: number;
-  route?: unknown;
-  scheduled_at?: string;
-}
-
-export interface AssignedTrip {
-  id: number;
-  empresa_user_id: string;
-  driver_id: number;
-  driver_app_user_id: string | null;
-  truck_id: number | null;
-  origin_label: string | null;
-  destination_label: string | null;
-  origin_lat: number | null;
-  origin_lon: number | null;
-  destination_lat: number | null;
-  destination_lon: number | null;
-  path: unknown | null;
-  distance_m: number | null;
-  duration_min: number | null;
-  status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
-  scheduled_at: string | null;
-  accepted_at: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  created_at: string;
-  driver_nombre?: string | null;
-  truck_patente?: string | null;
-}
-
-export async function createAssignedTrip(payload: AssignedTripPayload): Promise<AssignedTrip> {
-  const res = await fetch(`${BASE_URL}/api/assigned-trips`, {
-    method:  'POST',
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
-    body:    JSON.stringify(payload),
-  });
-  const data = await handleResponse<{ success: boolean; trip: AssignedTrip }>(res);
-  return data.trip;
-}
-
-export async function fetchAssignedTrips(): Promise<AssignedTrip[]> {
-  const res = await fetch(`${BASE_URL}/api/assigned-trips`, { headers: authHeaders() });
-  return handleResponse<AssignedTrip[]>(res);
-}
-
-export interface DriverLocationRow {
-  driver_app_user_id: string;
-  driver_name: string | null;
-  truck_plate: string | null;
-  lat: number;
-  lng: number;
-}
-
-export async function fetchDriverLocations(): Promise<DriverLocationRow[]> {
-  const res = await fetch(`${BASE_URL}/api/locations`, { headers: authHeaders() });
-  return handleResponse<DriverLocationRow[]>(res);
-}
-
-// ── Invitaciones ───────────────────────────────────────────────
-
-export interface DriverInvitation {
-  id: string;
-  code: string;
-  admin_id: string;
-  driver_id: number | null;
-  hint_name: string | null;
-  expires_at: string;
-  redeemed_at: string | null;
-  created_at: string;
-  driver_nombre?: string | null;
-}
-
-export async function fetchInvitations(): Promise<DriverInvitation[]> {
-  const res = await fetch(`${BASE_URL}/api/invitations`, {
-    headers: authHeaders(),
-  });
-  return handleResponse(res);
-}
-
-export async function createInvitation(hint_name?: string): Promise<DriverInvitation> {
-  const res = await fetch(`${BASE_URL}/api/invitations`, {
-    method:  "POST",
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
-    body:    JSON.stringify({ hint_name: hint_name ?? null }),
-  });
-  const data = await handleResponse<{ success: boolean; invitation: DriverInvitation }>(res);
-  return data.invitation;
-}
-
-export async function bulkCreateInvitations(
-  quantity: number
-): Promise<{ code: string; expires_at: string }[]> {
-  const res = await fetch(`${BASE_URL}/api/invitations/bulk`, {
-    method:  "POST",
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
-    body:    JSON.stringify({ quantity }),
-  });
-  return handleResponse(res);
-}
-
-// ── Billing / Stripe ──────────────────────────────────────────
+// ── Billing / MercadoPago ──────────────────────────────────────────
 
 /**
- * Crea una Stripe Checkout Session para el plan dado y devuelve la URL.
+ * Crea una MercadoPago Checkout Session para el plan dado y devuelve la URL.
  * El llamador debe hacer window.location.href = url para redirigir al usuario.
  */
 export async function startCheckout(plan: string): Promise<string> {
   const res = await fetch(`${BASE_URL}/api/billing/checkout`, {
     method:  "POST",
     headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
-    // returnUrl tells the backend where to redirect after Stripe checkout,
+    // returnUrl tells the backend where to redirect after MercadoPago checkout,
     // so it works correctly both in local dev and in production.
     body:    JSON.stringify({ plan, returnUrl: window.location.origin }),
   });
@@ -356,4 +246,117 @@ export async function fetchSubscription(): Promise<{
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
   return (data as { subscription: any }).subscription;
+}
+
+// ── Invitations ────────────────────────────────────────────────────────────────
+
+export interface DriverInvitation {
+  id: number;
+  code: string;
+  admin_id: string;
+  hint_name: string | null;
+  driver_id: number | null;
+  driver_nombre: string | null;
+  redeemed_at: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
+export async function createInvitation(): Promise<{ code: string; expires_at: string }> {
+  const res = await fetch(`${BASE_URL}/api/invitations`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  const data = await handleResponse<{ success: boolean; invitation: DriverInvitation }>(res);
+  return data.invitation;
+}
+
+export async function deleteInvitation(id: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/invitations/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok && res.status !== 204) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+  }
+}
+
+export async function bulkCreateInvitations(quantity: number): Promise<{ code: string; expires_at: string }[]> {
+  const res = await fetch(`${BASE_URL}/api/invitations/bulk`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity }),
+  });
+  return handleResponse<{ code: string; expires_at: string }[]>(res);
+}
+
+export async function fetchInvitations(): Promise<DriverInvitation[]> {
+  const res = await fetch(`${BASE_URL}/api/invitations`, {
+    headers: authHeaders(),
+  });
+  return handleResponse<DriverInvitation[]>(res);
+}
+
+// ── Assigned Trips ─────────────────────────────────────────────────────────────
+
+export interface AssignedTrip {
+  id: number;
+  driver_id: number;
+  driver_nombre?: string | null;
+  truck_id: number;
+  origin_label: string;
+  destination_label: string;
+  origin_lat: number;
+  origin_lon: number;
+  destination_lat: number;
+  destination_lon: number;
+  scheduled_at: string | null;
+  status: string;
+  created_at: string;
+}
+
+export async function fetchAssignedTrips(): Promise<AssignedTrip[]> {
+  const res = await fetch(`${BASE_URL}/api/assigned-trips`, {
+    headers: authHeaders(),
+  });
+  return handleResponse<AssignedTrip[]>(res);
+}
+
+export async function createAssignedTrip(data: {
+  driver_id: number;
+  truck_id: number;
+  origin_address: string;
+  destination_address: string;
+  origin_lat: number;
+  origin_lng: number;
+  destination_lat: number;
+  destination_lng: number;
+  route: unknown;
+  scheduled_at?: string;
+}): Promise<AssignedTrip> {
+  const res = await fetch(`${BASE_URL}/api/assigned-trips`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<AssignedTrip>(res);
+}
+
+// ── Driver Locations ───────────────────────────────────────────────────────────
+
+export interface DriverLocation {
+  driver_app_user_id: string;
+  driver_name: string;
+  truck_plate: string;
+  lat: number;
+  lng: number;
+  updated_at: string;
+}
+
+export async function fetchDriverLocations(): Promise<DriverLocation[]> {
+  const res = await fetch(`${BASE_URL}/api/locations`, {
+    headers: authHeaders(),
+  });
+  return handleResponse<DriverLocation[]>(res);
 }

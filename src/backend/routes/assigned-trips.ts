@@ -110,9 +110,11 @@ router.get('/mine', async (req: Request, res: Response) => {
   const userId = req.user!.id
   try {
     const result = await pool.query(
-      `SELECT * FROM assigned_trips
-       WHERE driver_app_user_id = $1
-       ORDER BY created_at DESC
+      `SELECT at.*, t.patente AS truck_patente, t.name AS truck_name
+       FROM assigned_trips at
+       LEFT JOIN trucks t ON t.id = at.truck_id AND t.is_active = true
+       WHERE at.driver_app_user_id = $1
+       ORDER BY at.created_at DESC
        LIMIT 50`,
       [userId]
     )

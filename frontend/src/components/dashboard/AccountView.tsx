@@ -3,8 +3,16 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { AdminPage } from "./AdminSidebar";
 
+interface Subscription {
+  plan: string;
+  status: string;
+  current_period_end: string | null;
+  mp_payer_id?: string | null;
+}
+
 interface Props {
   onNavigate: (page: AdminPage) => void;
+  billingSuccess?: boolean;
 }
 
 interface UserMeta {
@@ -18,8 +26,8 @@ interface UserMeta {
   email?: string;
 }
 
-export default function AccountView({ onNavigate }: Props) {
-  const { user } = useAuth();
+export default function AccountView({ onNavigate, billingSuccess }: Props) {
+  const { user, refreshPlan } = useAuth();
   const [meta, setMeta] = useState<UserMeta>({});
 
   useEffect(() => {
@@ -29,6 +37,12 @@ export default function AccountView({ onNavigate }: Props) {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!billingSuccess) return;
+    const timer = setTimeout(() => refreshPlan(), 3000);
+    return () => clearTimeout(timer);
+  }, [billingSuccess, refreshPlan]);
 
   return (
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>

@@ -9,10 +9,7 @@
     "newArchEnabled": true,
     "scheme": "safetruck",
     "plugins": [
-      "expo-router",
-      "expo-maps",
-      "expo-font",
-      "expo-secure-store"
+      "expo-router"
     ],
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -20,7 +17,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.SafeTruck2"
     },
     "android": {
       "adaptiveIcon": {
