@@ -23,7 +23,10 @@ export interface AssignedTrip {
   created_at: string
 }
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+// Mismo backend que usan index.tsx y billing.ts. La env var permite overridearlo
+// (p. ej. apuntar a un backend local), pero si no está seteada caemos en Railway
+// para que la pestaña de viajes funcione sin configuración extra.
+const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'https://safetruck20-production.up.railway.app').replace(/\/$/, '')
 
 async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession()
@@ -43,7 +46,10 @@ async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export async function fetchAllMyTrips(): Promise<AssignedTrip[]> {
-  return apiRequest<AssignedTrip[]>('/api/assigned-trips/mine')
+  const data = await apiRequest<AssignedTrip[]>('/api/assigned-trips/mine')
+  // Defensa: si el backend responde algo que no es un array (error, body vacío),
+  // devolvemos [] para no romper el render de TripsScreen (trips.find / FlatList).
+  return Array.isArray(data) ? data : []
 }
 
 export async function updateTripStatus(
