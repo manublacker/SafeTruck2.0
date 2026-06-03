@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import express, { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
-import { calculateRoute } from './router'
+import { calculateRoute, denunciarPunto } from './router'
 import { supabase } from './supabaseClient'
 import authRouter from './routes/auth'
 import trucksRouter from './routes/trucks'
@@ -56,6 +56,29 @@ app.post('/route', async (req, res) => {
     res.json({ success: true, route })
   } catch (err: any) {
     console.error('[/route]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// Denuncias cooperativas (CAPA DE PESO en el ruteo)
+// La app la llama desde el modal de reporte. Snapea el punto a la arista de
+// pgr_edges más cercana y acumula penalización; pgr_route_truck la usa en la
+// próxima ruta. La capa VISUAL (st_incidents) va aparte, directo a Supabase.
+// Lógica SQL: migración 003_denuncia_penalty_pgr.sql.
+// ────────────────────────────────────────────────────────────────────────────
+app.post('/reports', async (req, res) => {
+  try {
+    const { lat, lng, type, trip_id } = req.body
+    if (lat == null || lng == null)
+      return res.status(400).json({ error: 'lat y lng requeridos' })
+    // El sistema de peso sólo distingue 'multa' (negativo) / 'sin_problemas'.
+    // Toda denuncia del modal es negativa => 'multa'. El tipo concreto (control,
+    // accidente, etc.) se guarda como nota.
+    const edgeId = await denunciarPunto(lat, lng, 'multa', trip_id ?? null, type ?? null)
+    res.json({ success: true, edge_id: edgeId })
+  } catch (err: any) {
+    console.error('[/reports]', err.message)
     res.status(500).json({ error: err.message })
   }
 })

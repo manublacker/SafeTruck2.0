@@ -1,6 +1,14 @@
 /*******************************************************
  * reports.ts
  *
+ * ⚠️ LEGACY — NO LO USA LA APP. Opera sobre `aristas` /
+ * `street_reports` / `edge_trust_scores` (motor viejo, A*
+ * de routes/route.ts), tablas que NO existen en el Aiven
+ * actual. El sistema vivo de denuncias es POST /reports
+ * (server.ts -> router.denunciarPunto) sobre pgr_edges,
+ * ver migración 003_denuncia_penalty_pgr.sql. Se deja sólo
+ * por compatibilidad histórica.
+ *
  * Define el endpoint POST /api/reports.
  * Recibe un reporte de un camionero (multa o sin problemas)
  * sobre una arista específica del grafo, lo persiste en

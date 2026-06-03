@@ -15,6 +15,27 @@ import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, type As
 
 const BACKEND = "https://safetruck20-production.up.railway.app"
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DENUNCIAS / REPORTES — arquitectura de doble escritura (a propósito)
+// ─────────────────────────────────────────────────────────────────────────────
+// Cuando un chofer denuncia una calle (reportIncident), escribimos en DOS bases:
+//
+//   1) Supabase (st_incidents)  -> CAPA VISUAL efímera. Marcador tipo Waze con
+//      realtime + expiración que ven otros choferes. NO afecta el ruteo.
+//
+//   2) Backend Aiven (POST /reports) -> CAPA DE PESO. Snapea a la arista de
+//      pgr_edges más cercana y acumula pgr_edges.denuncia_penalty por umbral.
+//      El motor real de ruteo (pgr_route_truck, vía POST /route) suma esa
+//      penalización al costo => en la próxima ruta esquiva/bloquea la arista.
+//      (Umbral/penalización en src/backend/migrations/003_denuncia_penalty_pgr.sql.
+//       OJO: 002 quedó obsoleta — apuntaba a un motor viejo aristas/A* sin uso.)
+//
+// El chofer elige la ubicación a denunciar de dos maneras (selector en el modal):
+//   📍 "Donde estoy"  -> GPS actual (la arista donde está parado)
+//   🔍 "Buscar calle" -> buscador interno (Nominatim); snapea esa dirección
+// En ambos casos sólo se produce un lat/lon; el backend resuelve la arista.
+// ─────────────────────────────────────────────────────────────────────────────
+
 const INCIDENT_TYPES = [
   { key: 'fine',         label: '💸 Multa a camión',    creates_block: true  },
   { key: 'police_check', label: '👮 Control policial',  creates_block: false },
@@ -205,8 +226,8 @@ html,body,#map { width:100%;height:100%; }
 
 export default function MapScreen() {
   const webRef = useRef<WebView>(null)
-  const reportModeRef = useRef(false)
   const searchTimeout = useRef<any>(null)
+  const reportSearchTimeout = useRef<any>(null)
 
   const isDark = useStore(st => st.isDark)
   const toggleTheme = useStore(st => st.toggleTheme)
@@ -220,10 +241,15 @@ export default function MapScreen() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [loading, setLoading] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
-  const [reportMode, setReportMode] = useState(false)
   const [showIncidentModal, setShowIncidentModal] = useState(false)
   const [incidentLocation, setIncidentLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [reportingIncident, setReportingIncident] = useState(false)
+
+  // Modo de ubicación de la denuncia: 'current' = GPS del chofer, 'search' = calle buscada.
+  const [reportLocMode, setReportLocMode] = useState<'current' | 'search'>('current')
+  const [reportSearchText, setReportSearchText] = useState('')
+  const [reportSearchResults, setReportSearchResults] = useState<any[]>([])
+  const [reportSearching, setReportSearching] = useState(false)
 
   const [searchText, setSearchText] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
@@ -381,11 +407,53 @@ export default function MapScreen() {
     if (data) webRef.current?.injectJavaScript(`loadIncidents(${JSON.stringify(data)}); true;`)
   }
 
-  const toggleReportMode = () => {
-    const newMode = !reportMode
-    setReportMode(newMode)
-    reportModeRef.current = newMode
-    if (newMode) Alert.alert('Modo reporte', 'Tocá el lugar en el mapa donde ocurrió el incidente')
+  // Abre el modal de denuncia. Por defecto apunta a la ubicación actual (GPS):
+  // el caso más común es "denunciar la arista donde estoy parado".
+  const openReportModal = () => {
+    setReportLocMode('current')
+    setIncidentLocation(location) // {lat,lng} actual, o null si todavía no hay GPS
+    setReportSearchText('')
+    setReportSearchResults([])
+    setShowIncidentModal(true)
+  }
+
+  const closeReportModal = () => {
+    setShowIncidentModal(false)
+    setReportLocMode('current')
+    setReportSearchText('')
+    setReportSearchResults([])
+  }
+
+  // Buscador interno SOLO para denuncias (independiente del buscador de destino,
+  // para no pisar searchResults). Reusa Nominatim acotado al AMBA.
+  const searchReportAddress = async (query: string) => {
+    if (query.length < 3) { setReportSearchResults([]); return }
+    setReportSearching(true)
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}&format=json&limit=5&countrycodes=ar&bounded=1&viewbox=-59.2,-35.1,-57.8,-34.2`,
+        { headers: { 'User-Agent': 'SafeTruck/1.0' } }
+      )
+      setReportSearchResults(await res.json())
+    } catch (e) {
+      console.log('Report search error:', e)
+    } finally {
+      setReportSearching(false)
+    }
+  }
+
+  const onReportSearchChange = (text: string) => {
+    setReportSearchText(text)
+    if (reportSearchTimeout.current) clearTimeout(reportSearchTimeout.current)
+    reportSearchTimeout.current = setTimeout(() => searchReportAddress(text), 400)
+  }
+
+  // Al elegir una calle del buscador, esa pasa a ser la ubicación a denunciar.
+  const selectReportResult = (result: any) => {
+    setIncidentLocation({ lat: parseFloat(result.lat), lng: parseFloat(result.lon) })
+    setReportSearchText(result.display_name.split(',').slice(0, 2).join(','))
+    setReportSearchResults([])
+    Keyboard.dismiss()
   }
 
   const calculateRoute = async (destLat: number, destLng: number) => {
@@ -448,6 +516,9 @@ export default function MapScreen() {
     if (!incidentLocation || !profile) return
     setReportingIncident(true)
     try {
+      // ── (1) CAPA VISUAL — Supabase st_incidents ───────────────────────────
+      // Marcador efímero tipo Waze (realtime + expiración) que ven otros choferes.
+      // NO afecta el ruteo; es sólo presentación. Se mantiene en paralelo a propósito.
       const { data: incidentId, error } = await supabase.rpc('insert_incident', {
         p_user_id: profile.id,
         p_lat: incidentLocation.lat,
@@ -463,9 +534,32 @@ export default function MapScreen() {
           p_reason: type,
         })
       }
-      setShowIncidentModal(false)
-      setReportMode(false)
-      reportModeRef.current = false
+
+      // ── (2) CAPA DE PESO — backend Aiven (POST /reports) ──────────────────
+      // Snapea el punto a la arista de pgr_edges más cercana y acumula
+      // penalización (pgr_edges.denuncia_penalty) por umbral. El motor real de
+      // ruteo, pgr_route_truck, suma esa penalización al costo => en la próxima
+      // ruta esquiva o bloquea la arista denunciada. ESTA es la parte que pesa.
+      // El backend hace el snap; sólo mandamos lat/lng. El tipo concreto va como
+      // nota; el sistema de peso lo trata todo como 'multa' (evento negativo).
+      // Lógica SQL: src/backend/migrations/003_denuncia_penalty_pgr.sql.
+      // Fire-and-forget: si Aiven falla, el marcador visual igual quedó.
+      try {
+        await fetch(`${BACKEND}/reports`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lat: incidentLocation.lat,
+            lng: incidentLocation.lng,
+            type,                           // tipo concreto (control, accidente…) -> nota
+            trip_id: tripSheet?.id ?? null, // viaje en curso si lo hay (opcional)
+          }),
+        })
+      } catch (e) {
+        console.log('Reporte de peso (Aiven) falló:', e)
+      }
+
+      closeReportModal()
       Alert.alert('Reporte enviado', 'Gracias por contribuir a SafeTruck')
       loadIncidents()
       webRef.current?.injectJavaScript(
@@ -521,13 +615,11 @@ export default function MapScreen() {
     try {
       const msg = JSON.parse(e.nativeEvent.data)
       if (msg.type === 'mapClick') {
-        if (reportModeRef.current) {
-          setIncidentLocation({ lat: msg.lat, lng: msg.lng })
-          setShowIncidentModal(true)
-        } else {
-          reverseGeocode(msg.lat, msg.lng).then(setSearchText)
-          calculateRoute(msg.lat, msg.lng)
-        }
+        // El tap en el mapa es sólo para fijar destino y calcular ruta.
+        // La denuncia ya NO usa el tap: se elige ubicación dentro del modal
+        // (GPS actual o buscador interno). Ver openReportModal / reportIncident.
+        reverseGeocode(msg.lat, msg.lng).then(setSearchText)
+        calculateRoute(msg.lat, msg.lng)
       }
     } catch {}
   }
@@ -609,16 +701,9 @@ export default function MapScreen() {
       )}
 
       {/* Hint inicial */}
-      {!currentRoute && !loading && activeVehicle && !reportMode && searchText.length === 0 && (
+      {!currentRoute && !loading && activeVehicle && searchText.length === 0 && (
         <View style={s.hintPill}>
           <Text style={s.hintPillText}>Buscá un destino o tocá el mapa</Text>
-        </View>
-      )}
-
-      {/* Hint modo reporte */}
-      {reportMode && (
-        <View style={[s.hintPill, { backgroundColor: t.dangerSoft, borderColor: t.danger }]}>
-          <Text style={[s.hintPillText, { color: t.danger }]}>Tocá donde ocurrió el incidente</Text>
         </View>
       )}
 
@@ -695,13 +780,14 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* FAB de reporte */}
+      {/* FAB de reporte: abre el modal de denuncia directamente (ubicación se
+          elige adentro: GPS actual o buscador interno). */}
       <TouchableOpacity
-        style={[s.fab, reportMode && s.fabActive, showInfo && currentRoute && !navMode && s.fabRaised, navMode && s.fabNavRaised]}
-        onPress={toggleReportMode}
+        style={[s.fab, showInfo && currentRoute && !navMode && s.fabRaised, navMode && s.fabNavRaised]}
+        onPress={openReportModal}
         activeOpacity={0.85}
       >
-        <Ionicons name={reportMode ? 'close' : 'warning'} size={32} color="#fff" />
+        <Ionicons name="warning" size={32} color="#fff" />
       </TouchableOpacity>
 
       {/* Modal de incidente */}
@@ -711,22 +797,69 @@ export default function MapScreen() {
             <View style={s.modalHeader}>
               <View>
                 <Text style={s.modalTitle}>Reportar incidente</Text>
-                <Text style={s.modalSubtitle}>¿Qué está pasando en esta ubicación?</Text>
+                <Text style={s.modalSubtitle}>¿Dónde y qué está pasando?</Text>
               </View>
-              <TouchableOpacity
-                style={s.modalClose}
-                onPress={() => { setShowIncidentModal(false); setReportMode(false); reportModeRef.current = false }}
-              >
+              <TouchableOpacity style={s.modalClose} onPress={closeReportModal}>
                 <Text style={s.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView style={{ marginTop: 8 }}>
+
+            {/* Selector de ubicación: GPS actual vs buscar una calle */}
+            <View style={s.locModeRow}>
+              <TouchableOpacity
+                style={[s.locModeBtn, reportLocMode === 'current' && s.locModeBtnActive]}
+                onPress={() => { setReportLocMode('current'); setIncidentLocation(location) }}
+              >
+                <Text style={[s.locModeText, reportLocMode === 'current' && s.locModeTextActive]}>📍 Donde estoy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.locModeBtn, reportLocMode === 'search' && s.locModeBtnActive]}
+                onPress={() => { setReportLocMode('search'); setIncidentLocation(null) }}
+              >
+                <Text style={[s.locModeText, reportLocMode === 'search' && s.locModeTextActive]}>🔍 Buscar calle</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Buscador interno (sólo en modo 'search') */}
+            {reportLocMode === 'search' && (
+              <View style={{ marginBottom: 4 }}>
+                <TextInput
+                  style={s.reportSearchInput}
+                  placeholder="Escribí una calle..."
+                  placeholderTextColor={t.textMuted}
+                  value={reportSearchText}
+                  onChangeText={onReportSearchChange}
+                  returnKeyType="search"
+                />
+                {reportSearching && <ActivityIndicator size="small" color={t.accent} style={{ marginVertical: 8 }} />}
+                {reportSearchResults.map((r, idx) => (
+                  <TouchableOpacity key={idx} style={s.reportSearchItem} onPress={() => selectReportResult(r)}>
+                    <Text style={s.reportSearchItemText} numberOfLines={1}>
+                      {r.display_name.split(',').slice(0, 2).join(',')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Ubicación elegida (feedback) */}
+            <View style={s.locChosen}>
+              <Text style={s.locChosenText}>
+                {incidentLocation
+                  ? (reportLocMode === 'current'
+                      ? '📌 Tu ubicación actual'
+                      : `📌 ${reportSearchText || `${incidentLocation.lat.toFixed(5)}, ${incidentLocation.lng.toFixed(5)}`}`)
+                  : (reportLocMode === 'search' ? 'Buscá y elegí una calle' : 'Esperando GPS...')}
+              </Text>
+            </View>
+
+            <ScrollView style={{ marginTop: 4 }}>
               {INCIDENT_TYPES.map(inc => (
                 <TouchableOpacity
                   key={inc.key}
-                  style={s.incidentBtn}
+                  style={[s.incidentBtn, !incidentLocation && { opacity: 0.4 }]}
                   onPress={() => reportIncident(inc.key, inc.creates_block)}
-                  disabled={reportingIncident}
+                  disabled={reportingIncident || !incidentLocation}
                 >
                   <Text style={s.incidentBtnText}>{inc.label}</Text>
                   {inc.creates_block && (
@@ -996,6 +1129,36 @@ function makeStyles(t: Theme) {
     modalSubtitle: { color: t.textMuted, fontSize: 14 },
     modalClose: { backgroundColor: t.surface2, borderRadius: 8, padding: 8 },
     modalCloseText: { color: t.textMuted, fontSize: 14 },
+    // Selector de ubicación de la denuncia (📍 acá / 🔍 buscar)
+    locModeRow: { flexDirection: 'row', gap: 8, marginTop: 14, marginBottom: 10 },
+    locModeBtn: {
+      flex: 1, alignItems: 'center',
+      backgroundColor: t.surface2, borderRadius: 10,
+      borderWidth: 1, borderColor: t.border,
+      paddingVertical: 10,
+    },
+    locModeBtnActive: { backgroundColor: t.accentSoft, borderColor: t.accent },
+    locModeText: { color: t.textMuted, fontSize: 13, fontWeight: '600' },
+    locModeTextActive: { color: t.accent },
+
+    reportSearchInput: {
+      backgroundColor: t.surface2, borderRadius: 10,
+      borderWidth: 1, borderColor: t.border,
+      paddingHorizontal: 12, paddingVertical: 10,
+      color: t.text, fontSize: 14,
+    },
+    reportSearchItem: {
+      paddingHorizontal: 12, paddingVertical: 11,
+      borderBottomWidth: 1, borderBottomColor: t.border,
+    },
+    reportSearchItemText: { color: t.text, fontSize: 13 },
+
+    locChosen: {
+      backgroundColor: t.surface2, borderRadius: 8,
+      paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8,
+    },
+    locChosenText: { color: t.textMuted, fontSize: 12, fontWeight: '500' },
+
     incidentBtn: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       backgroundColor: t.surface2, borderRadius: 10,
