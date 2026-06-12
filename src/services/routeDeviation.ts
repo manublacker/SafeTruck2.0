@@ -49,6 +49,20 @@ export function toLatLng(p: RoutePoint): LatLng {
 }
 
 /**
+ * Distancia en línea recta, en metros, entre dos puntos.
+ *
+ * Misma proyección equirectangular local que el resto del módulo: barata y
+ * sub-métrica a escala de cuadras. Se usa para las zonas muertas cerca de
+ * origen/destino del monitor de desvío.
+ */
+export function metersBetween(a: LatLng, b: LatLng): number {
+  const mPerDegLng = M_PER_DEG_LAT * Math.cos((a.lat * Math.PI) / 180)
+  const dx = (b.lng - a.lng) * mPerDegLng
+  const dy = (b.lat - a.lat) * M_PER_DEG_LAT
+  return Math.hypot(dx, dy)
+}
+
+/**
  * Distancia, en metros, entre el punto `p` y el segmento recto `a`–`b`.
  *
  * Usa una proyección equirectangular local centrada en `p` (el punto pasa a ser

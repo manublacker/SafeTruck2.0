@@ -9,6 +9,7 @@
 import {
   checkDeviation,
   distanceToRoute,
+  metersBetween,
   toLatLng,
   DEVIATION_THRESHOLD_M,
   type LatLng,
@@ -99,6 +100,18 @@ describe('checkDeviation', () => {
 
   it('no marca desvío ante coordenadas inválidas (NaN)', () => {
     expect(checkDeviation({ lat: NaN, lng: -58.40 }, RUTA).isOff).toBe(false)
+  })
+})
+
+describe('metersBetween', () => {
+  it('mide ~111 m entre dos puntos a 0.001° de latitud', () => {
+    const d = metersBetween({ lat: -34.60, lng: -58.40 }, { lat: -34.601, lng: -58.40 })
+    expect(d).toBeGreaterThan(110)
+    expect(d).toBeLessThan(112)
+  })
+
+  it('da 0 entre un punto y sí mismo', () => {
+    expect(metersBetween({ lat: -34.60, lng: -58.40 }, { lat: -34.60, lng: -58.40 })).toBe(0)
   })
 })
 
