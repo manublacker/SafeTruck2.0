@@ -8,14 +8,18 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "safetruck",
-    "plugins": ["expo-router", "expo-maps"],
+    "plugins": [
+      "expo-router",
+      "expo-maps"
+    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.SafeTruck2"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,10 +27,21 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.SafeTruck2"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fa0da953-242f-451a-892b-b584083a4f62"
+      }
+    },
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/fa0da953-242f-451a-892b-b584083a4f62"
     }
   }
 }
