@@ -11,7 +11,9 @@ import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
-import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, type AssignedTrip } from '../../src/services/assignedTrips'
+import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, fetchMyAssignedTruck, type AssignedTrip } from '../../src/services/assignedTrips'
+import { createDeviationMonitor, stepDeviationMonitor, type DeviationMonitorState } from '../../src/services/deviationMonitor'
+import { toLatLng, type LatLng } from '../../src/services/routeDeviation'
 
 const BACKEND = "https://safetruck20-production.up.railway.app"
 
@@ -284,6 +286,16 @@ export default function MapScreen() {
   const [tripUpdating, setTripUpdating] = useState(false)
   const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // ── Monitor de desvío de ruta (pasos 1-2) ─────────────────────────────
+  // Vigila la posición GPS contra la ruta planificada del viaje en curso y, al
+  // confirmarse un desvío, recalcula la ruta desde la posición actual.
+  const monitorRef = useRef<DeviationMonitorState>(createDeviationMonitor())
+  const tripRouteRef = useRef<LatLng[]>([])
+  const tripOriginRef = useRef<LatLng | null>(null)
+  const tripDestRef = useRef<LatLng | null>(null)
+  const tripVehicleRef = useRef<{ weight_kg: number; height_m: number; width_m: number } | null>(null)
+  const [recalculating, setRecalculating] = useState(false)
+
   const loadTripById = useCallback(async (id: string) => {
     try {
       const all = await fetchAllMyTrips()
@@ -297,6 +309,13 @@ export default function MapScreen() {
             return (p?.path || p?.polyline || p?.segments?.flatMap((s: any) => s.coordinates) || []) as { lat: number; lon?: number; lng?: number }[]
           } catch { return [] }
         })()
+        // Alimentar el monitor de desvío con la ruta planificada y los extremos del viaje
+        tripRouteRef.current = path.map(toLatLng)
+        tripOriginRef.current = found.origin_lat != null && found.origin_lon != null
+          ? { lat: found.origin_lat, lng: found.origin_lon } : null
+        tripDestRef.current = found.destination_lat != null && found.destination_lon != null
+          ? { lat: found.destination_lat, lng: found.destination_lon } : null
+        tripVehicleRef.current = null // dims del camión: se resuelven al primer recálculo
         webRef.current?.injectJavaScript(
           `drawTripPath(${JSON.stringify(path)}, ${found.origin_lat ?? 'null'}, ${found.origin_lon ?? 'null'}, ${found.destination_lat ?? 'null'}, ${found.destination_lon ?? 'null'}); true;`
         )
@@ -313,20 +332,85 @@ export default function MapScreen() {
     }
   }, [tripId])
 
-  // GPS tracking for in_progress trip
+  // Dims del camión para el recálculo: el vehículo activo del store o, si no hay
+  // (caso chofer), el camión asignado. Se resuelve una sola vez por viaje.
+  const resolveTripVehicle = async (): Promise<{ weight_kg: number; height_m: number; width_m: number } | null> => {
+    if (activeVehicle) return { weight_kg: activeVehicle.weight_kg, height_m: activeVehicle.height_m, width_m: activeVehicle.width_m }
+    if (tripVehicleRef.current) return tripVehicleRef.current
+    const truck = await fetchMyAssignedTruck().catch(() => null)
+    if (truck) {
+      tripVehicleRef.current = { weight_kg: truck.max_weight_kg, height_m: truck.max_height_m, width_m: truck.max_width_m }
+      return tripVehicleRef.current
+    }
+    return null
+  }
+
+  // Recalcula la ruta desde la posición actual hacia el destino del viaje y la
+  // redibuja. Espeja la llamada de `calculateRoute` (mismo endpoint y forma),
+  // pero sin crear un viaje nuevo ni abrir la tarjeta de ruta: es silencioso.
+  // El aviso al chofer (globito) es el paso 4; acá solo se actualiza el mapa.
+  const recalculateAfterDeviation = async (fromLat: number, fromLng: number) => {
+    const dest = tripDestRef.current
+    if (!dest) return
+    const vehicle = await resolveTripVehicle()
+    if (!vehicle) return
+    setRecalculating(true)
+    try {
+      const res = await fetch(`${BACKEND}/route`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origin: { lat: fromLat, lng: fromLng }, destination: { lat: dest.lat, lng: dest.lng }, vehicle }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.route) throw new Error(data.error ?? 'No se pudo recalcular la ruta')
+      setCurrentRoute(data.route)
+      webRef.current?.injectJavaScript(`drawRoute(${JSON.stringify(data.route.segments)}); true;`)
+      // El monitor pasa a vigilar la ruta nueva; arranca de cero para no
+      // arrastrar la racha del desvío recién resuelto.
+      const nuevos = (data.route.segments ?? []).flatMap((s: any) => s.coordinates ?? [])
+      if (nuevos.length >= 2) tripRouteRef.current = nuevos.map(toLatLng)
+      monitorRef.current = createDeviationMonitor()
+    } catch {
+      // Silencioso por ahora; el aviso de fallo de recálculo se define en el paso 4.
+    } finally {
+      setRecalculating(false)
+    }
+  }
+
+  // GPS tracking + detección de desvío para el viaje en curso.
+  // Frecuencia de muestreo a 5s (antes 15s): 15s es demasiado grueso para
+  // detectar un desvío a tiempo. El envío de ubicación a la central se mantiene
+  // throttled a 15s para no multiplicar la carga del servidor.
   useEffect(() => {
     if (!tripSheet || tripSheet.status !== 'in_progress') {
       if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
       return
     }
-    const sendGps = async () => {
+    monitorRef.current = createDeviationMonitor() // racha limpia al arrancar el viaje
+    let lastSentAt = 0
+    const tick = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync()
       if (status !== 'granted') return
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-      await sendLocation(loc.coords.latitude, loc.coords.longitude, String(tripSheet.id), profile?.full_name ?? 'Conductor', tripSheet.truck_patente ?? undefined).catch(() => null)
+      const lat = loc.coords.latitude, lng = loc.coords.longitude
+      const nowMs = Date.now()
+      // 1) Compartir ubicación con la central (throttled a 15s)
+      if (nowMs - lastSentAt >= 15_000) {
+        lastSentAt = nowMs
+        await sendLocation(lat, lng, String(tripSheet.id), profile?.full_name ?? 'Conductor', tripSheet.truck_patente ?? undefined).catch(() => null)
+      }
+      // 2) Detección de desvío contra la ruta planificada
+      const route = tripRouteRef.current
+      const origin = tripOriginRef.current
+      const dest = tripDestRef.current
+      if (route.length >= 2 && origin && dest) {
+        const r = stepDeviationMonitor(monitorRef.current, { point: { lat, lng }, route, origin, destination: dest, now: nowMs })
+        monitorRef.current = r.state
+        if (r.triggered) void recalculateAfterDeviation(lat, lng)
+      }
     }
-    void sendGps()
-    gpsIntervalRef.current = setInterval(() => void sendGps(), 15_000)
+    void tick()
+    gpsIntervalRef.current = setInterval(() => void tick(), 5_000)
     return () => { if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null } }
   }, [tripSheet?.id, tripSheet?.status])
 
