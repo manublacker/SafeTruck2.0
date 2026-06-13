@@ -295,6 +295,11 @@ export default function MapScreen() {
   const tripDestRef = useRef<LatLng | null>(null)
   const tripVehicleRef = useRef<{ weight_kg: number; height_m: number; width_m: number } | null>(null)
   const [recalculating, setRecalculating] = useState(false)
+  // Aviso "te desviaste" (globito): se muestra al confirmar un desvío y se va solo.
+  const [deviationNotice, setDeviationNotice] = useState(false)
+  const deviationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Espejo de navMode para leerlo dentro de callbacks del GPS (closures).
+  const navModeRef = useRef(false)
 
   const loadTripById = useCallback(async (id: string) => {
     try {
@@ -365,6 +370,11 @@ export default function MapScreen() {
       if (!res.ok || !data.route) throw new Error(data.error ?? 'No se pudo recalcular la ruta')
       setCurrentRoute(data.route)
       webRef.current?.injectJavaScript(`drawRoute(${JSON.stringify(data.route.segments)}); true;`)
+      // En navegación, `drawRoute` hace fitBounds y sacaría la cámara de encima
+      // del chofer: la devolvemos a su posición (el próximo navUpdate la sigue).
+      if (navModeRef.current) {
+        webRef.current?.injectJavaScript(`map.setView([${fromLat}, ${fromLng}], 17, { animate: true }); true;`)
+      }
       // El monitor pasa a vigilar la ruta nueva; arranca de cero para no
       // arrastrar la racha del desvío recién resuelto.
       const nuevos = (data.route.segments ?? []).flatMap((s: any) => s.coordinates ?? [])
@@ -375,6 +385,14 @@ export default function MapScreen() {
     } finally {
       setRecalculating(false)
     }
+  }
+
+  // Muestra el globito "te desviaste" y lo descarta solo a los pocos segundos,
+  // sin requerir que el chofer toque nada.
+  const flashDeviationNotice = () => {
+    setDeviationNotice(true)
+    if (deviationTimeoutRef.current) clearTimeout(deviationTimeoutRef.current)
+    deviationTimeoutRef.current = setTimeout(() => setDeviationNotice(false), 5_000)
   }
 
   // GPS tracking + detección de desvío para el viaje en curso.
@@ -406,12 +424,19 @@ export default function MapScreen() {
       if (route.length >= 2 && origin && dest) {
         const r = stepDeviationMonitor(monitorRef.current, { point: { lat, lng }, route, origin, destination: dest, now: nowMs })
         monitorRef.current = r.state
-        if (r.triggered) void recalculateAfterDeviation(lat, lng)
+        if (r.triggered) {
+          flashDeviationNotice()
+          void recalculateAfterDeviation(lat, lng)
+        }
       }
     }
     void tick()
     gpsIntervalRef.current = setInterval(() => void tick(), 5_000)
-    return () => { if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null } }
+    return () => {
+      if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
+      if (deviationTimeoutRef.current) { clearTimeout(deviationTimeoutRef.current); deviationTimeoutRef.current = null }
+      setDeviationNotice(false)
+    }
   }, [tripSheet?.id, tripSheet?.status])
 
   const handleTripAction = async (newStatus: AssignedTrip['status']) => {
@@ -697,8 +722,14 @@ export default function MapScreen() {
   const startNavigation = async () => {
     if (!location) return
     setNavMode(true)
+    navModeRef.current = true
     setShowInfo(false)
-    const heading = null
+    // Alimentar el monitor de desvío con la ruta calculada y sus extremos.
+    const segs = currentRoute?.segments ?? []
+    tripRouteRef.current = segs.flatMap((seg: any) => seg.coordinates ?? []).map(toLatLng)
+    tripOriginRef.current = originCoords ?? location
+    tripDestRef.current = destination ?? null
+    monitorRef.current = createDeviationMonitor()
     webRef.current?.injectJavaScript(`enterNavMode(${location.lat}, ${location.lng}, null); true;`)
     watchRef.current = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 5 },
@@ -707,6 +738,16 @@ export default function MapScreen() {
         const hdg = pos.coords.heading != null && pos.coords.heading >= 0 ? pos.coords.heading : null
         setLocation(c)
         webRef.current?.injectJavaScript(`navUpdate(${c.lat}, ${c.lng}, ${hdg}); true;`)
+        // Detección de desvío durante la navegación manual
+        const route = tripRouteRef.current, origin = tripOriginRef.current, dest = tripDestRef.current
+        if (route.length >= 2 && origin && dest) {
+          const r = stepDeviationMonitor(monitorRef.current, { point: c, route, origin, destination: dest, now: Date.now() })
+          monitorRef.current = r.state
+          if (r.triggered) {
+            flashDeviationNotice()
+            void recalculateAfterDeviation(c.lat, c.lng)
+          }
+        }
       }
     )
   }
@@ -714,6 +755,9 @@ export default function MapScreen() {
   const stopNavigation = () => {
     if (!watchRef.current) return
     setNavMode(false)
+    navModeRef.current = false
+    if (deviationTimeoutRef.current) { clearTimeout(deviationTimeoutRef.current); deviationTimeoutRef.current = null }
+    setDeviationNotice(false)
     watchRef.current.remove()
     watchRef.current = null
     setLocation(loc => {
@@ -749,6 +793,23 @@ export default function MapScreen() {
     } catch {}
   }
 
+  // Vista de navegación estilo Waze: viaje asignado en curso O navegación manual.
+  const tripActive = tripSheet?.status === 'in_progress'
+  const navigating = tripActive || navMode
+  // Destino a mostrar arriba: el del viaje asignado o el buscado a mano.
+  const navDestLabel = tripActive ? (tripSheet?.destination_label ?? 'Destino') : (searchText || 'Destino')
+  // Métricas: la ruta recalculada/calculada si existe, si no las del viaje asignado.
+  const navDistanceKm = currentRoute?.total_distance_km
+    ?? (tripSheet?.distance_m != null ? (tripSheet.distance_m / 1000).toFixed(1) : null)
+  const navDurationMin = currentRoute?.total_duration_min ?? tripSheet?.duration_min ?? null
+  // Hora estimada de llegada = ahora + duración.
+  const navEta = navDurationMin != null
+    ? (() => {
+        const d = new Date(Date.now() + Number(navDurationMin) * 60_000)
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+      })()
+    : null
+
   return (
     <View style={s.container}>
       <WebView
@@ -762,7 +823,8 @@ export default function MapScreen() {
         originWhitelist={['*']}
       />
 
-      {/* Header */}
+      {/* Header — buscador origen/destino. Se oculta mientras se navega. */}
+      {!navigating && (
       <View style={s.header}>
         {/* Barra de búsqueda: Origen + Destino */}
         <View style={s.searchRow}>
@@ -875,16 +937,42 @@ export default function MapScreen() {
           </View>
         )}
       </View>
+      )}
+
+      {/* ── Barra superior de navegación (estilo Waze) ──────────────────── */}
+      {navigating && (
+        <View style={s.navTopBar}>
+          <View style={s.navTopIcon}>
+            <Ionicons name="navigate" size={16} color="#fff" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.navTopLabel}>Hacia</Text>
+            <Text style={s.navTopDest} numberOfLines={1}>{navDestLabel}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Globito "te desviaste" — aparece al confirmar el desvío y se va solo */}
+      {deviationNotice && (
+        <View style={s.deviationToast}>
+          {recalculating
+            ? <ActivityIndicator size="small" color={t.warning} />
+            : <Ionicons name="warning" size={16} color={t.warning} />}
+          <Text style={s.deviationToastText}>
+            {recalculating ? 'Te desviaste, recalculando ruta…' : 'Te desviaste de la ruta'}
+          </Text>
+        </View>
+      )}
 
       {/* Banner sin vehículo — solo tras confirmar que realmente no hay ninguno */}
-      {!activeVehicle && checkedVehicles && (
+      {!activeVehicle && checkedVehicles && !navigating && (
         <View style={s.banner}>
           <Text style={s.bannerText}>⚠️ Configurá tu camión en Perfil</Text>
         </View>
       )}
 
       {/* Hint inicial */}
-      {!currentRoute && !loading && activeVehicle && !reportMode && searchText.length === 0 && (
+      {!currentRoute && !loading && activeVehicle && !reportMode && searchText.length === 0 && !navigating && (
         <View style={s.hintPill}>
           <Text style={s.hintPillText}>Buscá un destino o tocá el mapa</Text>
         </View>
@@ -953,26 +1041,9 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* HUD de navegación */}
-      {navMode && currentRoute && (
-        <View style={s.navHUD}>
-          <View style={{ flex: 1, marginRight: 16 }}>
-            <Text style={s.navDest} numberOfLines={1}>{searchText || 'Destino'}</Text>
-            <View style={s.navStats}>
-              <Text style={s.navStat}>{currentRoute.total_distance_km} km</Text>
-              <Text style={s.navStatDot}>·</Text>
-              <Text style={s.navStat}>{currentRoute.total_duration_min} min</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={s.navStopBtn} onPress={stopNavigation}>
-            <Ionicons name="stop" size={22} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* FAB de reporte */}
       <TouchableOpacity
-        style={[s.fab, reportMode && s.fabActive, showInfo && currentRoute && !navMode && s.fabRaised, navMode && s.fabNavRaised]}
+        style={[s.fab, reportMode && s.fabActive, showInfo && currentRoute && !navMode && s.fabRaised, navigating && s.fabTripRaised]}
         onPress={toggleReportMode}
         activeOpacity={0.85}
       >
@@ -1016,8 +1087,8 @@ export default function MapScreen() {
         </View>
       </Modal>
 
-      {/* ── Trip Sheet (Google Maps style bottom panel) ─────────────── */}
-      {tripSheet && !navMode && !showInfo && (
+      {/* ── Trip Sheet (panel inferior, viaje no iniciado) ─────────────── */}
+      {tripSheet && !navMode && !showInfo && !tripActive && (
         <View style={s.tripSheet}>
           {/* Handle */}
           <View style={s.tripSheetHandle} />
@@ -1094,6 +1165,38 @@ export default function MapScreen() {
           )}
         </View>
       )}
+
+      {/* ── Barra de navegación inferior (estilo Waze) ─────────────────── */}
+      {navigating && !showInfo && (
+        <View style={s.navBar}>
+          {/* Izquierda: tiempo + distancia · Derecha: hora de llegada */}
+          <View style={s.navBarMetrics}>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={s.navBarTime}>{navDurationMin != null ? `${navDurationMin} min` : '—'}</Text>
+              <Text style={s.navBarDist}>{navDistanceKm != null ? `${navDistanceKm} km` : ''}</Text>
+            </View>
+            {navEta != null && (
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={s.navEtaTime}>{navEta}</Text>
+                <Text style={s.navEtaLabel}>LLEGADA</Text>
+              </View>
+            )}
+          </View>
+          {tripActive ? (
+            tripUpdating ? (
+              <ActivityIndicator color={t.accent} />
+            ) : (
+              <TouchableOpacity style={s.navArriveBtn} onPress={() => handleTripAction('completed')}>
+                <Text style={s.navArriveBtnText}>Llegué al destino</Text>
+              </TouchableOpacity>
+            )
+          ) : (
+            <TouchableOpacity style={[s.navArriveBtn, { backgroundColor: t.danger }]} onPress={stopNavigation}>
+              <Text style={s.navArriveBtnText}>Terminar navegación</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </View>
   )
 }
@@ -1141,6 +1244,7 @@ function makeStyles(t: Theme) {
     fabActive: { backgroundColor: t.danger, shadowColor: t.danger },
     fabRaised: { bottom: 210 },
     fabNavRaised: { bottom: 105 },
+    fabTripRaised: { bottom: 250 },
 
     playFab: {
       position: 'absolute', bottom: 284, right: 16,
@@ -1168,6 +1272,54 @@ function makeStyles(t: Theme) {
       width: 50, height: 50, alignItems: 'center', justifyContent: 'center',
       marginRight: 2,
     },
+
+    // ── Vista de navegación estilo Waze (viaje en curso) ──────────────
+    navTopBar: {
+      position: 'absolute', top: 52, left: 16, right: 16,
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      backgroundColor: t.card, borderRadius: 14,
+      borderWidth: 1, borderColor: t.cardBorder,
+      paddingHorizontal: 14, paddingVertical: 12,
+      shadowColor: '#000', shadowOpacity: isDarkTheme(t) ? 0.4 : 0.12,
+      shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
+    },
+    navTopIcon: {
+      width: 34, height: 34, borderRadius: 17,
+      backgroundColor: t.accent, alignItems: 'center', justifyContent: 'center',
+    },
+    navTopLabel: { color: t.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
+    navTopDest: { color: t.text, fontSize: 17, fontWeight: '700', marginTop: 1 },
+
+    deviationToast: {
+      position: 'absolute', top: 120, left: 24, right: 24,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+      backgroundColor: t.card, borderRadius: 999,
+      borderWidth: 1, borderColor: t.warning,
+      paddingHorizontal: 16, paddingVertical: 10,
+      shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 7,
+    },
+    deviationToastText: { color: t.warning, fontSize: 13, fontWeight: '700' },
+
+    navBar: {
+      position: 'absolute', bottom: 0, left: 0, right: 0,
+      backgroundColor: t.card,
+      borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      borderTopWidth: 1, borderColor: t.border,
+      paddingTop: 16, paddingBottom: 32, paddingHorizontal: 20,
+      alignItems: 'center', gap: 14,
+      shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16,
+      shadowOffset: { width: 0, height: -4 }, elevation: 12,
+    },
+    navBarMetrics: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 36 },
+    navBarTime: { color: t.accent, fontSize: 32, fontWeight: '700', letterSpacing: -0.5 },
+    navBarDist: { color: t.text, fontSize: 16, fontWeight: '600', marginTop: 2 },
+    navEtaTime: { color: t.text, fontSize: 26, fontWeight: '700', letterSpacing: -0.5 },
+    navEtaLabel: { color: t.textMuted, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.8, marginTop: 1 },
+    navArriveBtn: {
+      backgroundColor: t.accent, borderRadius: 12,
+      paddingVertical: 14, alignSelf: 'stretch', alignItems: 'center',
+    },
+    navArriveBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 
     searchResults: {
       backgroundColor: t.card, borderRadius: 10,
