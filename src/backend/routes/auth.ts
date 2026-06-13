@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { authMiddleware } from "../middleware/authMiddleware";
 import { supabase } from "../supabaseClient";
+import pool from "../db";
 
 const router = Router();
 
@@ -31,6 +32,24 @@ router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
 
   const full_name = (req.body?.full_name ?? meta["full_name"] ?? null) as string | null;
   const company = (req.body?.company ?? meta["company"] ?? null) as string | null;
+
+  // Sincronizar usuario en Aiven (FK requerida por trucks y drivers).
+  // ON CONFLICT DO UPDATE para mantener email/nombre actualizados.
+  try {
+    await pool.query(
+      `INSERT INTO users (id, email, full_name, company)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (id) DO UPDATE
+         SET email     = EXCLUDED.email,
+             full_name = COALESCE(EXCLUDED.full_name, users.full_name),
+             company   = COALESCE(EXCLUDED.company,   users.company)`,
+      [user.id, user.email, full_name, company]
+    );
+  } catch (err) {
+    // No bloqueante: si falla, el usuario igual puede operar.
+    // El error más común aquí sería que la tabla no exista en Aiven.
+    console.error("[auth/profile] Error sincronizando usuario en Aiven:", err);
+  }
 
   // Leer el plan: primero desde st_subscriptions (fuente de verdad de billing),
   // luego fallback a st_profiles (usuarios mobile), luego null.

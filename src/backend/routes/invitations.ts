@@ -178,6 +178,15 @@ router.post('/register', async (req: Request, res: Response) => {
     }
     const driverUserId = authData.user.id
 
+    // Sincronizar el nuevo conductor en la tabla users de Aiven.
+    // Necesario antes del BEGIN porque drivers.user_id tiene FK a users(id).
+    await pool.query(
+      `INSERT INTO users (id, email, full_name)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (id) DO NOTHING`,
+      [driverUserId, email.trim().toLowerCase(), full_name.trim()]
+    )
+
     await pool.query('BEGIN')
     try {
       let driverId: number
