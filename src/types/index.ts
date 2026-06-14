@@ -55,14 +55,16 @@ export interface Incident {
 }
 
 export type IncidentType =
-  | 'fine'
-  | 'accident'
-  | 'police_check'
-  | 'road_work'
-  | 'low_bridge'
-  | 'weight_check'
-  | 'road_closed'
-  | 'other'
+  | 'multa'
+  | 'accidente'
+  | 'control_policial'
+  | 'obra'
+  | 'puente_bajo'
+  | 'control_peso'
+  | 'corte'
+  | 'otro'
+  | 'trafico'
+  | 'objeto_en_via'
 
 export interface RouteSegment {
   id: string

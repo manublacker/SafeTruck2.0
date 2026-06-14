@@ -18,11 +18,7 @@ const router = Router();
 router.post("/", async (req: Request, res: Response) => {
   const { incident_type, lat, lon, notes } = req.body;
 
-  // Tipos del mobile (inglés) + tipos legacy (español)
-  const validTypes = [
-    'fine', 'police_check', 'accident', 'road_work', 'low_bridge', 'road_closed', 'weight_check', 'other',
-    'accidente', 'trafico', 'obra', 'control_policial', 'objeto_en_via', 'corte',
-  ];
+  const validTypes = ['multa', 'accidente', 'control_policial', 'obra', 'puente_bajo', 'corte', 'control_peso', 'otro', 'trafico', 'objeto_en_via'];
 
   if (!incident_type || !validTypes.includes(incident_type)) {
     res.status(400).json({ error: "incident_type inválido." });

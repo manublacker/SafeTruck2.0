@@ -43,13 +43,13 @@ const BACKEND = (process.env.EXPO_PUBLIC_API_URL ?? 'https://safetruck20-product
 // ─────────────────────────────────────────────────────────────────────────────
 
 const INCIDENT_TYPES = [
-  { key: 'fine',         label: '💸 Multa a camión',    creates_block: true  },
-  { key: 'police_check', label: '👮 Control policial',  creates_block: false },
-  { key: 'accident',     label: '🚨 Accidente',         creates_block: false },
-  { key: 'road_work',    label: '🚧 Obras',             creates_block: false },
-  { key: 'low_bridge',   label: '🌉 Puente bajo',       creates_block: true  },
-  { key: 'road_closed',  label: '🚫 Calle cerrada',     creates_block: true  },
-  { key: 'weight_check', label: '⚖️ Control de peso',  creates_block: false },
+  { key: 'multa',            label: '💸 Multa a camión',    creates_block: true  },
+  { key: 'control_policial', label: '👮 Control policial',  creates_block: false },
+  { key: 'accidente',        label: '🚨 Accidente',         creates_block: false },
+  { key: 'obra',             label: '🚧 Obras',             creates_block: false },
+  { key: 'puente_bajo',      label: '🌉 Puente bajo',       creates_block: true  },
+  { key: 'corte',            label: '🚫 Calle cerrada',     creates_block: true  },
+  { key: 'control_peso',     label: '⚖️ Control de peso',  creates_block: false },
 ]
 
 const MAP_HTML = `
@@ -129,9 +129,9 @@ html,body,#map { width:100%;height:100%; }
   }
 
   var ICONS = {
-    fine:'💸', police_check:'👮', accident:'🚨',
-    road_work:'🚧', low_bridge:'🌉', road_closed:'🚫',
-    weight_check:'⚖️', other:'⚠️'
+    multa:'💸', control_policial:'👮', accidente:'🚨',
+    obra:'🚧', puente_bajo:'🌉', corte:'🚫',
+    control_peso:'⚖️', otro:'⚠️', trafico:'🚗', objeto_en_via:'⚠️'
   };
 
   function addIncidentMarker(lat, lng, type) {

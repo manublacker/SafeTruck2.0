@@ -18,14 +18,16 @@ export const ROUTING = {
 }
 
 export const INCIDENT_LABELS: Record<string, string> = {
-  fine: '💸 Multa a camión',
-  accident: '🚨 Accidente',
-  police_check: '👮 Control policial',
-  road_work: '🚧 Obras',
-  low_bridge: '🌉 Puente bajo',
-  weight_check: '⚖️ Control de peso',
-  road_closed: '�� Calle cerrada',
-  other: '⚠️ Otro',
+  multa:            '💸 Multa a camión',
+  accidente:        '🚨 Accidente',
+  control_policial: '👮 Control policial',
+  obra:             '🚧 Obras',
+  puente_bajo:      '🌉 Puente bajo',
+  control_peso:     '⚖️ Control de peso',
+  corte:            '🚫 Calle cerrada',
+  otro:             '⚠️ Otro',
+  trafico:          '🚗 Tráfico',
+  objeto_en_via:    '⚠️ Objeto en vía',
 }
 
 export const COLORS = {

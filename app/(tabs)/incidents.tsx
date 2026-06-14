@@ -13,28 +13,32 @@ async function authHeaders(): Promise<Record<string, string>> {
 }
 
 const INCIDENT_LABELS: Record<string, string> = {
-  fine:         '💸 Multa a camión',
-  police_check: '👮 Control policial',
-  accident:     '🚨 Accidente',
-  road_work:    '🚧 Obras',
-  low_bridge:   '🌉 Puente bajo',
-  road_closed:  '🚫 Calle cerrada',
-  weight_check: '⚖️ Control de peso',
-  other:        '⚠️ Otro',
+  multa:            '💸 Multa a camión',
+  control_policial: '👮 Control policial',
+  accidente:        '🚨 Accidente',
+  obra:             '🚧 Obras',
+  puente_bajo:      '🌉 Puente bajo',
+  corte:            '🚫 Calle cerrada',
+  control_peso:     '⚖️ Control de peso',
+  otro:             '⚠️ Otro',
+  trafico:          '🚗 Tráfico',
+  objeto_en_via:    '⚠️ Objeto en vía',
 }
 
 const INCIDENT_COLORS: Record<string, string> = {
-  fine:         '#FF3B30',
-  police_check: '#FF9500',
-  accident:     '#FF3B30',
-  road_work:    '#FF9500',
-  low_bridge:   '#FF3B30',
-  road_closed:  '#FF3B30',
-  weight_check: '#FF9500',
-  other:        '#8E8E93',
+  multa:            '#FF3B30',
+  control_policial: '#FF9500',
+  accidente:        '#FF3B30',
+  obra:             '#FF9500',
+  puente_bajo:      '#FF3B30',
+  corte:            '#FF3B30',
+  control_peso:     '#FF9500',
+  otro:             '#8E8E93',
+  trafico:          '#FF9500',
+  objeto_en_via:    '#FF9500',
 }
 
-const FILTERS = ['fine', 'accident', 'police_check', 'road_work', 'low_bridge', 'road_closed']
+const FILTERS = ['multa', 'accidente', 'control_policial', 'obra', 'puente_bajo', 'corte']
 
 export default function IncidentsScreen() {
   const profile = useStore(s => s.profile)
