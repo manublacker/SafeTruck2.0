@@ -13,6 +13,12 @@ import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
 import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, type AssignedTrip } from '../../src/services/assignedTrips'
 
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 const BACKEND = "https://safetruck20-production.up.railway.app"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -399,12 +405,14 @@ export default function MapScreen() {
   }
 
   const loadIncidents = async () => {
-    const { data } = await supabase
-      .from('st_incidents')
-      .select('*')
-      .eq('is_active', true)
-      .gt('expires_at', new Date().toISOString())
-    if (data) webRef.current?.injectJavaScript(`loadIncidents(${JSON.stringify(data)}); true;`)
+    try {
+      const res = await fetch(`${BACKEND}/api/incidents`)
+      const json = await res.json()
+      const data = json.incidents ?? []
+      webRef.current?.injectJavaScript(`loadIncidents(${JSON.stringify(data)}); true;`)
+    } catch (e) {
+      console.log('loadIncidents error:', e)
+    }
   }
 
   // Abre el modal de denuncia. Por defecto apunta a la ubicación actual (GPS):
@@ -485,24 +493,8 @@ export default function MapScreen() {
       setDestination({ lat: destLat, lng: destLng })
       setShowInfo(true)
 
-      if (profile && activeVehicle) {
-        const [originAddr, destAddr] = await Promise.all([
-          reverseGeocode(location.lat, location.lng),
-          searchText ? Promise.resolve(searchText) : reverseGeocode(destLat, destLng),
-        ])
-        supabase.rpc('insert_trip', {
-          p_user_id: profile.id,
-          p_vehicle_id: activeVehicle.id,
-          p_origin_lat: location.lat,
-          p_origin_lng: location.lng,
-          p_dest_lat: destLat,
-          p_dest_lng: destLng,
-          p_origin_address: originAddr,
-          p_dest_address: destAddr,
-          p_distance_km: data.route.total_distance_km,
-          p_duration_min: data.route.total_duration_min,
-        }).then(({ error }) => { if (error) console.log('Trip error:', error) })
-      }
+      // insert_trip (st_trips) eliminado en Fase 3 — el historial de viajes
+      // se registra en assigned_trips via /api/assigned-trips.
 
       webRef.current?.injectJavaScript(`drawRoute(${JSON.stringify(data.route.segments)}); true;`)
     } catch (e: any) {
@@ -516,23 +508,20 @@ export default function MapScreen() {
     if (!incidentLocation || !profile) return
     setReportingIncident(true)
     try {
-      // ── (1) CAPA VISUAL — Supabase st_incidents ───────────────────────────
-      // Marcador efímero tipo Waze (realtime + expiración) que ven otros choferes.
-      // NO afecta el ruteo; es sólo presentación. Se mantiene en paralelo a propósito.
-      const { data: incidentId, error } = await supabase.rpc('insert_incident', {
-        p_user_id: profile.id,
-        p_lat: incidentLocation.lat,
-        p_lng: incidentLocation.lng,
-        p_type: type,
+      // ── (1) Registrar incidente en la tabla incidents via API ─────────────
+      const headers = await authHeaders()
+      const incRes = await fetch(`${BACKEND}/api/incidents`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          incident_type: type,
+          lat: incidentLocation.lat,
+          lon: incidentLocation.lng,
+        }),
       })
-      if (error) throw error
-      if (creates_block) {
-        await supabase.rpc('insert_cooperative_block', {
-          p_incident_id: incidentId,
-          p_lat: incidentLocation.lat,
-          p_lng: incidentLocation.lng,
-          p_reason: type,
-        })
+      if (!incRes.ok) {
+        const err = await incRes.json().catch(() => ({}))
+        throw new Error((err as any).error ?? 'Error al registrar incidente')
       }
 
       // ── (2) CAPA DE PESO — backend Aiven (POST /reports) ──────────────────

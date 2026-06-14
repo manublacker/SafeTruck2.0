@@ -8,6 +8,7 @@
 
 import { Router, Request, Response } from "express";
 import pool from "../db";
+import { authMiddleware } from "../middleware/authMiddleware";
 
 const router = Router();
 
@@ -67,10 +68,40 @@ router.post("/", async (req: Request, res: Response) => {
 // Devuelve todos los incidentes activos para mostrar en el mapa.
 router.get("/", async (_req: Request, res: Response) => {
   try {
-    const result = await pool.query("SELECT * FROM get_active_incidents()");
+    const result = await pool.query(
+      `SELECT id, arista_id, incident_type, lat, lon,
+              expires_at, confirmed_count, reported_at, user_id
+       FROM incidents
+       WHERE active = TRUE AND expires_at > NOW()
+       ORDER BY reported_at DESC`
+    );
     res.status(200).json({ incidents: result.rows });
   } catch (error) {
     console.error("Error en GET /api/incidents:", error);
+    res.status(500).json({ error: "Error interno del servidor." });
+  }
+});
+
+// PATCH /api/incidents/:id/deactivate
+// El conductor que creó el incidente lo marca como resuelto.
+router.patch("/:id/deactivate", authMiddleware, async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `UPDATE incidents SET active = FALSE
+       WHERE id = $1 AND user_id = $2 AND active = TRUE
+       RETURNING id`,
+      [id, userId]
+    );
+    if (!result.rowCount) {
+      res.status(404).json({ error: "Incidente no encontrado o sin permiso." });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Error en PATCH /api/incidents/:id/deactivate:", error);
     res.status(500).json({ error: "Error interno del servidor." });
   }
 });

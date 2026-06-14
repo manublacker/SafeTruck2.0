@@ -4,6 +4,14 @@ import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 
+const BACKEND = 'https://safetruck20-production.up.railway.app'
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 const INCIDENT_LABELS: Record<string, string> = {
   fine:         '💸 Multa a camión',
   police_check: '👮 Control policial',
@@ -40,31 +48,35 @@ export default function IncidentsScreen() {
 
   useEffect(() => {
     loadIncidents()
-    const sub = supabase
-      .channel('incidents')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'st_incidents' }, () => loadIncidents())
-      .subscribe()
-    return () => { supabase.removeChannel(sub) }
   }, [])
 
   const loadIncidents = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('st_incidents')
-      .select('*')
-      .eq('is_active', true)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-    setIncidents(data || [])
-    setLoading(false)
+    try {
+      const res = await fetch(`${BACKEND}/api/incidents`)
+      const json = await res.json()
+      setIncidents(json.incidents ?? [])
+    } catch (e) {
+      console.log('loadIncidents error:', e)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const deactivate = async (incidentId: string) => {
+  const deactivate = async (incidentId: string | number) => {
     Alert.alert('Desactivar', '¿Este incidente ya no está activo?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Sí', style: 'destructive', onPress: async () => {
-        await supabase.from('st_incidents').update({ is_active: false }).eq('id', incidentId)
-        loadIncidents()
+        try {
+          const headers = await authHeaders()
+          await fetch(`${BACKEND}/api/incidents/${incidentId}/deactivate`, {
+            method: 'PATCH',
+            headers,
+          })
+          loadIncidents()
+        } catch (e) {
+          console.log('deactivate error:', e)
+        }
       }},
     ])
   }
@@ -129,17 +141,14 @@ export default function IncidentsScreen() {
             <View style={s.cardBody}>
               <View style={s.cardTop}>
                 <Text style={s.cardType}>{INCIDENT_LABELS[item.incident_type] || '⚠️ Incidente'}</Text>
-                <Text style={s.cardTime}>{timeAgo(item.created_at)}</Text>
+                <Text style={s.cardTime}>{timeAgo(item.reported_at)}</Text>
               </View>
               <View style={s.cardBottom}>
                 <Text style={s.cardExpiry}>⏱ Expira {timeAgo(item.expires_at)}</Text>
                 {/* --dash-vote-btn: pill */}
                 <View style={s.votes}>
                   <TouchableOpacity style={s.voteBtn}>
-                    <Text style={s.voteBtnText}>👍 {item.upvotes || 0}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.voteBtn}>
-                    <Text style={s.voteBtnText}>👎 {item.downvotes || 0}</Text>
+                    <Text style={s.voteBtnText}>✅ {item.confirmed_count || 0}</Text>
                   </TouchableOpacity>
                   {item.user_id === profile?.id && (
                     <TouchableOpacity
