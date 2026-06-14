@@ -51,6 +51,15 @@ router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
     console.error("[auth/profile] Error sincronizando usuario en Aiven:", err);
   }
 
+  // Garantizar que existe una fila en profiles para este usuario.
+  // Upsert silencioso: si ya existe, no sobreescribe el plan ni otros campos.
+  try {
+    await supabase.from("profiles").upsert(
+      { id: user.id, full_name: full_name ?? user.email },
+      { onConflict: "id", ignoreDuplicates: true }
+    );
+  } catch { /* no bloqueante */ }
+
   // Leer el plan: primero desde subscriptions (fuente de verdad de billing),
   // luego fallback a profiles (usuarios mobile), luego null.
   let plan: string | null = null;
