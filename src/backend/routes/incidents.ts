@@ -15,7 +15,7 @@ const router = Router();
 // POST /api/incidents
 // Recibe un reporte de incidente en vía.
 // Busca la arista más cercana al punto tocado y llama a reportar_incidente().
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", authMiddleware, async (req: Request, res: Response) => {
   const { incident_type, lat, lon, notes } = req.body;
 
   const validTypes = ['multa', 'accidente', 'control_policial', 'obra', 'puente_bajo', 'corte', 'control_peso', 'otro', 'trafico', 'objeto_en_via'];
@@ -50,7 +50,7 @@ router.post("/", async (req: Request, res: Response) => {
     // inserto el incidente con su tiempo de expiración
     const resIncident = await pool.query(
       "SELECT reportar_incidente($1, $2, $3, $4, $5, $6) AS id",
-      [aristaId, incident_type, lat, lon, req.user?.id ?? null, notes ?? null]
+      [aristaId, incident_type, lat, lon, req.user!.id, notes ?? null]
     );
 
     res.status(201).json({
