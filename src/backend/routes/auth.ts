@@ -24,7 +24,7 @@ router.get("/me", authMiddleware, async (req: Request, res: Response) => {
 
 // POST /api/auth/profile — Devuelve el perfil del usuario.
 // En el 2.0 el perfil vive en Supabase auth user_metadata, así que esto
-// se reduce a devolver los datos del token + plan de st_profiles.
+// se reduce a devolver los datos del token + plan de profiles.
 router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
   const user = req.user!;
   const meta = user.user_metadata ?? {};
@@ -51,12 +51,12 @@ router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
     console.error("[auth/profile] Error sincronizando usuario en Aiven:", err);
   }
 
-  // Leer el plan: primero desde st_subscriptions (fuente de verdad de billing),
-  // luego fallback a st_profiles (usuarios mobile), luego null.
+  // Leer el plan: primero desde subscriptions (fuente de verdad de billing),
+  // luego fallback a profiles (usuarios mobile), luego null.
   let plan: string | null = null;
   try {
     const { data: sub } = await supabase
-      .from("st_subscriptions")
+      .from("subscriptions")
       .select("plan, status")
       .eq("user_id", user.id)
       .eq("status", "active")
@@ -68,7 +68,7 @@ router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
       plan = sub.plan;
     } else {
       const { data: profile } = await supabase
-        .from("st_profiles")
+        .from("profiles")
         .select("plan")
         .eq("id", user.id)
         .maybeSingle();

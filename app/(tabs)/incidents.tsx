@@ -4,7 +4,7 @@ import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 
-const BACKEND = 'https://safetruck20-production.up.railway.app'
+const BACKEND = (process.env.EXPO_PUBLIC_API_URL ?? 'https://safetruck20-production.up.railway.app').replace(/\/$/, '')
 
 async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession()

@@ -88,7 +88,7 @@ export async function signUpWithEmail(params: SignUpParams): Promise<void> {
 
 /**
  * Verifica el código OTP de registro. Devuelve el id del usuario autenticado,
- * necesario para crear su fila en `st_profiles`.
+ * necesario para crear su fila en `profiles`.
  */
 export async function verifySignupOtp(email: string, code: string): Promise<string> {
   const { data, error } = await supabase.auth.verifyOtp({
@@ -148,9 +148,9 @@ export interface CreateProfileParams {
   fleetSize: string
 }
 
-/** Crea (o reemplaza) la fila del usuario en `st_profiles` al cerrar el registro. */
+/** Crea (o reemplaza) la fila del usuario en `profiles` al cerrar el registro. */
 export async function upsertProfile(params: CreateProfileParams): Promise<void> {
-  const { error } = await supabase.from('st_profiles').upsert({
+  const { error } = await supabase.from('profiles').upsert({
     id: params.userId,
     full_name: params.fullName,
     company_name: params.companyName,

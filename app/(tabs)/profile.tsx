@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, ActivityIndicator,
+  ScrollView, ActivityIndicator, RefreshControl,
 } from 'react-native'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
@@ -64,6 +64,7 @@ function NavRow({ label, detail, danger = false, isLast = false, onPress }: {
 export default function ProfileScreen() {
   const profile = useStore(s => s.profile)
   const setProfile = useStore(s => s.setProfile)
+  const setActiveVehicle = useStore(s => s.setActiveVehicle)
   const isDark = useStore(s => s.isDark)
   const t = getTheme(isDark)
 
@@ -80,9 +81,24 @@ export default function ProfileScreen() {
       fetchMyAssignedTruck(),
     ])
     if (dp.status === 'fulfilled') setDriverProfile(dp.value)
-    if (at.status === 'fulfilled') setAssignedTruck(at.value)
+    if (at.status === 'fulfilled') {
+      setAssignedTruck(at.value)
+      setActiveVehicle(at.value ? {
+        id:         String(at.value.id),
+        user_id:    '',
+        plate:      at.value.patente ?? '',
+        name:       at.value.name,
+        weight_kg:  at.value.max_weight_kg,
+        height_m:   at.value.max_height_m,
+        width_m:    at.value.max_width_m,
+        length_m:   at.value.max_length_m,
+        axles:      0,
+        is_default: true,
+        created_at: '',
+      } : null)
+    }
     setProfileLoading(false)
-  }, [])
+  }, [setActiveVehicle])
 
   useEffect(() => { void load() }, [load])
 
@@ -99,7 +115,11 @@ export default function ProfileScreen() {
     .toUpperCase() ?? '?'
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: bgColor }} contentContainerStyle={{ padding: 18, paddingTop: 60, paddingBottom: 60 }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: bgColor }}
+      contentContainerStyle={{ padding: 18, paddingTop: 60, paddingBottom: 60 }}
+      refreshControl={<RefreshControl refreshing={profileLoading} onRefresh={load} tintColor={t.accent} />}
+    >
 
       {/* Eyebrow */}
       <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', color: t.accent, marginBottom: 16 }}>

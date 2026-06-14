@@ -29,11 +29,11 @@ export default function LoginScreen() {
       if (error) throw error
 
       let { data: profile } = await supabase
-        .from('st_profiles').select('*').eq('id', data.user.id).single()
+        .from('profiles').select('*').eq('id', data.user.id).single()
 
       if (!profile) {
         const { data: newProfile } = await supabase
-          .from('st_profiles')
+          .from('profiles')
           .insert({ id: data.user.id, full_name: data.user.email || 'Usuario' })
           .select().single()
         profile = newProfile

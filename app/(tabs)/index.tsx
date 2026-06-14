@@ -11,7 +11,7 @@ import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
-import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, type AssignedTrip } from '../../src/services/assignedTrips'
+import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, fetchMyAssignedTruck, type AssignedTrip } from '../../src/services/assignedTrips'
 
 async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession()
@@ -19,7 +19,7 @@ async function authHeaders(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-const BACKEND = "https://safetruck20-production.up.railway.app"
+const BACKEND = (process.env.EXPO_PUBLIC_API_URL ?? 'https://safetruck20-production.up.railway.app').replace(/\/$/, '')
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DENUNCIAS / REPORTES — arquitectura de doble escritura (a propósito)
@@ -240,8 +240,27 @@ export default function MapScreen() {
   const t = getTheme(isDark)
   const s = useMemo(() => makeStyles(t), [isDark])
 
-  const { activeVehicle, currentRoute, setCurrentRoute, setOrigin, setDestination } = useStore()
+  const { activeVehicle, currentRoute, setCurrentRoute, setOrigin, setDestination, setActiveVehicle } = useStore()
   const profile = useStore(st => st.profile)
+
+  // Cargar camión asignado al montar el mapa (por si el conductor no pasó por Perfil)
+  useEffect(() => {
+    fetchMyAssignedTruck().then(truck => {
+      setActiveVehicle(truck ? {
+        id:         String(truck.id),
+        user_id:    '',
+        plate:      truck.patente ?? '',
+        name:       truck.name,
+        weight_kg:  truck.max_weight_kg,
+        height_m:   truck.max_height_m,
+        width_m:    truck.max_width_m,
+        length_m:   truck.max_length_m,
+        axles:      0,
+        is_default: true,
+        created_at: '',
+      } : null)
+    }).catch(() => null)
+  }, [])
   const mapSource = useMemo(() => ({ html: MAP_HTML }), [])
 
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
@@ -467,7 +486,7 @@ export default function MapScreen() {
   const calculateRoute = async (destLat: number, destLng: number) => {
     if (loading) return
     if (!location) return Alert.alert('Error', 'Esperando GPS...')
-    if (!activeVehicle) return Alert.alert('Sin vehículo', 'Configurá tu camión en Perfil')
+    if (!activeVehicle) return Alert.alert('Sin vehículo', 'Tu empresa aún no te asignó un camión')
     webRef.current?.injectJavaScript(`clearRoute(); true;`)
     setCurrentRoute(null)
     setShowInfo(false)
@@ -685,7 +704,7 @@ export default function MapScreen() {
       {/* Banner sin vehículo */}
       {!activeVehicle && (
         <View style={s.banner}>
-          <Text style={s.bannerText}>⚠️ Configurá tu camión en Perfil</Text>
+          <Text style={s.bannerText}>⚠️ Tu empresa aún no te asignó un camión</Text>
         </View>
       )}
 

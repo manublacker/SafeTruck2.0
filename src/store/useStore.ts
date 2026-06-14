@@ -14,7 +14,7 @@ interface AppState {
   // Vehículo activo
   activeVehicle: Vehicle | null
   vehicles: Vehicle[]
-  setActiveVehicle: (vehicle: Vehicle) => void
+  setActiveVehicle: (vehicle: Vehicle | null) => void
   setVehicles: (vehicles: Vehicle[]) => void
 
   // Navegación/Ruta

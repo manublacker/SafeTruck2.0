@@ -53,7 +53,7 @@ function CompleteProfileScreen({ profileId, onComplete }: { profileId: string; o
     setError('')
     try {
       const { error: err } = await supabase
-        .from('st_profiles')
+        .from('profiles')
         .update({ phone: trimmed })
         .eq('id', profileId)
       if (err) throw err
@@ -122,7 +122,7 @@ export default function RootLayout() {
     supabase.auth.getSession().then(async ({ data }) => {
       if (data.session?.user) {
         const { data: prof } = await supabase
-          .from('st_profiles')
+          .from('profiles')
           .select('*')
           .eq('id', data.session.user.id)
           .single()

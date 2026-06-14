@@ -87,10 +87,10 @@ export default function RegisterScreen() {
     try {
       await verifySignupOtp(form.email, otpCode)
 
-      // Guardar nombre en st_profiles
+      // Guardar nombre en profiles
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        await supabase.from('st_profiles').upsert({
+        await supabase.from('profiles').upsert({
           id: user.id,
           full_name: form.fullName,
           email: form.email,
@@ -98,7 +98,7 @@ export default function RegisterScreen() {
         }, { onConflict: 'id' })
 
         const { data: profile } = await supabase
-          .from('st_profiles').select('*').eq('id', user.id).single()
+          .from('profiles').select('*').eq('id', user.id).single()
         if (profile) setProfile(profile)
       }
 

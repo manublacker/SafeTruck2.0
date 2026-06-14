@@ -73,7 +73,7 @@ router.get('/subscription', authMiddleware, async (req: Request, res: Response) 
     const userId = req.user!.id
 
     const { data, error } = await supabase
-      .from('st_subscriptions')
+      .from('subscriptions')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
@@ -166,7 +166,7 @@ interface UpsertParams {
 
 async function upsertSubscription(p: UpsertParams) {
   const { error: subErr } = await supabase
-    .from('st_subscriptions')
+    .from('subscriptions')
     .upsert({
       user_id:              p.userId,
       mp_payer_id:          p.mpPayerId,
@@ -181,14 +181,14 @@ async function upsertSubscription(p: UpsertParams) {
   if (subErr) throw subErr
 
   const { error: profileErr } = await supabase
-    .from('st_profiles')
+    .from('profiles')
     .upsert({ id: p.userId, plan: p.plan }, { onConflict: 'id' })
 
   if (profileErr) throw profileErr
 }
 
 async function logEvent(eventId: string, eventType: string, userId: string, payload: object) {
-  await supabase.from('st_payment_events').upsert(
+  await supabase.from('payment_events').upsert(
     { mp_event_id: eventId, event_type: eventType, user_id: userId, payload },
     { onConflict: 'mp_event_id' },
   )
