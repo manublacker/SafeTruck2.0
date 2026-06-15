@@ -75,7 +75,7 @@ html,body,#map { width:100%;height:100%; }
     attribution:'© OSM', maxZoom:19
   }).addTo(map);
   var userMarker=null, destMarker=null, routeLayers=[], incidentMarkers=[];
-  var navActive=false, headingMarker=null;
+  var navActive=false, headingMarker=null, tripMarkers=[];
 
   function setMapTheme(dark) {
     if (dark) map.getContainer().classList.add('night-mode');
@@ -99,7 +99,7 @@ html,body,#map { width:100%;height:100%; }
   function setUserLocation(lat, lng) {
     if (userMarker) map.removeLayer(userMarker);
     userMarker = L.circleMarker([lat, lng], {
-      radius: 7, fillColor: '#E5342B', color: 'white', weight: 2, fillOpacity: 1
+      radius: 8, fillColor: '#007AFF', color: 'white', weight: 3, fillOpacity: 1
     }).addTo(map);
     map.setView([lat, lng], 14);
   }
@@ -125,6 +125,8 @@ html,body,#map { width:100%;height:100%; }
   function clearRoute() {
     routeLayers.forEach(function(l) { map.removeLayer(l); });
     routeLayers = [];
+    tripMarkers.forEach(function(m) { map.removeLayer(m); });
+    tripMarkers = [];
     if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
   }
 
@@ -178,7 +180,7 @@ html,body,#map { width:100%;height:100%; }
     if (userMarker) map.removeLayer(userMarker);
     if (headingMarker) map.removeLayer(headingMarker);
     userMarker = L.circleMarker([lat, lng], {
-      radius: 9, fillColor: '#E5342B', color: 'white', weight: 3, fillOpacity: 1
+      radius: 9, fillColor: '#007AFF', color: 'white', weight: 3, fillOpacity: 1
     }).addTo(map);
     if (heading !== null) {
       var rad = (heading - 90) * Math.PI / 180;
@@ -204,7 +206,7 @@ html,body,#map { width:100%;height:100%; }
     if (userMarker) map.removeLayer(userMarker);
     if (lat !== null) {
       userMarker = L.circleMarker([lat, lng], {
-        radius: 7, fillColor: '#E5342B', color: 'white', weight: 2, fillOpacity: 1
+        radius: 8, fillColor: '#007AFF', color: 'white', weight: 3, fillOpacity: 1
       }).addTo(map);
     }
     try { map.setBearing(0); } catch(e) {}
@@ -221,10 +223,102 @@ html,body,#map { width:100%;height:100%; }
     if (latlngs.length < 2) return;
     var poly = L.polyline(latlngs, { color: '#E5342B', weight: 5, opacity: 0.9, lineCap: 'round' }).addTo(map);
     routeLayers.push(poly);
-    L.circleMarker(latlngs[0], { radius: 8, fillColor: '#1F9D57', color: 'white', weight: 2.5, fillOpacity: 1 }).addTo(map);
+    // Origen (verde) y destino (rojo) — distintos de la ubicación actual (azul).
+    var oMarker = L.circleMarker(latlngs[0], { radius: 9, fillColor: '#1F9D57', color: 'white', weight: 3, fillOpacity: 1 }).addTo(map);
     var dest = latlngs[latlngs.length - 1];
-    L.circleMarker(dest, { radius: 8, fillColor: '#E5342B', color: 'white', weight: 2.5, fillOpacity: 1 }).addTo(map);
+    var dMarker = L.circleMarker(dest, { radius: 9, fillColor: '#E5342B', color: 'white', weight: 3, fillOpacity: 1 }).addTo(map);
+    tripMarkers.push(oMarker, dMarker);
     map.fitBounds(poly.getBounds(), { padding: [80, 80] });
+  }
+
+  // ── SIMULACIÓN DE RECORRIDO ─────────────────────────────────────────────
+  // Anima un marcador a lo largo de la ruta (array de [lat,lng]) interpolando
+  // por segmentos. El loop corre acá en JS (suave). La cámara solo recentra al
+  // iniciar o cuando el marcador se acerca al borde, no en cada paso.
+  var simTimer=null, simMarker=null, simHeadingM=null, simData=null;
+  var SIM_TICK_MS = 100;
+
+  function simHaversine(a, b) {
+    var R=6371000;
+    var dLat=(b[0]-a[0])*Math.PI/180, dLng=(b[1]-a[1])*Math.PI/180;
+    var la1=a[0]*Math.PI/180, la2=b[0]*Math.PI/180;
+    var x=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.sin(dLng/2)*Math.sin(dLng/2)*Math.cos(la1)*Math.cos(la2);
+    return 2*R*Math.asin(Math.sqrt(x));
+  }
+  function simBearing(a, b) {
+    var la1=a[0]*Math.PI/180, la2=b[0]*Math.PI/180, dLng=(b[1]-a[1])*Math.PI/180;
+    var y=Math.sin(dLng)*Math.cos(la2);
+    var x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dLng);
+    return (Math.atan2(y,x)*180/Math.PI+360)%360;
+  }
+
+  function simStart(path, speedKmh) {
+    simStop();
+    if (!path || path.length < 2) return;
+    navActive = false;
+    // Ocultar el marcador de ubicación actual: el de la simulación lo reemplaza.
+    if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+    simData = { path: path, idx: 0, frac: 0, speed: speedKmh || 40, paused: false };
+    map.setView(path[0], 16, { animate: true, duration: 0.6 });
+    simRender(path[0][0], path[0][1], simBearing(path[0], path[1]), true);
+    simTimer = setInterval(simTick, SIM_TICK_MS);
+  }
+
+  function simTick() {
+    var s = simData; if (!s || s.paused) return;
+    var path = s.path;
+    if (s.idx >= path.length - 1) { simFinish(); return; }
+    var meters = s.speed * 1000/3600 * (SIM_TICK_MS/1000);
+    while (meters > 0 && s.idx < path.length - 1) {
+      var a = path[s.idx], b = path[s.idx+1];
+      var segLen = simHaversine(a, b);
+      if (segLen < 0.01) { s.idx++; s.frac = 0; continue; }
+      var distLeft = segLen * (1 - s.frac);
+      if (distLeft > meters) { s.frac += meters / segLen; meters = 0; }
+      else { meters -= distLeft; s.idx++; s.frac = 0; }
+    }
+    if (s.idx >= path.length - 1) {
+      var last = path[path.length-1], prev = path[path.length-2];
+      simRender(last[0], last[1], simBearing(prev, last), false);
+      simFinish(); return;
+    }
+    var a2 = path[s.idx], b2 = path[s.idx+1];
+    var lat = a2[0] + (b2[0]-a2[0]) * s.frac;
+    var lng = a2[1] + (b2[1]-a2[1]) * s.frac;
+    simRender(lat, lng, simBearing(a2, b2), false);
+  }
+
+  function simRender(lat, lng, heading, recenter) {
+    if (!simMarker) {
+      simMarker = L.circleMarker([lat,lng], { radius:9, fillColor:'#007AFF', color:'white', weight:3, fillOpacity:1 }).addTo(map);
+    } else { simMarker.setLatLng([lat,lng]); }
+    if (simHeadingM) { map.removeLayer(simHeadingM); simHeadingM=null; }
+    if (heading !== null && heading !== undefined) {
+      simHeadingM = L.marker([lat,lng], { icon: L.divIcon({ className:'', html:'<div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:18px solid #007AFF;transform:rotate('+heading+'deg);transform-origin:center bottom;margin-left:-7px;margin-top:-18px;filter:drop-shadow(0 1px 4px rgba(0,122,255,0.5))"></div>', iconAnchor:[0,0] }) }).addTo(map);
+    }
+    if (recenter || !map.getBounds().pad(-0.25).contains(L.latLng(lat,lng))) {
+      map.panTo([lat,lng], { animate: true, duration: 0.5 });
+    }
+  }
+
+  function simFinish() { if (simTimer) { clearInterval(simTimer); simTimer=null; } }
+  function simPause() { if (simData) simData.paused = true; }
+  function simResume() { if (simData) simData.paused = false; }
+  function simSetSpeed(k) { if (simData) simData.speed = k; }
+  function simStop() {
+    if (simTimer) { clearInterval(simTimer); simTimer=null; }
+    if (simMarker) { map.removeLayer(simMarker); simMarker=null; }
+    if (simHeadingM) { map.removeLayer(simHeadingM); simHeadingM=null; }
+    simData = null;
+  }
+
+  // Inicio de viaje REAL (no simulado): centra la cámara en el inicio de la ruta
+  // y ajusta la ubicación al inicio de las líneas.
+  function navStartTrip(path) {
+    if (!path || path.length < 2) return;
+    if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+    userMarker = L.circleMarker(path[0], { radius:8, fillColor:'#007AFF', color:'white', weight:3, fillOpacity:1 }).addTo(map);
+    map.setView(path[0], 16, { animate: true, duration: 0.8 });
   }
 </script>
 </body>
@@ -283,6 +377,14 @@ export default function MapScreen() {
   const [navMode, setNavMode] = useState(false)
   const watchRef = useRef<any>(null)
 
+  // ── Simulación de recorrido (sigue la ruta calculada o el viaje asignado) ──
+  const [simRunning, setSimRunning] = useState(false)
+  const [simPaused, setSimPaused] = useState(false)
+  const [simSpeed, setSimSpeed] = useState(40) // km/h
+  const simSpeedRef = useRef(40)
+  const tripPathRef = useRef<{ lat: number; lon?: number; lng?: number }[]>([])
+  const SIM_SPEEDS = [10, 40, 80]
+
   // ── Trip visualization (navegado desde Viajes) ─────────────────────────
   const { tripId } = useLocalSearchParams<{ tripId?: string }>()
   const router = useRouter()
@@ -303,6 +405,7 @@ export default function MapScreen() {
             return (p?.path || p?.polyline || p?.segments?.flatMap((s: any) => s.coordinates) || []) as { lat: number; lon?: number; lng?: number }[]
           } catch { return [] }
         })()
+        tripPathRef.current = path
         webRef.current?.injectJavaScript(
           `drawTripPath(${JSON.stringify(path)}, ${found.origin_lat ?? 'null'}, ${found.origin_lon ?? 'null'}, ${found.destination_lat ?? 'null'}, ${found.destination_lon ?? 'null'}); true;`
         )
@@ -318,6 +421,70 @@ export default function MapScreen() {
       if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
     }
   }, [tripId])
+
+  // ── Simulación de recorrido ─────────────────────────────────────────────
+  // Devuelve la ruta a simular como [[lat,lng],...]: prioriza la ruta calculada
+  // (destino tocado) y si no, el path del viaje asignado.
+  const simPathLatLng = (): [number, number][] => {
+    const segs = (currentRoute as any)?.segments as { coordinates?: { lat: number; lng: number }[] }[] | undefined
+    if (segs?.length) {
+      const pts: [number, number][] = []
+      for (const s of segs) for (const c of (s.coordinates ?? [])) pts.push([c.lat, c.lng])
+      if (pts.length >= 2) return pts
+    }
+    const tp = tripPathRef.current
+    if (tp.length >= 2) return tp.map(p => [p.lat, (p.lon ?? p.lng) as number])
+    return []
+  }
+
+  const startSimulation = () => {
+    const path = simPathLatLng()
+    if (path.length < 2) {
+      Alert.alert('Simulación', 'No hay una ruta para simular. Tocá un destino o iniciá un viaje asignado.')
+      return
+    }
+    setSimRunning(true)
+    setSimPaused(false)
+    setShowInfo(false)
+    webRef.current?.injectJavaScript(`simStart(${JSON.stringify(path)}, ${simSpeedRef.current}); true;`)
+  }
+
+  const stopSimulation = () => {
+    setSimRunning(false)
+    setSimPaused(false)
+    webRef.current?.injectJavaScript(`simStop(); true;`)
+    // Restaurar el marcador de ubicación actual (lo había ocultado simStart).
+    if (location) {
+      webRef.current?.injectJavaScript(`setUserLocation(${location.lat}, ${location.lng}); true;`)
+    }
+  }
+
+  const toggleSimPause = () => {
+    setSimPaused(p => {
+      const next = !p
+      webRef.current?.injectJavaScript(`${next ? 'simPause' : 'simResume'}(); true;`)
+      return next
+    })
+  }
+
+  const cycleSimSpeed = () => {
+    setSimSpeed(prev => {
+      const next = SIM_SPEEDS[(SIM_SPEEDS.indexOf(prev) + 1) % SIM_SPEEDS.length]
+      simSpeedRef.current = next
+      webRef.current?.injectJavaScript(`simSetSpeed(${next}); true;`)
+      return next
+    })
+  }
+
+  // Repinta en el mapa la ruta del viaje + círculos de origen (verde) y destino
+  // (rojo). Se usa al cargar el viaje, al recargar el WebView y al reiniciar.
+  const redrawTrip = (trip: AssignedTrip | null = tripSheet) => {
+    if (!trip) return
+    const path = tripPathRef.current
+    webRef.current?.injectJavaScript(
+      `drawTripPath(${JSON.stringify(path)}, ${trip.origin_lat ?? 'null'}, ${trip.origin_lon ?? 'null'}, ${trip.destination_lat ?? 'null'}, ${trip.destination_lon ?? 'null'}); true;`
+    )
+  }
 
   // GPS tracking for in_progress trip
   useEffect(() => {
@@ -341,11 +508,29 @@ export default function MapScreen() {
     setTripUpdating(true)
     try {
       await updateTripStatus(String(tripSheet.id), newStatus)
-      if (newStatus === 'completed') await clearLocation().catch(() => null)
-      if (newStatus === 'in_progress' && location) {
-        webRef.current?.injectJavaScript(
-          `map.flyTo([${location.lat}, ${location.lng}], 16, { animate: true, duration: 1.2 }); true;`
-        )
+      if (newStatus === 'completed') {
+        await clearLocation().catch(() => null)
+        // Sacar la ruta y los círculos de origen/destino del mapa al terminar.
+        stopSimulation()
+        webRef.current?.injectJavaScript(`clearRoute(); true;`)
+      }
+      if (newStatus === 'in_progress') {
+        // Repintar la ruta/círculos (pueden haberse borrado si estaba completado)
+        // y centrar + rotar la cámara a la dirección de la ruta, ajustando la
+        // ubicación al inicio de las líneas.
+        redrawTrip()
+        const path = simPathLatLng()
+        if (path.length >= 2) {
+          webRef.current?.injectJavaScript(`navStartTrip(${JSON.stringify(path)}); true;`)
+        } else {
+          const startLat = tripSheet.origin_lat ?? location?.lat
+          const startLng = tripSheet.origin_lon ?? location?.lng
+          if (startLat != null && startLng != null) {
+            webRef.current?.injectJavaScript(
+              `map.flyTo([${startLat}, ${startLng}], 16, { animate: true, duration: 1.2 }); true;`
+            )
+          }
+        }
       }
       setTripSheet(prev => prev ? { ...prev, status: newStatus } : null)
     } catch (e: any) {
@@ -639,7 +824,13 @@ export default function MapScreen() {
         style={s.map}
         source={mapSource}
         onMessage={onMessage}
-        onLoadEnd={() => webRef.current?.injectJavaScript(`setMapTheme(${isDark}); true;`)}
+        onLoadEnd={() => {
+          const w = webRef.current
+          if (!w) return
+          w.injectJavaScript(`setMapTheme(${isDark}); true;`)
+          if (location) w.injectJavaScript(`setUserLocation(${location.lat}, ${location.lng}); true;`)
+          if (tripSheet) redrawTrip()
+        }}
         javaScriptEnabled
         domStorageEnabled
         originWhitelist={['*']}
@@ -709,7 +900,7 @@ export default function MapScreen() {
       )}
 
       {/* Hint inicial */}
-      {!currentRoute && !loading && activeVehicle && searchText.length === 0 && (
+      {!currentRoute && !tripSheet && !simRunning && !loading && activeVehicle && searchText.length === 0 && (
         <View style={s.hintPill}>
           <Text style={s.hintPillText}>Buscá un destino o tocá el mapa</Text>
         </View>
@@ -784,6 +975,32 @@ export default function MapScreen() {
           </View>
           <TouchableOpacity style={s.navStopBtn} onPress={stopNavigation}>
             <Ionicons name="stop" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Simulación: botón para simular el recorrido sobre la ruta calculada
+          o el viaje asignado. Aparece con una ruta/viaje y no en navegación. */}
+      {!simRunning && !navMode && (tripSheet?.status === 'in_progress' || (currentRoute && !tripSheet)) && (
+        <TouchableOpacity style={s.simFab} onPress={startSimulation} activeOpacity={0.85}>
+          <Ionicons name="navigate-circle-outline" size={20} color={t.text} />
+          <Text style={s.simFabText}>Simular</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Barra de control de la simulación en curso */}
+      {simRunning && (
+        <View style={s.simBar}>
+          <TouchableOpacity style={s.simBarBtn} onPress={toggleSimPause} activeOpacity={0.8}>
+            <Ionicons name={simPaused ? 'play' : 'pause'} size={18} color="#fff" />
+          </TouchableOpacity>
+          <Text style={s.simBarText}>{simPaused ? 'Pausado' : 'Simulando recorrido'}</Text>
+          <TouchableOpacity style={s.simSpeedBtn} onPress={cycleSimSpeed} activeOpacity={0.8}>
+            <Ionicons name="speedometer-outline" size={14} color={t.text} />
+            <Text style={s.simSpeedText}>{simSpeed}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.simStopBtn} onPress={stopSimulation} activeOpacity={0.8}>
+            <Ionicons name="stop" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
       )}
@@ -946,9 +1163,11 @@ export default function MapScreen() {
             <ActivityIndicator color={t.accent} />
           ) : (
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              {(tripSheet.status === 'pending' || tripSheet.status === 'accepted') && (
+              {tripSheet.status !== 'in_progress' && (
                 <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: t.success, flex: 1 }]} onPress={() => handleTripAction('in_progress')}>
-                  <Text style={s.tripSheetBtnText}>Iniciar viaje</Text>
+                  <Text style={s.tripSheetBtnText}>
+                    {tripSheet.status === 'completed' || tripSheet.status === 'cancelled' ? 'Reiniciar viaje' : 'Iniciar viaje'}
+                  </Text>
                 </TouchableOpacity>
               )}
               {tripSheet.status === 'in_progress' && (
@@ -1060,6 +1279,40 @@ function makeStyles(t: Theme) {
       paddingHorizontal: 16, paddingVertical: 10,
     },
     hintPillText: { color: t.text, fontSize: 13, textAlign: 'center', fontWeight: '500' },
+
+    simFab: {
+      position: 'absolute', top: 110, left: 16,
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      backgroundColor: t.card, borderWidth: 1, borderColor: t.cardBorder,
+      borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10,
+      shadowColor: '#000', shadowOpacity: 0.2,
+      shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
+    },
+    simFabText: { color: t.text, fontSize: 13, fontWeight: '700' },
+    simBar: {
+      position: 'absolute', top: 110, left: 16, right: 16,
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      backgroundColor: t.card, borderRadius: 999,
+      borderWidth: 1, borderColor: '#007AFF',
+      paddingHorizontal: 10, paddingVertical: 8,
+      shadowColor: '#000', shadowOpacity: isDarkTheme(t) ? 0.4 : 0.12,
+      shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
+    },
+    simBarBtn: {
+      backgroundColor: '#007AFF', borderRadius: 999,
+      width: 34, height: 34, alignItems: 'center', justifyContent: 'center',
+    },
+    simBarText: { flex: 1, color: t.text, fontSize: 13, fontWeight: '600' },
+    simSpeedBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      backgroundColor: t.surface2, borderRadius: 999,
+      paddingHorizontal: 10, paddingVertical: 6,
+    },
+    simSpeedText: { color: t.text, fontSize: 13, fontWeight: '700' },
+    simStopBtn: {
+      backgroundColor: t.danger, borderRadius: 999,
+      width: 34, height: 34, alignItems: 'center', justifyContent: 'center',
+    },
 
     loadingOverlay: {
       position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
