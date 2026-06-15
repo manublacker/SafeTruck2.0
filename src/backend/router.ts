@@ -20,13 +20,7 @@ function getPool(): Pool {
   return pool
 }
 
-// Cualquier cost >= este umbral es un tramo "no habilitado" forzado (1e9 o 2e9
-// por el recargo de contramano) y no debe contarse como tiempo de viaje real.
-const NO_HABILITADO_THRESHOLD = 1e8
-
-// Bug temporal de unidades en pgr_edges.cost (cost real x50). Sacar cuando se
-// recalculen cost/reverse_cost en la tabla con length_m*3.6/speed_kmh.
-const COST_FACTOR = 50
+const AVG_SPEED_KMH = 40
 
 export async function calculateRoute(
   origin: Coordinates,
@@ -80,20 +74,14 @@ export async function calculateRoute(
       }
     })
 
-    // Tiempo real estimado: solo suma el cost de los tramos que NO son
-    // penalizaciones de "no habilitado" (1e9 / 2e9 por contramano). Esos
-    // tramos ya se reportan aparte vía has_unauthorized / status='unauthorized'.
-    const realCostSec = validRows
-      .filter((r: any) => r.cost < NO_HABILITADO_THRESHOLD)
-      .reduce((sum: number, r: any) => sum + (r.cost || 0), 0)
-
     const totalDist = validRows.reduce((sum: number, r: any) => sum + (r.length_m || 0), 0) / 1000
     const polyline = segments.flatMap(s => s.coordinates)
+    const totalDurationMin = Math.round((totalDist / AVG_SPEED_KMH) * 60)
 
     return {
       segments,
       total_distance_km: Math.round(totalDist * 10) / 10,
-      total_duration_min: Math.round(realCostSec / COST_FACTOR / 60),
+      total_duration_min: totalDurationMin,
       has_unauthorized: segments.some(s => s.status === 'unauthorized'),
       has_unknown: segments.some(s => s.status === 'unknown'),
       polyline,
@@ -103,17 +91,6 @@ export async function calculateRoute(
   }
 }
 
-/**
- * Registra una denuncia de un chofer sobre la arista más cercana a un punto.
- * Usa el MISMO pool/DB que el ruteo (pgr_edges), así la penalización que escribe
- * la "ve" pgr_route_truck en el próximo cálculo de ruta.
- *
- * Toda la lógica vive en la función SQL denunciar_punto() (ver migración
- * src/backend/migrations/003_denuncia_penalty_pgr.sql): snap a pgr_edges +
- * INSERT en edge_reports + recálculo de pgr_edges.denuncia_penalty por umbral.
- *
- * Devuelve el edge_id (pgr_edges.id) afectado.
- */
 export async function denunciarPunto(
   lat: number,
   lng: number,

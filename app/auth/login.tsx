@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
@@ -22,14 +22,17 @@ export default function LoginScreen() {
   const router     = useRouter()
 
   const handleLogin = async () => {
+    console.log('[Login] handleLogin called', email, password)
     if (!email || !password) return Alert.alert('Error', 'Completá todos los campos')
     setLoading(true)
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      console.log('[Login] signInWithPassword result', { data, error })
       if (error) throw error
 
-      let { data: profile } = await supabase
+      let { data: profile, error: profileError } = await supabase
         .from('st_profiles').select('*').eq('id', data.user.id).single()
+      console.log('[Login] profile result', { profile, profileError })
 
       if (!profile) {
         const { data: newProfile } = await supabase
@@ -41,6 +44,7 @@ export default function LoginScreen() {
 
       if (profile) { setProfile(profile); router.replace('/(tabs)/') }
     } catch (e: any) {
+      console.log('[Login] catch error', e)
       Alert.alert('Error al ingresar', e.message)
     } finally {
       setLoading(false)
