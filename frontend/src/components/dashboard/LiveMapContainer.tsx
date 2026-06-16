@@ -153,6 +153,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
                 onTripCreated={refreshTrips}
                 onOriginPinned={(p) => setOriginPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
                 onDestinationPinned={(p) => setDestinationPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
+                onSubscriptionRequired={() => onNavigate("plans")}
               />
             </section>
 

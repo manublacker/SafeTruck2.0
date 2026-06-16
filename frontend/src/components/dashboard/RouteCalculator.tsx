@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { calculateRoute } from "@/services/api";
+import { calculateRoute, SubscriptionRequiredError } from "@/services/api";
 import {
   searchLocations,
   geocodeLocation,
@@ -53,15 +53,17 @@ interface Props {
   onRouteCalculated: (result: RouteResponse) => void;
   onOriginPinned?: (pin: PinPreview | null) => void;
   onDestinationPinned?: (pin: PinPreview | null) => void;
+  onSubscriptionRequired?: () => void;
 }
 
 const RouteCalculator = forwardRef<RouteCalculatorHandle, Props>(function RouteCalculator(
-  { selectedTruck, onRouteCalculated, onOriginPinned, onDestinationPinned },
+  { selectedTruck, onRouteCalculated, onOriginPinned, onDestinationPinned, onSubscriptionRequired },
   ref,
 ) {
   const [origin, setOrigin] = useState<Field>(emptyField());
   const [destination, setDestination] = useState<Field>(emptyField());
   const [error, setError] = useState("");
+  const [subscriptionRequired, setSubscriptionRequired] = useState(false);
 
   const originTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const destTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,6 +75,7 @@ const RouteCalculator = forwardRef<RouteCalculatorHandle, Props>(function RouteC
         return null;
       }
       setError("");
+      setSubscriptionRequired(false);
       try {
         const [resolvedOrigin, resolvedDestination] = await Promise.all([
           resolveField(origin, setOrigin),
@@ -111,7 +114,11 @@ const RouteCalculator = forwardRef<RouteCalculatorHandle, Props>(function RouteC
           destinationLon:   resolvedDestination.lon,
         };
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Error al calcular la ruta.");
+        if (err instanceof SubscriptionRequiredError) {
+          setSubscriptionRequired(true);
+        } else {
+          setError(err instanceof Error ? err.message : "Error al calcular la ruta.");
+        }
         return null;
       }
     },
@@ -137,6 +144,9 @@ const RouteCalculator = forwardRef<RouteCalculatorHandle, Props>(function RouteC
         onPinned={onDestinationPinned}
       />
 
+      {subscriptionRequired && (
+        <SubscriptionBanner onGoToPlans={onSubscriptionRequired} />
+      )}
       {error && <ErrorMessage message={error} />}
     </div>
   );
@@ -280,6 +290,50 @@ function ErrorMessage({ message }: { message: string }) {
       >
         {message}
       </p>
+    </div>
+  );
+}
+
+function SubscriptionBanner({ onGoToPlans }: { onGoToPlans?: () => void }) {
+  return (
+    <div
+      style={{
+        background: "rgba(229,57,53,0.06)",
+        border: "1px solid rgba(229,57,53,0.2)",
+        borderRadius: 10,
+        padding: "14px 16px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <div>
+        <p style={{ color: "#c62828", fontWeight: 700, fontSize: "0.88rem", margin: "0 0 4px" }}>
+          Necesitás una suscripción activa
+        </p>
+        <p style={{ color: "#6b7280", fontSize: "0.82rem", margin: 0, lineHeight: 1.45 }}>
+          Para calcular rutas debés tener un plan activo. Activá tu suscripción y empezá a operar.
+        </p>
+      </div>
+      {onGoToPlans && (
+        <button
+          type="button"
+          onClick={onGoToPlans}
+          style={{
+            alignSelf: "flex-start",
+            background: "#e53935",
+            color: "#fff",
+            border: "none",
+            borderRadius: 8,
+            padding: "8px 16px",
+            fontSize: "0.82rem",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Ver planes y precios
+        </button>
+      )}
     </div>
   );
 }

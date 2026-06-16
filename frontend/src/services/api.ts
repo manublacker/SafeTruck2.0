@@ -19,6 +19,13 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
 const TOKEN_KEY = "safetruck_token";
 
+export class SubscriptionRequiredError extends Error {
+  constructor() {
+    super("subscription_required");
+    this.name = "SubscriptionRequiredError";
+  }
+}
+
 // Called by AuthProvider on mount so the service layer can trigger logout
 // without importing React context.
 let _onUnauthorized: (() => void) | null = null;
@@ -69,6 +76,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
       const refreshed = await tryRefreshSession();
       if (!refreshed) _onUnauthorized?.();
     }
+    if (res.status === 402) throw new SubscriptionRequiredError();
     const text = await res.text().catch(() => "");
     throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
   }
@@ -305,13 +313,18 @@ export interface AssignedTrip {
   driver_id: number;
   driver_nombre?: string | null;
   truck_id: number;
+  truck_patente?: string | null;
   origin_label: string;
   destination_label: string;
   origin_lat: number;
   origin_lon: number;
   destination_lat: number;
   destination_lon: number;
+  distance_m?: number | null;
+  duration_min?: number | null;
   scheduled_at: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
   status: string;
   created_at: string;
 }

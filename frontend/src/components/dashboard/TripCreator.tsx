@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
 import RouteCalculator, { type RouteCalculatorHandle, type PinPreview } from "./RouteCalculator";
-import { createAssignedTrip } from "@/services/api";
+import { createAssignedTrip, SubscriptionRequiredError } from "@/services/api";
 
 const FLASH_DURATION_MS = 4000;
 const MUTED = "#6b7280";
@@ -18,6 +18,7 @@ interface Props {
   onTripCreated?: () => void;
   onOriginPinned?: (pin: PinPreview | null) => void;
   onDestinationPinned?: (pin: PinPreview | null) => void;
+  onSubscriptionRequired?: () => void;
 }
 
 interface DraftTrip { date: string; time: string }
@@ -33,6 +34,7 @@ export default function TripCreator({
   onTripCreated,
   onOriginPinned,
   onDestinationPinned,
+  onSubscriptionRequired,
 }: Props) {
   const [draft, setDraft]       = useState<DraftTrip>(EMPTY_DRAFT);
   const [flash, setFlash]       = useState<{ msg: string; ok: boolean }>({ msg: "", ok: true });
@@ -106,6 +108,7 @@ export default function TripCreator({
           onRouteCalculated={onRouteCalculated}
           onOriginPinned={onOriginPinned}
           onDestinationPinned={onDestinationPinned}
+          onSubscriptionRequired={onSubscriptionRequired}
         />
 
         {routeResult?.found && assignedTruck && (
@@ -160,7 +163,11 @@ export default function TripCreator({
       setDraft(EMPTY_DRAFT);
       onTripCreated?.();
     } catch (err) {
-      setFlash({ msg: `Error: ${err instanceof Error ? err.message : "No se pudo crear el viaje"}`, ok: false });
+      if (err instanceof SubscriptionRequiredError) {
+        onSubscriptionRequired?.();
+      } else {
+        setFlash({ msg: `Error: ${err instanceof Error ? err.message : "No se pudo crear el viaje"}`, ok: false });
+      }
     } finally {
       setSubmitting(false);
     }
