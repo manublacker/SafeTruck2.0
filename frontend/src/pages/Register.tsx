@@ -593,7 +593,7 @@ const PlanCard = ({
     <p className="plan-card__name">{name}</p>
     <div className="plan-card__price-row">
       <span className="plan-card__price">{price}</span>
-      <span className="plan-card__period">USD/mes</span>
+      <span className="plan-card__period">/mes</span>
     </div>
     <ul className="plan-card__features">
       {features.map((f) => (

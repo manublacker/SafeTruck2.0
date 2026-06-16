@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware } from '../middleware/authMiddleware'
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription'
 import pool from '../db'
 import { supabase } from '../supabaseClient'
 
@@ -13,7 +14,7 @@ function generateCode(length = 8): string {
 }
 
 // POST / — Admin genera un código de invitación (no requiere driver existente)
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, requireActiveSubscription, async (req: Request, res: Response) => {
   const adminId = req.user!.id
   const { hint_name } = req.body   // nombre opcional solo como referencia
 
@@ -35,7 +36,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // GET / — Admin lista sus invitaciones
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, requireActiveSubscription, async (req: Request, res: Response) => {
   const adminId = req.user!.id
   try {
     const result = await pool.query(
@@ -237,7 +238,7 @@ router.post('/register', async (req: Request, res: Response) => {
 })
 
 // DELETE /:id — Admin elimina una invitación pendiente
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, requireActiveSubscription, async (req: Request, res: Response) => {
   const adminId = req.user!.id
   try {
     const result = await pool.query(
@@ -252,7 +253,7 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // POST /bulk — Admin genera códigos en masa (sin drivers existentes)
-router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
+router.post('/bulk', authMiddleware, requireActiveSubscription, async (req: Request, res: Response) => {
   const adminId = req.user!.id
   const { quantity = 1 } = req.body
 

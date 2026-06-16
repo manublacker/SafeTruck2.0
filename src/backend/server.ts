@@ -13,6 +13,7 @@ import reportsRouter from './routes/reports'
 import usersRouter from './routes/users'
 import billingRouter from './routes/billing'
 import { authMiddleware } from './middleware/authMiddleware'
+import { requireActiveSubscription } from './middleware/requireActiveSubscription'
 import assignedTripsRouter from './routes/assigned-trips'
 import invitationsRouter from './routes/invitations'
 import locationsRouter from './routes/locations'
@@ -30,9 +31,9 @@ app.use('/api/search', searchRouter)
 app.use('/api/incidents', incidentsRouter)
 app.use('/api/reports', reportsRouter)
 app.use('/api/users', usersRouter)
-app.use('/api/trucks', authMiddleware, trucksRouter)
-app.use('/api/drivers', authMiddleware, driversRouter)
-app.use('/api/truck-drivers', authMiddleware, truckDriversRouter)
+app.use('/api/trucks', authMiddleware, requireActiveSubscription, trucksRouter)
+app.use('/api/drivers', authMiddleware, requireActiveSubscription, driversRouter)
+app.use('/api/truck-drivers', authMiddleware, requireActiveSubscription, truckDriversRouter)
 app.use('/api/assigned-trips', assignedTripsRouter)
 app.use('/api/invitations', invitationsRouter)
 app.use('/api/locations', locationsRouter)

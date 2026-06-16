@@ -1,9 +1,11 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware } from '../middleware/authMiddleware'
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription'
 import pool from '../db'
 
 const router = Router()
 router.use(authMiddleware)
+router.use(requireActiveSubscription)
 
 // GET / — Admin obtiene todas las ubicaciones activas (para el live map)
 router.get('/', async (req: Request, res: Response) => {
