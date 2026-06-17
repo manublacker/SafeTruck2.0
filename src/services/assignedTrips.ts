@@ -26,7 +26,7 @@ export interface AssignedTrip {
   truck_name?: string | null
 }
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'https://safetruck20-production.up.railway.app').replace(/\/$/, '')
 
 async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession()
