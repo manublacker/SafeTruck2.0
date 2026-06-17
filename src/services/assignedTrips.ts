@@ -37,11 +37,20 @@ async function authHeaders(): Promise<Record<string, string>> {
   }
 }
 
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = await authHeaders()
   const res = await fetch(`${API_URL}${path}`, { ...options, headers: { ...headers, ...options?.headers } })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error((data as any).error ?? `HTTP ${res.status}`)
+  if (!res.ok) throw new ApiError(res.status, (data as any).error ?? `HTTP ${res.status}`)
   return data as T
 }
 
@@ -53,11 +62,15 @@ export async function fetchAllMyTrips(): Promise<AssignedTrip[]> {
 export async function updateTripStatus(
   tripId: string,
   status: AssignedTrip['status']
-): Promise<void> {
-  await apiRequest(`/api/assigned-trips/${tripId}/status`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status }),
-  })
+): Promise<AssignedTrip | null> {
+  const res = await apiRequest<{ success: boolean; trip: AssignedTrip }>(
+    `/api/assigned-trips/${tripId}/status`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }
+  )
+  return res.trip ?? null
 }
 
 export async function sendLocation(
