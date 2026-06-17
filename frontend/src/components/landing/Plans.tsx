@@ -72,7 +72,7 @@ const Plans = () => (
             <p className="landing-plan-card__name">{p.name}</p>
             <div className="landing-plan-card__price-row">
               <span className="landing-plan-card__price">{p.price}</span>
-              <span className="landing-plan-card__period">/mes</span>
+              <span className="landing-plan-card__period">ARS/mes</span>
             </div>
             <ul className="landing-plan-card__features">
               {p.features.map((f) => (

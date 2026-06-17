@@ -95,6 +95,7 @@ router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
       full_name,
       company,
       plan,
+      role: (meta["role"] as string | undefined) ?? "admin",
       trucks: [],
     },
   });

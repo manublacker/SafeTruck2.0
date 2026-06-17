@@ -36,6 +36,7 @@ export interface AuthUser {
   full_name: string;
   company: string | null;
   plan: "starter" | "pro" | "enterprise" | null;
+  role: "admin" | "driver" | null;
   trucks: Truck[];
   drivers: Driver[];
 }

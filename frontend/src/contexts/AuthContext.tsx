@@ -79,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       full_name: (meta.full_name as string) ?? "",
       company:   (meta.company as string) ?? null,
       plan:      null,
+      role:      (meta.role as "admin" | "driver" | undefined) ?? "admin",
       trucks:    [],
       drivers:   [],
     };
