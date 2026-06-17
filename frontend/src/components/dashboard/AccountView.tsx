@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { confirmCheckout } from "@/services/api";
 import type { AdminPage } from "./AdminSidebar";
 
 interface Subscription {
@@ -29,6 +30,26 @@ interface UserMeta {
 export default function AccountView({ onNavigate, billingSuccess }: Props) {
   const { user, refreshPlan } = useAuth();
   const [meta, setMeta] = useState<UserMeta>({});
+  const [verifying, setVerifying] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
+
+  // Re-verifica el pago en MercadoPago y activa la suscripción si la encuentra.
+  // Sirve para quienes pagaron pero el plan no quedó registrado (webhook perdido).
+  async function handleVerifyPayment() {
+    setVerifying(true);
+    setVerifyMsg(null);
+    try {
+      const { confirmed } = await confirmCheckout(null);
+      await refreshPlan();
+      if (!confirmed) {
+        setVerifyMsg("No encontramos un pago aprobado asociado a tu cuenta.");
+      }
+    } catch {
+      setVerifyMsg("No se pudo verificar el pago. Intentá de nuevo en unos minutos.");
+    } finally {
+      setVerifying(false);
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -104,14 +125,31 @@ export default function AccountView({ onNavigate, billingSuccess }: Props) {
                   : "Elegí un plan para desbloquear todas las funciones."}
               </p>
             </div>
-            <button
-              className="st-btn-primary"
-              style={{ padding: "10px 20px", whiteSpace: "nowrap" }}
-              onClick={() => onNavigate("plans")}
-            >
-              {user?.plan ? "Cambiar plan" : "Ver planes"}
-            </button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {!user?.plan && (
+                <button
+                  className="st-btn-secondary"
+                  style={{ padding: "10px 20px", whiteSpace: "nowrap" }}
+                  onClick={handleVerifyPayment}
+                  disabled={verifying}
+                >
+                  {verifying ? "Verificando…" : "Ya pagué — verificar"}
+                </button>
+              )}
+              <button
+                className="st-btn-primary"
+                style={{ padding: "10px 20px", whiteSpace: "nowrap" }}
+                onClick={() => onNavigate("plans")}
+              >
+                {user?.plan ? "Cambiar plan" : "Ver planes"}
+              </button>
+            </div>
           </div>
+          {verifyMsg && (
+            <p style={{ margin: "10px 2px 0", fontSize: "0.82rem", color: "#dc2626", fontWeight: 600 }}>
+              {verifyMsg}
+            </p>
+          )}
         </section>
 
       </div>
