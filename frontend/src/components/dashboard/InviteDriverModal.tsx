@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createInvitation } from "@/services/api";
 
 interface Props {
@@ -10,6 +10,14 @@ export default function InviteDriverModal({ onClose }: Props) {
   const [link, setLink]         = useState("");
   const [error, setError]       = useState("");
   const [copied, setCopied]     = useState(false);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   async function handleGenerate() {
     setLoading(true);
@@ -41,26 +49,33 @@ export default function InviteDriverModal({ onClose }: Props) {
 
   return (
     <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 900,
-        background: "rgba(0,0,0,0.4)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}
+      className="st-modal-backdrop"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{
-        background: "#fff", borderRadius: 16, padding: 28,
-        width: "100%", maxWidth: 420,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-      }}>
-        <h3 style={{ margin: "0 0 6px", fontSize: "1.1rem", fontWeight: 800, color: "#0d0d0d" }}>
+      <div className="st-modal" style={{ maxWidth: 420 }}>
+        <h3 style={{ margin: "0 0 6px", fontSize: "1.1rem", fontWeight: 700, color: "#0d0d0d" }}>
           Invitar conductor
         </h3>
         <p style={{ margin: "0 0 24px", fontSize: "0.88rem", color: "#6b7280", lineHeight: 1.5 }}>
           Generá un enlace y mandáselo por WhatsApp. El conductor se registra con sus datos y queda vinculado automáticamente.
         </p>
 
-        {error && <p style={{ color: "#c62828", fontSize: "0.85rem", marginBottom: 12 }}>{error}</p>}
+        {error && (
+          <div
+            style={{
+              background: "var(--c-danger-soft)",
+              border: "1px solid var(--c-danger)",
+              color: "var(--c-accent-hover)",
+              borderRadius: "var(--r-md)",
+              padding: "10px 14px",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              marginBottom: 12,
+            }}
+          >
+            {error}
+          </div>
+        )}
 
         {!link ? (
           <button

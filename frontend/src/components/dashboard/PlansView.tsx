@@ -14,9 +14,6 @@ const PLANS = [
     name: "Starter",
     price: "$43.500",
     period: "ARS / mes",
-    color: "#6b7280",
-    accentBg: "#f3f4f6",
-    border: "#e5e7eb",
     features: [
       "Hasta 5 camiones",
       "Tracking GPS en tiempo real",
@@ -30,9 +27,6 @@ const PLANS = [
     name: "Pro",
     price: "$118.500",
     period: "ARS / mes",
-    color: "#2563eb",
-    accentBg: "#eff6ff",
-    border: "#bfdbfe",
     badge: "Más popular",
     features: [
       "Hasta 20 camiones",
@@ -48,9 +42,6 @@ const PLANS = [
     name: "Enterprise",
     price: "$298.500",
     period: "ARS / mes",
-    color: "#9333ea",
-    accentBg: "#fdf4ff",
-    border: "#e9d5ff",
     features: [
       "Camiones ilimitados",
       "Todo lo de Pro",
@@ -63,12 +54,12 @@ const PLANS = [
   },
 ];
 
-const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  active:     { label: "Activo",       color: "#16a34a" },
-  trialing:   { label: "Trial",        color: "#2563eb" },
-  past_due:   { label: "Pago vencido", color: "#dc2626" },
-  cancelled:  { label: "Cancelado",    color: "#6b7280" },
-  incomplete: { label: "Incompleto",   color: "#f59e0b" },
+const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+  active:     { label: "Activo",       cls: "st-badge-activo" },
+  trialing:   { label: "Trial",        cls: "st-badge-activo" },
+  past_due:   { label: "Pago vencido", cls: "st-badge-cancelado" },
+  cancelled:  { label: "Cancelado",    cls: "st-badge-cancelado" },
+  incomplete: { label: "Incompleto",   cls: "st-badge-pendiente" },
 };
 
 export default function PlansView() {
@@ -101,15 +92,15 @@ export default function PlansView() {
   const status = sub ? (STATUS_LABEL[sub.status] ?? STATUS_LABEL.incomplete) : null;
 
   return (
-    <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
+    <div style={{ padding: 24, height: "100%", background: "var(--c-bg)", overflowY: "auto" }}>
 
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
+      <div style={{ marginBottom: 28 }}>
         <p className="st-section-eyebrow">Suscripción</p>
-        <h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0d0d0d", margin: "4px 0 8px" }}>
+        <h2 className="st-section-title">
           {currentPlan ? "Cambiar plan" : "Elegir un plan"}
         </h2>
-        <p style={{ margin: 0, fontSize: "0.92rem", color: "#6b7280" }}>
+        <p style={{ margin: "6px 0 0", fontSize: "0.9rem", color: "var(--c-ink-2)" }}>
           Elegí el plan que mejor se adapte al tamaño de tu operación.
         </p>
       </div>
@@ -118,42 +109,36 @@ export default function PlansView() {
       {!loading && currentPlan && status && (
         <div
           style={{
-            background: "#fafafa",
-            border: "1px solid #f0f0f0",
-            borderRadius: 12,
+            background: "var(--c-surface)",
+            border: "1px solid var(--c-border)",
+            borderRadius: 14,
             padding: "14px 20px",
-            marginBottom: 32,
+            marginBottom: 28,
             display: "flex",
             alignItems: "center",
-            gap: 20,
+            gap: 24,
             flexWrap: "wrap",
           }}
         >
           <div>
-            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              Plan actual
-            </span>
-            <p style={{ margin: "2px 0 0", fontWeight: 800, fontSize: "0.95rem", color: "#0d0d0d", textTransform: "capitalize" }}>
+            <span className="st-section-label">Plan actual</span>
+            <p style={{ margin: "3px 0 0", fontWeight: 600, fontSize: "0.95rem", color: "var(--c-ink)", textTransform: "capitalize" }}>
               {currentPlan}
             </p>
           </div>
-          <div style={{ width: 1, height: 32, background: "#e5e7eb" }} />
+          <div style={{ width: 1, height: 30, background: "var(--c-border)" }} />
           <div>
-            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              Estado
-            </span>
-            <p style={{ margin: "2px 0 0", fontWeight: 700, color: status.color, fontSize: "0.9rem" }}>
-              ● {status.label}
-            </p>
+            <span className="st-section-label">Estado</span>
+            <div style={{ marginTop: 5 }}>
+              <span className={`st-badge ${status.cls}`}>{status.label}</span>
+            </div>
           </div>
           {sub?.current_period_end && (
             <>
-              <div style={{ width: 1, height: 32, background: "#e5e7eb" }} />
+              <div style={{ width: 1, height: 30, background: "var(--c-border)" }} />
               <div>
-                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  Próximo cobro
-                </span>
-                <p style={{ margin: "2px 0 0", fontWeight: 600, fontSize: "0.9rem", color: "#0d0d0d" }}>
+                <span className="st-section-label">Próximo cobro</span>
+                <p style={{ margin: "3px 0 0", fontWeight: 600, fontSize: "0.9rem", color: "var(--c-ink)" }}>
                   {new Date(sub.current_period_end).toLocaleDateString("es-AR", {
                     day: "numeric", month: "long", year: "numeric",
                   })}
@@ -167,12 +152,12 @@ export default function PlansView() {
       {error && (
         <div
           style={{
-            background: "rgba(220,38,38,0.06)",
-            border: "1px solid rgba(220,38,38,0.2)",
+            background: "var(--c-danger-soft)",
+            border: "1px solid var(--c-danger)",
             borderRadius: 10,
             padding: "12px 16px",
             marginBottom: 24,
-            color: "#dc2626",
+            color: "var(--c-accent-hover)",
             fontWeight: 600,
             fontSize: "0.88rem",
           }}
@@ -186,38 +171,38 @@ export default function PlansView() {
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 20,
+          gap: 16,
           maxWidth: 960,
         }}
       >
         {PLANS.map((plan) => {
           const isCurrent = currentPlan === plan.slug;
           const isLoading = upgrading === plan.slug;
+          const highlighted = isCurrent || !!plan.badge;
 
           return (
             <div
               key={plan.slug}
               style={{
-                border: `2px solid ${isCurrent ? plan.color : plan.border}`,
-                borderRadius: 18,
-                background: isCurrent ? plan.accentBg : "#fff",
+                border: `1px solid ${highlighted ? "var(--c-accent)" : "var(--c-border)"}`,
+                borderRadius: 14,
+                background: "var(--c-bg)",
                 display: "flex",
                 flexDirection: "column",
                 overflow: "hidden",
                 position: "relative",
-                transition: "box-shadow 0.15s ease",
               }}
             >
               {/* Badge "Plan actual" o "Más popular" */}
               {(isCurrent || plan.badge) && (
                 <div
                   style={{
-                    background: isCurrent ? plan.color : plan.color,
-                    color: "#fff",
-                    fontSize: "0.72rem",
-                    fontWeight: 800,
+                    background: isCurrent ? "var(--c-accent)" : "var(--c-accent-soft)",
+                    color: isCurrent ? "#fff" : "var(--c-accent)",
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
                     textTransform: "uppercase",
-                    letterSpacing: "0.08em",
+                    letterSpacing: "0.07em",
                     padding: "6px 0",
                     textAlign: "center",
                   }}
@@ -226,52 +211,41 @@ export default function PlansView() {
                 </div>
               )}
 
-              <div style={{ padding: 28, flex: 1, display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ padding: 24, flex: 1, display: "flex", flexDirection: "column", gap: 18 }}>
                 {/* Nombre y precio */}
                 <div>
-                  <p style={{ margin: "0 0 12px", fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>
+                  <p style={{ margin: "0 0 10px", fontSize: "0.95rem", fontWeight: 600, color: "var(--c-ink)" }}>
                     {plan.name}
                   </p>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                    <span style={{ fontSize: "2.4rem", fontWeight: 900, color: plan.color, lineHeight: 1 }}>
+                    <span style={{ fontSize: "1.9rem", fontWeight: 700, color: "var(--c-ink)", lineHeight: 1, letterSpacing: "-0.02em" }}>
                       {plan.price}
                     </span>
-                    <span style={{ fontSize: "0.82rem", color: "#9ca3af", fontWeight: 500 }}>
+                    <span style={{ fontSize: "0.8rem", color: "var(--c-ink-3)", fontWeight: 500 }}>
                       {plan.period}
                     </span>
                   </div>
                 </div>
 
                 {/* Separador */}
-                <div style={{ borderTop: "1px solid #f0f0f0" }} />
+                <div style={{ borderTop: "1px solid var(--c-border)" }} />
 
                 {/* Features */}
                 <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
                   {plan.features.map((f) => (
                     <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                      <span style={{ color: plan.color, flexShrink: 0, fontWeight: 800, fontSize: "0.9rem", lineHeight: "1.4" }}>✓</span>
-                      <span style={{ fontSize: "0.88rem", color: "#374151", lineHeight: 1.4 }}>{f}</span>
+                      <span style={{ color: "var(--c-accent)", flexShrink: 0, fontWeight: 700, fontSize: "0.85rem", lineHeight: "1.5" }}>✓</span>
+                      <span style={{ fontSize: "0.875rem", color: "var(--c-ink-2)", lineHeight: 1.45 }}>{f}</span>
                     </li>
                   ))}
                 </ul>
 
                 {/* Botón */}
                 <button
+                  className={isCurrent ? "st-btn-secondary" : "st-btn-primary"}
                   onClick={() => !isCurrent && !isLoading && !upgrading && handleUpgrade(plan.slug)}
                   disabled={isCurrent || !!upgrading}
-                  style={{
-                    height: 48,
-                    borderRadius: 12,
-                    border: `2px solid ${plan.color}`,
-                    background: isCurrent ? "transparent" : plan.color,
-                    color: isCurrent ? plan.color : "#fff",
-                    fontWeight: 800,
-                    fontSize: "0.92rem",
-                    cursor: isCurrent ? "default" : upgrading ? "not-allowed" : "pointer",
-                    opacity: upgrading && !isLoading ? 0.5 : 1,
-                    transition: "opacity 0.15s, background 0.15s",
-                    fontFamily: "inherit",
-                  }}
+                  style={{ width: "100%", justifyContent: "center" }}
                 >
                   {isCurrent
                     ? "Plan actual"

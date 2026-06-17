@@ -1,8 +1,8 @@
 import type { AdminPage } from "./AdminSidebar";
 
-const INK = "#0d0d0d";
-const MUTED = "#6b7280";
-const LINE = "#f0f0f0";
+const INK = "var(--c-ink)";
+const MUTED = "var(--c-ink-2)";
+const LINE = "var(--c-border)";
 const BRAND = "#e53935";
 
 interface Props {
@@ -144,14 +144,14 @@ function Card({
   children: React.ReactNode;
   tone?: "neutral" | "warning";
 }) {
-  const background = tone === "warning" ? "rgba(229,57,53,0.04)" : "#fafafa";
-  const borderColor = tone === "warning" ? "rgba(229,57,53,0.2)" : LINE;
+  const background = tone === "warning" ? "var(--c-warning-soft)" : "var(--c-surface)";
+  const borderColor = tone === "warning" ? "var(--c-warning)" : LINE;
   return (
     <div
       style={{
         background,
         border: `1px solid ${borderColor}`,
-        borderRadius: 14,
+        borderRadius: "var(--r-lg)",
         padding: 24,
         maxWidth: 520,
         margin: "0 auto",
@@ -174,7 +174,7 @@ function Title({ children }: { children: React.ReactNode }) {
     <h3
       style={{
         fontSize: "1.15rem",
-        fontWeight: 800,
+        fontWeight: 700,
         color: INK,
         margin: 0,
       }}

@@ -40,7 +40,7 @@ interface Props {
 function buildDestinationIcon(): L.DivIcon {
   return L.divIcon({
     className: "",
-    html: `<div style="width:16px;height:16px;border-radius:50%;background:${ROUTE_COLOR};border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.25);"></div>`,
+    html: `<div style="width:16px;height:16px;border-radius:50%;background:${ROUTE_COLOR};border:3px solid white;box-shadow:0 1px 4px rgba(16,24,40,0.18);"></div>`,
     iconSize: [16, 16],
     iconAnchor: [8, 8],
   });
@@ -49,9 +49,9 @@ function buildDestinationIcon(): L.DivIcon {
 function buildDriverIcon(label: string): L.DivIcon {
   return L.divIcon({
     className: "",
-    html: `<div style="background:#0d47a1;color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.30);white-space:nowrap;position:relative;">
+    html: `<div style="background:#0d47a1;color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid white;box-shadow:0 1px 4px rgba(16,24,40,0.18);white-space:nowrap;position:relative;">
       🚛
-      <div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:#0d47a1;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;white-space:nowrap;pointer-events:none;">
+      <div style="position:absolute;top:-21px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,0.96);color:#0f1b2d;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;white-space:nowrap;pointer-events:none;border:1px solid rgba(15,27,45,0.14);">
         ${label}
       </div>
     </div>`,
@@ -63,7 +63,7 @@ function buildDriverIcon(label: string): L.DivIcon {
 function buildOriginIcon(): L.DivIcon {
   return L.divIcon({
     className: "",
-    html: `<div style="width:14px;height:14px;border-radius:50%;background:#16a34a;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.25);"></div>`,
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:#16a34a;border:3px solid white;box-shadow:0 1px 4px rgba(16,24,40,0.18);"></div>`,
     iconSize: [14, 14],
     iconAnchor: [7, 7],
   });

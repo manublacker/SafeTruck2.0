@@ -121,7 +121,6 @@ export default function TripHistoryView() {
         </div>
         <button
           className="st-btn-secondary"
-          style={{ padding: "8px 14px", fontSize: "0.82rem" }}
           onClick={() => void loadTrips()}
           disabled={loading}
         >
@@ -163,26 +162,17 @@ export default function TripHistoryView() {
           <label className="st-label">Hasta</label>
           <input type="date" className="st-input" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
-        <button
-          onClick={reset}
-          style={{
-            background: "transparent", border: "none", color: "#e53935",
-            fontSize: "0.82rem", fontWeight: 700, cursor: "pointer",
-            padding: "14px 4px", fontFamily: "inherit",
-          }}
-        >
-          Restablecer
-        </button>
+        {(filterDriver || filterStatus || from || to) && (
+          <button className="st-btn-ghost" onClick={reset}>
+            Restablecer
+          </button>
+        )}
       </div>
 
       {error && (
         <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "12px 0" }}>
           <p style={{ margin: 0, color: "#c62828", fontSize: "0.88rem" }}>{error}</p>
-          <button
-            className="st-btn-secondary"
-            style={{ padding: "6px 12px", fontSize: "0.8rem" }}
-            onClick={() => void loadTrips()}
-          >
+          <button className="st-btn-secondary" onClick={() => void loadTrips()}>
             Reintentar
           </button>
         </div>
@@ -214,7 +204,7 @@ export default function TripHistoryView() {
                 <td>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
                     <span>{t.origin_label ?? "—"}</span>
-                    <span style={{ color: "#e53935" }}><Icons.Arrow /></span>
+                    <span style={{ color: "var(--c-ink-3)" }}><Icons.Arrow /></span>
                     <span>{t.destination_label ?? "—"}</span>
                   </div>
                 </td>

@@ -84,10 +84,10 @@ function Tabs({ current, onChange }: { current: FleetTab; onChange: (t: FleetTab
               padding: "12px 18px",
               fontFamily: "inherit",
               fontSize: "0.9rem",
-              fontWeight: active ? 800 : 600,
-              color: active ? "#0d0d0d" : "#6b7280",
+              fontWeight: active ? 700 : 600,
+              color: active ? "var(--c-ink)" : "var(--c-ink-2)",
               cursor: "pointer",
-              borderBottom: active ? "2px solid #e53935" : "2px solid transparent",
+              borderBottom: active ? "2px solid var(--c-accent)" : "2px solid transparent",
               marginBottom: -1,
             }}
           >
@@ -102,17 +102,12 @@ function Tabs({ current, onChange }: { current: FleetTab; onChange: (t: FleetTab
 // ── Tab: Camiones ──────────────────────────────────────────────────────────
 
 function TruckStatusBadge({ estado }: { estado: string }) {
-  const cfg: Record<string, { label: string; bg: string; color: string; dot: string }> = {
-    "Activo":        { label: "Activo",        bg: "#E7F6EE", color: "#1F9D57", dot: "#1F9D57" },
-    "En ruta":       { label: "En ruta",       bg: "#FDECEA", color: "#e53935", dot: "#e53935" },
-    "Mantenimiento": { label: "Mantenimiento", bg: "#FBF1E0", color: "#D9881A", dot: "#D9881A" },
-    "Inactivo":      { label: "Inactivo",      bg: "#F2F4F7", color: "#69727E", dot: "#9AA3AD" },
-  };
-  const c = cfg[estado] ?? cfg["Inactivo"];
+  const known = ["Activo", "En ruta", "Mantenimiento", "Inactivo"].includes(estado);
+  const { className } = truckEstadoStyle(estado);
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: c.bg, borderRadius: 999, padding: "3px 9px", fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: c.color }}>
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: c.dot }} />
-      {c.label}
+    <span className={`st-badge ${className}`}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
+      {known ? estado : "Inactivo"}
     </span>
   );
 }
@@ -127,37 +122,33 @@ function TruckListCard({ truck, onClick }: { truck: Truck; onClick: () => void }
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        background: "#fff",
-        border: `1px solid ${hover ? "#d0d5dd" : "#f0f0f0"}`,
-        borderRadius: 14, padding: "20px 18px", cursor: "pointer",
-        transform: hover ? "translateY(-2px)" : "none",
-        boxShadow: hover
-          ? "0 8px 24px -8px rgba(16,24,40,0.14), 0 2px 6px rgba(16,24,40,0.05)"
-          : "0 1px 3px rgba(16,24,40,0.06)",
-        transition: "all 160ms ease",
+        background: "var(--c-bg)",
+        border: `1px solid ${hover ? "var(--c-border-strong)" : "var(--c-border)"}`,
+        borderRadius: "var(--r-lg)", padding: 16, cursor: "pointer",
+        transition: "border-color 160ms ease",
         display: "flex", flexDirection: "column", gap: 14,
       }}
     >
       {/* Header: nombre + estado + chevron */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0d0d0d", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--c-ink)", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {truck.name}
           </div>
           {truck.patente && (
-            <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.82rem", fontWeight: 700, color: "#0d0d0d", letterSpacing: 0.4, marginBottom: 6 }}>
+            <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.82rem", fontWeight: 600, color: "var(--c-ink)", letterSpacing: 0.4, marginBottom: 6 }}>
               {truck.patente}
             </div>
           )}
           <TruckStatusBadge estado={truck.estado} />
         </div>
-        <span style={{ color: hover ? "#e53935" : "#d0d5dd", transition: "color 150ms", fontSize: "1.1rem", flexShrink: 0, marginTop: 2 }}>›</span>
+        <span style={{ color: hover ? "var(--c-accent)" : "var(--c-border-strong)", transition: "color 150ms", fontSize: "1.1rem", flexShrink: 0, marginTop: 2 }}>›</span>
       </div>
 
       {/* Conductor */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 12, borderTop: "1px solid #f5f5f5" }}>
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: driverActive ? "#1F9D57" : "#9AA3AD", flexShrink: 0 }} />
-        <span style={{ fontSize: "0.82rem", color: driverActive ? "#0d0d0d" : "#9AA3AD", fontWeight: driverActive ? 600 : 400 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: driverActive ? "var(--c-success)" : "var(--c-ink-3)", flexShrink: 0 }} />
+        <span style={{ fontSize: "0.82rem", color: driverActive ? "var(--c-ink)" : "var(--c-ink-3)", fontWeight: driverActive ? 600 : 400 }}>
           {truck.driver?.nombre ?? "Sin conductor asignado"}
         </span>
       </div>
@@ -215,30 +206,30 @@ function TruckDetailPanel({
       <div style={{ position: "absolute", inset: 0, background: "rgba(15,27,45,0.35)", backdropFilter: "blur(2px)" }} />
       <div onClick={e => e.stopPropagation()} style={{
         position: "relative", zIndex: 1, width: 380, height: "100%",
-        background: "#fff", boxShadow: "-8px 0 32px rgba(15,27,45,0.12)",
+        background: "var(--c-bg)", boxShadow: "var(--sh-2)",
         display: "flex", flexDirection: "column", animation: "slideInRight 200ms ease",
       }}>
-        {/* Header navy */}
-        <div style={{ background: "#0F1B2D", padding: "28px 24px 24px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-            <span style={{ fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#AEB8C4" }}>Camión</span>
-            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: "#AEB8C4", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        {/* Header claro */}
+        <div style={{ background: "var(--c-bg)", borderBottom: "1px solid var(--c-border)", padding: "24px 24px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <span className="st-section-label">Camión</span>
+            <button onClick={onClose} style={{ background: "var(--c-surface-2)", border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: "var(--c-ink-2)", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.02em", marginBottom: 6 }}>{truck.name}</div>
-            {truck.patente && <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.9rem", fontWeight: 700, color: "#AEB8C4", letterSpacing: "0.08em", marginBottom: 10 }}>{truck.patente}</div>}
+          <div>
+            <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--c-ink)", letterSpacing: "-0.02em", marginBottom: 6 }}>{truck.name}</div>
+            {truck.patente && <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.9rem", fontWeight: 600, color: "var(--c-ink-2)", letterSpacing: "0.08em", marginBottom: 10 }}>{truck.patente}</div>}
             <TruckStatusBadge estado={truck.estado} />
           </div>
         </div>
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-          <div style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#9AA3AD", marginBottom: 12 }}>DETALLES</div>
-          <div style={{ border: "1px solid #E6E8EC", borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
+          <div className="st-section-label" style={{ marginBottom: 12 }}>Detalles</div>
+          <div style={{ border: "1px solid var(--c-border)", borderRadius: "var(--r-md)", overflow: "hidden", marginBottom: 16 }}>
             {rows.map((row, i) => (
-              <div key={row.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: i < rows.length - 1 ? "1px solid #F2F4F7" : "none" }}>
-                <span style={{ fontSize: "0.85rem", color: "#69727E" }}>{row.label}</span>
-                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#0d0d0d", ...row.style }}>{row.value}</span>
+              <div key={row.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: i < rows.length - 1 ? "1px solid var(--c-border)" : "none" }}>
+                <span style={{ fontSize: "0.85rem", color: "var(--c-ink-2)" }}>{row.label}</span>
+                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--c-ink)", ...row.style }}>{row.value}</span>
               </div>
             ))}
           </div>
@@ -246,14 +237,14 @@ function TruckDetailPanel({
           {/* Actions */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="st-btn-secondary" style={{ flex: 1, padding: "10px 14px", fontSize: "0.85rem" }} onClick={() => setEditing(true)}>
+              <button className="st-btn-secondary" style={{ flex: 1 }} onClick={() => setEditing(true)}>
                 <Icons.Edit size={14} /> Editar
               </button>
-              <button className="st-btn-secondary" style={{ flex: 1, padding: "10px 14px", fontSize: "0.85rem" }} onClick={() => setAssigning(true)}>
+              <button className="st-btn-secondary" style={{ flex: 1 }} onClick={() => setAssigning(true)}>
                 <Icons.People size={14} /> Conductor
               </button>
             </div>
-            <button onClick={() => setShowConfirm(true)} style={{ width: "100%", padding: "10px 16px", borderRadius: 10, border: "1px solid #fecaca", background: "#fff5f5", color: "#e53935", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer", fontFamily: "inherit" }}>
+            <button className="st-btn-danger" style={{ width: "100%" }} onClick={() => setShowConfirm(true)}>
               Eliminar camión
             </button>
             {showConfirm && (
@@ -308,15 +299,15 @@ function TrucksTab() {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>
+        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--c-ink)" }}>
           Camiones
           <span style={{ marginLeft: 8, fontSize: "0.82rem", fontWeight: 600, color: "#9AA3AD" }}>{trucks.length}</span>
         </h3>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="st-btn-secondary" style={{ padding: "10px 14px", fontSize: "0.82rem", opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }} onClick={atLimit ? undefined : () => setFromTemplate(true)} disabled={atLimit}>
+          <button className="st-btn-ghost" style={{ opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }} onClick={atLimit ? undefined : () => setFromTemplate(true)} disabled={atLimit}>
             Desde plantilla
           </button>
-          <button className="st-btn-primary" style={{ padding: "10px 16px", opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }} onClick={atLimit ? undefined : () => setCreating(true)} disabled={atLimit}>
+          <button className="st-btn-primary" style={{ opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }} onClick={atLimit ? undefined : () => setCreating(true)} disabled={atLimit}>
             <Icons.Plus size={14} /> Agregar camión
           </button>
         </div>
@@ -381,16 +372,12 @@ function DriverCard({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        background: "#fff",
-        border: `1px solid ${hover ? "#d0d5dd" : "#f0f0f0"}`,
-        borderRadius: 14,
-        padding: "20px 18px",
+        background: "var(--c-bg)",
+        border: `1px solid ${hover ? "var(--c-border-strong)" : "var(--c-border)"}`,
+        borderRadius: "var(--r-lg)",
+        padding: 16,
         cursor: "pointer",
-        transform: hover ? "translateY(-2px)" : "none",
-        boxShadow: hover
-          ? "0 8px 24px -8px rgba(16,24,40,0.14), 0 2px 6px rgba(16,24,40,0.05)"
-          : "0 1px 3px rgba(16,24,40,0.06)",
-        transition: "all 160ms ease",
+        transition: "border-color 160ms ease",
         display: "flex",
         flexDirection: "column",
         gap: 14,
@@ -400,52 +387,42 @@ function DriverCard({
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
         <div style={{
           width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
-          background: "#0F1B2D", color: "#fff",
+          background: "var(--c-navy)", color: "#fff",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontWeight: 800, fontSize: "0.88rem", letterSpacing: "0.04em",
+          fontWeight: 600, fontSize: "0.88rem", letterSpacing: "0.04em",
         }}>
           {driverInitials(driver.nombre)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#0d0d0d", lineHeight: 1.25, marginBottom: 6 }}>
+          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--c-ink)", lineHeight: 1.25, marginBottom: 6 }}>
             {driver.nombre}
           </div>
           {isOnTrip ? (
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              background: "#E7F6EE", borderRadius: 999,
-              padding: "3px 9px", fontSize: "0.72rem", fontWeight: 700,
-              letterSpacing: "0.08em", textTransform: "uppercase", color: "#1F9D57",
-            }}>
+            <span className="st-badge st-badge-activo">
               <span style={{ position: "relative", display: "inline-flex", width: 6, height: 6 }}>
                 <span style={{
                   position: "absolute", inset: 0, borderRadius: "50%",
-                  background: "#1F9D57", opacity: 0.4,
+                  background: "var(--c-success)", opacity: 0.4,
                   animation: "st-pulse 1.8s ease-out infinite",
                 }} />
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#1F9D57" }} />
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--c-success)" }} />
               </span>
               En viaje
             </span>
           ) : (
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              background: "#F2F4F7", borderRadius: 999,
-              padding: "3px 9px", fontSize: "0.72rem", fontWeight: 700,
-              letterSpacing: "0.08em", textTransform: "uppercase", color: "#69727E",
-            }}>
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#9AA3AD" }} />
+            <span className="st-badge st-badge-inactivo">
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
               Descansando
             </span>
           )}
         </div>
-        <span style={{ color: hover ? "#e53935" : "#d0d5dd", transition: "color 150ms", fontSize: "1.1rem", flexShrink: 0 }}>›</span>
+        <span style={{ color: hover ? "var(--c-accent)" : "var(--c-border-strong)", transition: "color 150ms", fontSize: "1.1rem", flexShrink: 0 }}>›</span>
       </div>
 
       {/* Camión */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 12, borderTop: "1px solid #f5f5f5" }}>
-        <span style={{ fontSize: "0.85rem", color: "#9AA3AD" }}>🚛</span>
-        <span style={{ fontSize: "0.82rem", color: truck ? "#0d0d0d" : "#9AA3AD", fontWeight: truck ? 600 : 400 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ color: "var(--c-ink-3)", display: "inline-flex" }}><Icons.Truck size={15} /></span>
+        <span style={{ fontSize: "0.82rem", color: truck ? "var(--c-ink)" : "var(--c-ink-3)", fontWeight: truck ? 600 : 400 }}>
           {truck ?? "Sin camión asignado"}
         </span>
       </div>
@@ -487,34 +464,20 @@ function ConfirmModal({
           animation: "fadeScaleIn 150ms ease",
         }}
       >
-        <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0d0d0d", marginBottom: 10 }}>
+        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--c-ink)", marginBottom: 10 }}>
           {title}
         </div>
         <div style={{ fontSize: "0.9rem", color: "#69727E", lineHeight: 1.55, marginBottom: 24 }}>
           {message}
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button
-            onClick={onCancel}
-            style={{
-              padding: "10px 18px", borderRadius: 10,
-              border: "1px solid #E6E8EC", background: "#fff",
-              color: "#16202C", fontWeight: 600, fontSize: "0.88rem",
-              cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
+          <button className="st-btn-secondary" onClick={onCancel}>
             Cancelar
           </button>
           <button
+            className="st-btn-danger solid"
             onClick={onConfirm}
             disabled={loading}
-            style={{
-              padding: "10px 18px", borderRadius: 10,
-              border: "none", background: "#e53935",
-              color: "#fff", fontWeight: 700, fontSize: "0.88rem",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.65 : 1, fontFamily: "inherit",
-            }}
           >
             {loading ? "Eliminando…" : confirmLabel}
           </button>
@@ -556,8 +519,7 @@ function InvitationCard({ inv, onDeleteClick }: { inv: DriverInvitation; onDelet
           width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
           background: "#fef3c7", color: "#92400e",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: "1.2rem",
-        }}>⏳</div>
+        }}><Icons.Clock size={20} /></div>
         <div>
           <div style={{ fontSize: "0.92rem", fontWeight: 700, color: "#92400e", marginBottom: 4 }}>
             {inv.hint_name ?? "Invitación pendiente"}
@@ -633,40 +595,40 @@ function DriverDetailPanel({
         style={{
           position: "relative", zIndex: 1,
           width: 380, height: "100%",
-          background: "#fff", boxShadow: "-8px 0 32px rgba(15,27,45,0.12)",
+          background: "var(--c-bg)", boxShadow: "var(--sh-2)",
           display: "flex", flexDirection: "column",
           animation: "slideInRight 200ms ease",
         }}
       >
-        {/* Header navy */}
-        <div style={{ background: "#0F1B2D", padding: "28px 24px 24px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-            <span style={{ fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#AEB8C4" }}>Conductor</span>
+        {/* Header claro */}
+        <div style={{ background: "var(--c-bg)", borderBottom: "1px solid var(--c-border)", padding: "24px 24px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <span className="st-section-label">Conductor</span>
             <button
               onClick={onClose}
-              style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: "#AEB8C4", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center" }}
+              style={{ background: "var(--c-surface-2)", border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: "var(--c-ink-2)", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center" }}
             >✕</button>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <div style={{
               width: 52, height: 52, borderRadius: "50%",
-              background: "#e53935", color: "#fff",
+              background: "var(--c-navy)", color: "#fff",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontWeight: 800, fontSize: "1.1rem",
+              fontWeight: 600, fontSize: "1.1rem",
             }}>
               {driverInitials(driver.nombre)}
             </div>
             <div>
-              <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>{driver.nombre}</div>
+              <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--c-ink)", letterSpacing: "-0.02em" }}>{driver.nombre}</div>
               <div style={{ marginTop: 6 }}>
                 {isOnTrip ? (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(31,157,87,0.18)", borderRadius: 999, padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700, color: "#34C97A", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#34C97A" }} />
+                  <span className="st-badge st-badge-activo">
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
                     En viaje
                   </span>
                 ) : (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.08)", borderRadius: 999, padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700, color: "#AEB8C4", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#637482" }} />
+                  <span className="st-badge st-badge-inactivo">
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
                     Descansando
                   </span>
                 )}
@@ -677,33 +639,25 @@ function DriverDetailPanel({
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-          <div style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#9AA3AD", marginBottom: 12 }}>
-            INFORMACIÓN DEL CONDUCTOR
+          <div className="st-section-label" style={{ marginBottom: 12 }}>
+            Información del conductor
           </div>
-          <div style={{ border: "1px solid #E6E8EC", borderRadius: 10, overflow: "hidden", marginBottom: 24 }}>
+          <div style={{ border: "1px solid var(--c-border)", borderRadius: "var(--r-md)", overflow: "hidden", marginBottom: 24 }}>
             {rows.map((row, i) => (
               <div key={row.label} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "13px 16px",
-                borderBottom: i < rows.length - 1 ? "1px solid #F2F4F7" : "none",
+                borderBottom: i < rows.length - 1 ? "1px solid var(--c-border)" : "none",
               }}>
-                <span style={{ fontSize: "0.85rem", color: "#69727E" }}>{row.label}</span>
-                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#0d0d0d", ...row.style }}>
+                <span style={{ fontSize: "0.85rem", color: "var(--c-ink-2)" }}>{row.label}</span>
+                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--c-ink)", ...row.style }}>
                   {row.value}
                 </span>
               </div>
             ))}
           </div>
 
-          <button
-            onClick={() => setShowConfirm(true)}
-            style={{
-              width: "100%", padding: "11px 16px", borderRadius: 10,
-              border: "1px solid #fecaca", background: "#fff5f5",
-              color: "#e53935", fontWeight: 700, fontSize: "0.88rem",
-              cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
+          <button className="st-btn-danger" style={{ width: "100%" }} onClick={() => setShowConfirm(true)}>
             Eliminar conductor
           </button>
 
@@ -776,7 +730,7 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>
+        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--c-ink)" }}>
           Conductores
           <span style={{ marginLeft: 8, fontSize: "0.82rem", fontWeight: 600, color: "#9AA3AD" }}>
             {drivers.length}
@@ -862,7 +816,7 @@ function Toolbar({
         marginBottom: 14,
       }}
     >
-      <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0d0d0d" }}>{title}</h3>
+      <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--c-ink)" }}>{title}</h3>
       <button
         className="st-btn-primary"
         style={{ padding: "10px 16px", opacity: disabled ? 0.45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
