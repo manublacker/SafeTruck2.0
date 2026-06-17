@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, ActivityIndicator, RefreshControl,
+  View, Text, TouchableOpacity,
+  ScrollView, ActivityIndicator, RefreshControl, Alert,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
-import { getTheme } from '../../src/theme'
+import { getTheme, Theme } from '../../src/theme'
 import {
   fetchMyAssignedTruck,
   fetchMyDriverProfile,
@@ -23,11 +24,11 @@ function SectionLabel({ children }: { children: string }) {
   )
 }
 
-function Card({ children, style }: { children: React.ReactNode; style?: object }) {
+function Card({ children, style, t }: { children: React.ReactNode; style?: object; t: Theme }) {
   return (
     <View style={[{
-      backgroundColor: '#FFFFFF', borderRadius: 12,
-      borderWidth: 1, borderColor: '#E6E8EC',
+      backgroundColor: t.card, borderRadius: 12,
+      borderWidth: 1, borderColor: t.cardBorder,
       overflow: 'hidden',
       shadowColor: '#10203080', shadowOpacity: 0.05, shadowRadius: 4,
       shadowOffset: { width: 0, height: 1 }, elevation: 1,
@@ -37,26 +38,27 @@ function Card({ children, style }: { children: React.ReactNode; style?: object }
   )
 }
 
-function DataRow({ label, value, isLast = false }: { label: string; value: string | null; isLast?: boolean }) {
+function DataRow({ label, value, isLast = false, t }: { label: string; value: string | null; isLast?: boolean; t: Theme }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: isLast ? 0 : 1, borderBottomColor: '#E6E8EC' }}>
-      <Text style={{ fontSize: 13.5, color: '#69727E', flex: 1 }}>{label}</Text>
-      <Text style={{ fontSize: 13.5, fontWeight: '600', color: '#16202C' }}>{value ?? '—'}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: isLast ? 0 : 1, borderBottomColor: t.border }}>
+      <Text style={{ fontSize: 13.5, color: t.textMuted, flex: 1 }}>{label}</Text>
+      <Text style={{ fontSize: 13.5, fontWeight: '600', color: t.text }}>{value ?? '—'}</Text>
     </View>
   )
 }
 
-function NavRow({ label, detail, danger = false, isLast = false, onPress }: {
-  label: string; detail?: string; danger?: boolean; isLast?: boolean; onPress?: () => void
+function NavRow({ label, detail, danger = false, isLast = false, onPress, t }: {
+  label: string; detail?: string; danger?: boolean; isLast?: boolean; onPress?: () => void; t: Theme
 }) {
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={{
+    <TouchableOpacity onPress={onPress} disabled={!onPress} activeOpacity={0.7} style={{
       flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14,
-      borderBottomWidth: isLast ? 0 : 1, borderBottomColor: '#E6E8EC',
+      borderBottomWidth: isLast ? 0 : 1, borderBottomColor: t.border,
+      opacity: onPress || danger ? 1 : 0.55,
     }}>
-      <Text style={{ fontSize: 14, fontWeight: '500', color: danger ? '#E5342B' : '#16202C', flex: 1 }}>{label}</Text>
-      {detail && <Text style={{ fontSize: 13, color: '#9AA3AD', marginRight: 6 }}>{detail}</Text>}
-      {!danger && <Text style={{ fontSize: 16, color: '#9AA3AD' }}>›</Text>}
+      <Text style={{ fontSize: 14, fontWeight: '500', color: danger ? t.danger : t.text, flex: 1 }}>{label}</Text>
+      {detail && <Text style={{ fontSize: 13, color: t.textSoft, marginRight: 6 }}>{detail}</Text>}
+      {!danger && onPress && <Text style={{ fontSize: 16, color: t.textSoft }}>›</Text>}
     </TouchableOpacity>
   )
 }
@@ -67,12 +69,14 @@ export default function ProfileScreen() {
   const setActiveVehicle = useStore(s => s.setActiveVehicle)
   const isDark = useStore(s => s.isDark)
   const t = getTheme(isDark)
+  const insets = useSafeAreaInsets()
 
   const bgColor = isDark ? t.bg : '#F7F8FA'
 
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null)
   const [assignedTruck, setAssignedTruck]  = useState<AssignedTruck | null | undefined>(undefined)
   const [profileLoading, setProfileLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setProfileLoading(true)
@@ -97,14 +101,24 @@ export default function ProfileScreen() {
         created_at: '',
       } : null)
     }
+    // Si ambas llamadas fallaron, es un error de red/sesión, no "sin datos".
+    setError(dp.status === 'rejected' && at.status === 'rejected'
+      ? 'No pudimos cargar tu información. Revisá tu conexión.'
+      : null)
     setProfileLoading(false)
   }, [setActiveVehicle])
 
   useEffect(() => { void load() }, [load])
 
-  const logout = async () => {
-    await supabase.auth.signOut()
-    setProfile(null)
+  const logout = () => {
+    Alert.alert('Cerrar sesión', '¿Querés salir de tu cuenta?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Cerrar sesión', style: 'destructive', onPress: async () => {
+        await supabase.auth.signOut()
+        setActiveVehicle(null)
+        setProfile(null)
+      }},
+    ])
   }
 
   const initials = profile?.full_name
@@ -117,7 +131,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: bgColor }}
-      contentContainerStyle={{ padding: 18, paddingTop: 60, paddingBottom: 60 }}
+      contentContainerStyle={{ padding: 18, paddingTop: insets.top + 14, paddingBottom: 60 }}
       refreshControl={<RefreshControl refreshing={profileLoading} onRefresh={load} tintColor={t.accent} />}
     >
 
@@ -148,33 +162,42 @@ export default function ProfileScreen() {
 
       {profileLoading ? (
         <ActivityIndicator color={t.accent} style={{ marginVertical: 32 }} />
+      ) : error ? (
+        <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+          <Text style={{ fontSize: 32, marginBottom: 12 }}>📡</Text>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: t.text, marginBottom: 6 }}>No se pudo cargar</Text>
+          <Text style={{ fontSize: 13, color: t.textMuted, textAlign: 'center', marginBottom: 18 }}>{error}</Text>
+          <TouchableOpacity onPress={load} activeOpacity={0.85} style={{ backgroundColor: t.accent, borderRadius: 10, paddingHorizontal: 22, paddingVertical: 11 }}>
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13.5 }}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <>
           {/* ── Camión asignado ──────────────────────────────────────── */}
           <SectionLabel>Camión asignado</SectionLabel>
           <View style={{ marginBottom: 22 }}>
             {assignedTruck ? (
-              <Card style={{ padding: 14 }}>
+              <Card style={{ padding: 14 }} t={t}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                   <View style={{
                     width: 46, height: 46, borderRadius: 8,
-                    backgroundColor: '#FDECEA', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    backgroundColor: t.accentSoft, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   }}>
                     <Text style={{ fontSize: 22 }}>🚛</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#16202C', letterSpacing: -0.3 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: t.text, letterSpacing: -0.3 }}>
                       {assignedTruck.name}
                     </Text>
                     {assignedTruck.modelo && (
-                      <Text style={{ fontSize: 12.5, color: '#69727E', marginTop: 2 }}>
+                      <Text style={{ fontSize: 12.5, color: t.textMuted, marginTop: 2 }}>
                         {assignedTruck.modelo}{assignedTruck.anio ? ` · ${assignedTruck.anio}` : ''}
                       </Text>
                     )}
                   </View>
                   {assignedTruck.patente && (
-                    <View style={{ backgroundColor: '#F2F4F7', borderRadius: 4, borderWidth: 1, borderColor: '#E6E8EC', paddingHorizontal: 8, paddingVertical: 5 }}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.6, color: '#16202C', fontVariantNumeric: 'tabular-nums' }}>
+                    <View style={{ backgroundColor: t.surface2, borderRadius: 4, borderWidth: 1, borderColor: t.border, paddingHorizontal: 8, paddingVertical: 5 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.6, color: t.text, fontVariantNumeric: 'tabular-nums' }}>
                         {assignedTruck.patente}
                       </Text>
                     </View>
@@ -182,26 +205,26 @@ export default function ProfileScreen() {
                 </View>
               </Card>
             ) : (
-              <Card style={{ padding: 14 }}>
-                <Text style={{ fontSize: 13, color: '#9AA3AD' }}>Tu empresa aún no te asignó un camión.</Text>
+              <Card style={{ padding: 14 }} t={t}>
+                <Text style={{ fontSize: 13, color: t.textSoft }}>Tu empresa aún no te asignó un camión.</Text>
               </Card>
             )}
           </View>
 
           {/* ── Datos de contacto ────────────────────────────────────── */}
           <SectionLabel>Datos de contacto</SectionLabel>
-          <Card style={{ marginBottom: 22 }}>
-            <DataRow label="Teléfono" value={driverProfile?.telefono ?? null} />
-            <DataRow label="Email" value={profile?.email ?? null} isLast />
+          <Card style={{ marginBottom: 22 }} t={t}>
+            <DataRow label="Teléfono" value={driverProfile?.telefono ?? null} t={t} />
+            <DataRow label="Email" value={profile?.email ?? null} isLast t={t} />
           </Card>
 
           {/* ── Cuenta ──────────────────────────────────────────────── */}
           <SectionLabel>Cuenta</SectionLabel>
-          <Card style={{ marginBottom: 18 }}>
-            <NavRow label="Notificaciones" detail="Activadas" />
-            <NavRow label="Seguridad y datos" />
-            <NavRow label="Ayuda y soporte" />
-            <NavRow label="Cerrar sesión" danger isLast onPress={logout} />
+          <Card style={{ marginBottom: 18 }} t={t}>
+            <NavRow label="Notificaciones" detail="Activadas" t={t} />
+            <NavRow label="Seguridad y datos" t={t} />
+            <NavRow label="Ayuda y soporte" t={t} />
+            <NavRow label="Cerrar sesión" danger isLast onPress={logout} t={t} />
           </Card>
 
           <Text style={{ textAlign: 'center', fontSize: 11, color: '#9AA3AD', fontVariantNumeric: 'tabular-nums', letterSpacing: 0.4, paddingBottom: 8 }}>

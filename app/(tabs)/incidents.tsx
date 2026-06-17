@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
@@ -45,9 +46,11 @@ export default function IncidentsScreen() {
   const isDark = useStore(s => s.isDark)
   const t = getTheme(isDark)
   const s = useMemo(() => makeStyles(t), [isDark])
+  const insets = useSafeAreaInsets()
 
   const [incidents, setIncidents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<string | null>(null)
 
   useEffect(() => {
@@ -58,10 +61,13 @@ export default function IncidentsScreen() {
     setLoading(true)
     try {
       const res = await fetch(`${BACKEND}/api/incidents`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setIncidents(json.incidents ?? [])
+      setError(null)
     } catch (e) {
       console.log('loadIncidents error:', e)
+      setError('No se pudieron cargar las alertas. Revisá tu conexión.')
     } finally {
       setLoading(false)
     }
@@ -73,13 +79,15 @@ export default function IncidentsScreen() {
       { text: 'Sí', style: 'destructive', onPress: async () => {
         try {
           const headers = await authHeaders()
-          await fetch(`${BACKEND}/api/incidents/${incidentId}/deactivate`, {
+          const res = await fetch(`${BACKEND}/api/incidents/${incidentId}/deactivate`, {
             method: 'PATCH',
             headers,
           })
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
           loadIncidents()
         } catch (e) {
           console.log('deactivate error:', e)
+          Alert.alert('Error', 'No se pudo desactivar la alerta. Intentá de nuevo.')
         }
       }},
     ])
@@ -88,8 +96,18 @@ export default function IncidentsScreen() {
   const timeAgo = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime()
     const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'recién'
     if (mins < 60) return `hace ${mins} min`
     return `hace ${Math.floor(mins / 60)}h`
+  }
+
+  // expires_at es futuro: mostramos cuánto FALTA, no "hace -X".
+  const timeUntil = (dateStr: string) => {
+    const diff = new Date(dateStr).getTime() - Date.now()
+    if (diff <= 0) return 'expirada'
+    const mins = Math.floor(diff / 60000)
+    if (mins < 60) return `en ${mins} min`
+    return `en ${Math.floor(mins / 60)}h`
   }
 
   const filtered = filter ? incidents.filter(i => i.incident_type === filter) : incidents
@@ -97,7 +115,7 @@ export default function IncidentsScreen() {
   return (
     <View style={s.container}>
       {/* Topbar */}
-      <View style={s.topbar}>
+      <View style={[s.topbar, { paddingTop: insets.top + 14 }]}>
         <Text style={s.topbarTitle}>Alertas activas</Text>
         <Text style={s.topbarSub}>
           {incidents.length} incidente{incidents.length !== 1 ? 's' : ''} en el AMBA
@@ -127,16 +145,31 @@ export default function IncidentsScreen() {
 
       <FlatList
         data={filtered}
-        keyExtractor={item => item.id}
+        keyExtractor={item => String(item.id)}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadIncidents} tintColor={t.accent} />}
         contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         ListEmptyComponent={
-          <View style={s.empty}>
-            <View style={s.emptyIcon}><Text style={{ fontSize: 28 }}>✅</Text></View>
-            <Text style={s.emptyTitle}>Sin alertas activas</Text>
-            <Text style={s.emptyText}>El área está despejada por el momento</Text>
-          </View>
+          loading ? null : error ? (
+            <View style={s.empty}>
+              <View style={s.emptyIcon}><Text style={{ fontSize: 28 }}>📡</Text></View>
+              <Text style={s.emptyTitle}>No se pudo cargar</Text>
+              <Text style={s.emptyText}>{error}</Text>
+              <TouchableOpacity
+                onPress={loadIncidents}
+                activeOpacity={0.85}
+                style={{ marginTop: 16, backgroundColor: t.accent, borderRadius: 10, paddingHorizontal: 22, paddingVertical: 11 }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13.5 }}>Reintentar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={s.empty}>
+              <View style={s.emptyIcon}><Text style={{ fontSize: 28 }}>✅</Text></View>
+              <Text style={s.emptyTitle}>Sin alertas activas</Text>
+              <Text style={s.emptyText}>El área está despejada por el momento</Text>
+            </View>
+          )
         }
         renderItem={({ item }) => (
           // --dash-incident-card: flat, franja lateral de color
@@ -148,7 +181,7 @@ export default function IncidentsScreen() {
                 <Text style={s.cardTime}>{timeAgo(item.reported_at)}</Text>
               </View>
               <View style={s.cardBottom}>
-                <Text style={s.cardExpiry}>⏱ Expira {timeAgo(item.expires_at)}</Text>
+                <Text style={s.cardExpiry}>⏱ Expira {timeUntil(item.expires_at)}</Text>
                 {/* --dash-vote-btn: pill */}
                 <View style={s.votes}>
                   <TouchableOpacity style={s.voteBtn}>
