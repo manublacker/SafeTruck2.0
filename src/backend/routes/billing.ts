@@ -90,6 +90,67 @@ router.get('/subscription', authMiddleware, async (req: Request, res: Response) 
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/billing/confirm
+// Confirmación SÍNCRONA al volver del checkout. No dependemos del webhook de
+// MercadoPago (que puede no llegar o fallar): buscamos el pago del usuario en
+// MercadoPago por external_reference y activamos la suscripción al instante.
+// Idempotente — el upsert usa onConflict, así que repetir la llamada no duplica.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id
+    const { plan } = req.body as { plan?: string }
+
+    // external_reference = `${userId}|${plan}` (ver /checkout). Filtramos por él
+    // si tenemos el plan; igual validamos el userId sobre cada resultado.
+    const externalReference = plan ? `${userId}|${plan}` : undefined
+
+    let paid: any = null
+    try {
+      const search = await paymentClient.search({
+        options: {
+          ...(externalReference ? { external_reference: externalReference } : {}),
+          sort: 'date_created',
+          criteria: 'desc',
+        },
+      })
+      const results = (search as any).results ?? []
+      paid = results.find((p: any) => {
+        const [refUser] = String(p.external_reference ?? '').split('|')
+        return refUser === userId && ['approved', 'pending'].includes(p.status ?? '')
+      })
+    } catch (searchErr: any) {
+      // Si la búsqueda falla no abortamos: devolvemos la suscripción que ya exista.
+      console.error('[/api/billing/confirm] búsqueda MP falló:', searchErr.message)
+    }
+
+    if (paid) {
+      const [, refPlan] = String(paid.external_reference ?? '').split('|')
+      await upsertSubscription({
+        userId,
+        plan:        refPlan || plan || '',
+        mpPaymentId: String(paid.id),
+        mpPayerId:   String(paid.payer?.id ?? ''),
+        paidAt:      paid.date_approved ?? null,
+      })
+    }
+
+    const { data } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    res.json({ subscription: data ?? null, confirmed: !!paid })
+  } catch (err: any) {
+    console.error('[/api/billing/confirm]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/billing/webhook
 // Recibe notificaciones de MercadoPago. Usa express.json() normal.
 // ─────────────────────────────────────────────────────────────────────────────
