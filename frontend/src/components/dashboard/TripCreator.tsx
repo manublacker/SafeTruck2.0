@@ -3,6 +3,7 @@ import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
 import RouteCalculator, { type RouteCalculatorHandle, type PinPreview } from "./RouteCalculator";
 import { createAssignedTrip, SubscriptionRequiredError } from "@/services/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 const FLASH_DURATION_MS = 4000;
 const MUTED = "#6b7280";
@@ -36,6 +37,8 @@ export default function TripCreator({
   onDestinationPinned,
   onSubscriptionRequired,
 }: Props) {
+  const { user } = useAuth();
+  const hasSubscription = user?.plan != null;
   const [draft, setDraft]       = useState<DraftTrip>(EMPTY_DRAFT);
   const [flash, setFlash]       = useState<{ msg: string; ok: boolean }>({ msg: "", ok: true });
   const [submitting, setSubmitting] = useState(false);
@@ -49,13 +52,37 @@ export default function TripCreator({
 
   const hasDrivers  = availableDrivers.length > 0;
   const hasTruck    = Boolean(assignedTruck);
-  const formDisabled = !hasDrivers || !hasTruck || submitting;
+  const formDisabled = !hasDrivers || !hasTruck || submitting || !hasSubscription;
   const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
       <p className="st-section-eyebrow" style={{ marginBottom: 4 }}>Asignar</p>
       <h2 className="st-section-title" style={{ marginBottom: 14 }}>Nuevo viaje</h2>
+
+      {!hasSubscription && onSubscriptionRequired && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+          background: "#fffbeb", border: "1px solid #fde68a",
+          borderRadius: 10, padding: "10px 16px", marginBottom: 12,
+          fontSize: "0.85rem",
+        }}>
+          <span style={{ color: "#92400e", fontWeight: 600 }}>
+            🔒 Necesitás un plan activo para asignar viajes.
+          </span>
+          <button
+            type="button"
+            onClick={onSubscriptionRequired}
+            style={{
+              background: "none", border: "none", color: "#e53935",
+              fontWeight: 700, fontSize: "0.85rem", cursor: "pointer",
+              padding: 0, fontFamily: "inherit", textDecoration: "underline",
+            }}
+          >
+            Ver planes →
+          </button>
+        </div>
+      )}
 
       {!hasDrivers && (
         <p style={{ color: "#c62828", fontSize: "0.85rem", margin: "0 0 12px" }}>
@@ -115,7 +142,12 @@ export default function TripCreator({
           <RouteSummary route={routeResult} truckName={assignedTruck.modelo ?? assignedTruck.name} />
         )}
 
-        <button type="submit" className="st-btn-cta" disabled={formDisabled}>
+        <button
+          type="submit"
+          className="st-btn-cta"
+          disabled={formDisabled}
+          title={!hasSubscription ? "Activá tu suscripción para asignar viajes" : undefined}
+        >
           {submitting ? "Asignando viaje…" : "Asignar viaje"}
         </button>
 

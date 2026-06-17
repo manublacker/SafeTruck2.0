@@ -1,15 +1,17 @@
 import { useState, useEffect } from "react";
-import { createInvitation } from "@/services/api";
+import { createInvitation, SubscriptionRequiredError } from "@/services/api";
 
 interface Props {
   onClose: () => void;
+  onSubscriptionRequired?: () => void;
 }
 
-export default function InviteDriverModal({ onClose }: Props) {
-  const [loading, setLoading]   = useState(false);
-  const [link, setLink]         = useState("");
-  const [error, setError]       = useState("");
-  const [copied, setCopied]     = useState(false);
+export default function InviteDriverModal({ onClose, onSubscriptionRequired }: Props) {
+  const [loading, setLoading]             = useState(false);
+  const [link, setLink]                   = useState("");
+  const [error, setError]                 = useState("");
+  const [subscriptionError, setSubscriptionError] = useState(false);
+  const [copied, setCopied]               = useState(false);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -22,12 +24,17 @@ export default function InviteDriverModal({ onClose }: Props) {
   async function handleGenerate() {
     setLoading(true);
     setError("");
+    setSubscriptionError(false);
     try {
       const inv = await createInvitation();
       const url = `${window.location.origin}/unirse?code=${inv.code}`;
       setLink(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al generar el enlace");
+      if (err instanceof SubscriptionRequiredError) {
+        setSubscriptionError(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Error al generar el enlace");
+      }
     } finally {
       setLoading(false);
     }
@@ -77,7 +84,37 @@ export default function InviteDriverModal({ onClose }: Props) {
           </div>
         )}
 
-        {!link ? (
+        {subscriptionError && (
+          <div style={{
+            background: "rgba(229,57,53,0.06)", border: "1px solid rgba(229,57,53,0.2)",
+            borderRadius: 10, padding: "14px 16px", marginBottom: 12,
+            display: "flex", flexDirection: "column", gap: 10,
+          }}>
+            <div>
+              <p style={{ color: "#c62828", fontWeight: 700, fontSize: "0.88rem", margin: "0 0 4px" }}>
+                Necesitás una suscripción activa
+              </p>
+              <p style={{ color: "#6b7280", fontSize: "0.82rem", margin: 0, lineHeight: 1.45 }}>
+                Para invitar conductores debés tener un plan activo.
+              </p>
+            </div>
+            {onSubscriptionRequired && (
+              <button
+                type="button"
+                onClick={onSubscriptionRequired}
+                style={{
+                  alignSelf: "flex-start", background: "#e53935", color: "#fff",
+                  border: "none", borderRadius: 8, padding: "8px 16px",
+                  fontSize: "0.82rem", fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                Ver planes y precios
+              </button>
+            )}
+          </div>
+        )}
+
+        {!link && !subscriptionError ? (
           <button
             className="st-btn-cta"
             onClick={handleGenerate}

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Truck, Driver } from "@/types/auth";
-import { fetchTrucks, fetchDrivers, deleteDriver, updateDriver, startCheckout, fetchInvitations, deleteInvitation, fetchAssignedTrips, type DriverInvitation } from "@/services/api";
+import { fetchTrucks, fetchDrivers, deleteDriver, startCheckout, fetchInvitations, deleteInvitation, fetchAssignedTrips, SubscriptionRequiredError, type DriverInvitation } from "@/services/api";
+import type { AdminPage } from "./AdminSidebar";
 import { Icons } from "./DashboardIcons";
 import TruckEditModal from "./TruckEditModal";
 import AssignDriverModal from "./AssignDriverModal";
@@ -19,12 +20,9 @@ const PLAN_TRUCK_LIMITS: Record<string, number> = {
   enterprise: Infinity,
 };
 
-const DRIVER_ESTADO_ACTIVO = "Activo";
-const DRIVER_ESTADO_INACTIVO = "Inactivo";
-
 type FleetTab = "trucks" | "drivers";
 
-export default function FleetView() {
+export default function FleetView({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
   const { refreshDrivers } = useAuth();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [tab, setTab] = useState<FleetTab>("drivers");
@@ -54,9 +52,9 @@ export default function FleetView() {
 
       <div style={{ marginTop: 20 }}>
         {tab === "trucks" ? (
-          <TrucksTab />
+          <TrucksTab onNavigate={onNavigate} />
         ) : (
-          <DriversTab drivers={drivers} refreshDrivers={refreshAllDrivers} />
+          <DriversTab drivers={drivers} refreshDrivers={refreshAllDrivers} onNavigate={onNavigate} />
         )}
       </div>
     </div>
@@ -267,23 +265,30 @@ function TruckDetailPanel({
   );
 }
 
-function TrucksTab() {
+function TrucksTab({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
   const { user, drivers, refreshTrucks } = useAuth();
   const [trucks, setTrucks]       = useState<Truck[]>(user?.trucks ?? []);
   const [loading, setLoading]     = useState(user === null);
   const [error, setError]         = useState("");
+  const [subscriptionError, setSubscriptionError] = useState(false);
   const [creating, setCreating]   = useState(false);
   const [fromTemplate, setFromTemplate] = useState(false);
   const [selected, setSelected]   = useState<Truck | null>(null);
 
+  const hasSubscription = user?.plan != null;
   const plan = user?.plan ?? "starter";
   const truckLimit = PLAN_TRUCK_LIMITS[plan] ?? 5;
   const atLimit = Number.isFinite(truckLimit) && trucks.length >= truckLimit;
+  const trucksLocked = !hasSubscription;
 
   const loadTrucks = useCallback(async () => {
     setError("");
+    setSubscriptionError(false);
     try { setTrucks(await fetchTrucks()); }
-    catch (err) { setError(err instanceof Error ? err.message : "Error al cargar camiones."); }
+    catch (err) {
+      if (err instanceof SubscriptionRequiredError) setSubscriptionError(true);
+      else setError(err instanceof Error ? err.message : "Error al cargar camiones.");
+    }
     finally { setLoading(false); }
   }, []);
 
@@ -298,16 +303,29 @@ function TrucksTab() {
 
   return (
     <div>
+      {trucksLocked && <SubscriptionNotice onGoToPlans={() => onNavigate("plans")} />}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--c-ink)" }}>
           Camiones
           <span style={{ marginLeft: 8, fontSize: "0.82rem", fontWeight: 600, color: "#9AA3AD" }}>{trucks.length}</span>
         </h3>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="st-btn-ghost" style={{ opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }} onClick={atLimit ? undefined : () => setFromTemplate(true)} disabled={atLimit}>
+          <button
+            className="st-btn-ghost"
+            style={{ opacity: (atLimit || trucksLocked) ? 0.45 : 1, cursor: (atLimit || trucksLocked) ? "not-allowed" : "pointer" }}
+            onClick={(atLimit || trucksLocked) ? undefined : () => setFromTemplate(true)}
+            disabled={atLimit || trucksLocked}
+            title={trucksLocked ? "Activá tu suscripción para agregar camiones" : undefined}
+          >
             Desde plantilla
           </button>
-          <button className="st-btn-primary" style={{ opacity: atLimit ? 0.45 : 1, cursor: atLimit ? "not-allowed" : "pointer" }} onClick={atLimit ? undefined : () => setCreating(true)} disabled={atLimit}>
+          <button
+            className="st-btn-primary"
+            style={{ opacity: (atLimit || trucksLocked) ? 0.45 : 1, cursor: (atLimit || trucksLocked) ? "not-allowed" : "pointer" }}
+            onClick={(atLimit || trucksLocked) ? undefined : () => setCreating(true)}
+            disabled={atLimit || trucksLocked}
+            title={trucksLocked ? "Activá tu suscripción para agregar camiones" : undefined}
+          >
             <Icons.Plus size={14} /> Agregar camión
           </button>
         </div>
@@ -315,6 +333,7 @@ function TrucksTab() {
 
       {Number.isFinite(truckLimit) && <FleetUsageBar current={trucks.length} limit={truckLimit} plan={plan} />}
       {loading && <Hint>Cargando camiones…</Hint>}
+      {subscriptionError && <SubscriptionBanner onGoToPlans={() => onNavigate("plans")} />}
       {error && <Hint tone="error">{error}</Hint>}
       {!loading && !error && trucks.length === 0 && (
         <EmptyState title="No tenés camiones registrados" actionLabel="Agregar camión" onAction={() => setCreating(true)} disabled={atLimit} />
@@ -346,6 +365,7 @@ function TrucksTab() {
 interface DriversTabProps {
   drivers: Driver[];
   refreshDrivers: () => Promise<void>;
+  onNavigate: (page: AdminPage) => void;
 }
 
 function driverInitials(name: string) {
@@ -364,8 +384,6 @@ function DriverCard({
   onClick: () => void;
 }) {
   const [hover, setHover] = useState(false);
-  const venceStyle = licenseExpiryStyle(driver.vencimiento_licencia);
-
   return (
     <div
       onClick={onClick}
@@ -689,7 +707,9 @@ function DriverDetailPanel({
   );
 }
 
-function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
+function DriversTab({ drivers, refreshDrivers, onNavigate }: DriversTabProps) {
+  const { user } = useAuth();
+  const hasSubscription = user?.plan != null;
   const [inviting, setInviting]   = useState(false);
   const [selected, setSelected]   = useState<Driver | null>(null);
   const [trucks, setTrucks]       = useState<Truck[]>([]);
@@ -729,6 +749,7 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
 
   return (
     <div>
+      {!hasSubscription && <SubscriptionNotice onGoToPlans={() => onNavigate("plans")} />}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--c-ink)" }}>
           Conductores
@@ -736,7 +757,13 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
             {drivers.length}
           </span>
         </h3>
-        <button className="st-btn-primary" style={{ padding: "10px 16px" }} onClick={() => setInviting(true)}>
+        <button
+          className="st-btn-primary"
+          style={{ padding: "10px 16px", opacity: hasSubscription ? 1 : 0.45, cursor: hasSubscription ? "pointer" : "not-allowed" }}
+          onClick={hasSubscription ? () => setInviting(true) : undefined}
+          disabled={!hasSubscription}
+          title={!hasSubscription ? "Activá tu suscripción para invitar conductores" : undefined}
+        >
           Invitar conductor
         </button>
       </div>
@@ -768,7 +795,7 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
         />
       )}
       {inviting && (
-        <InviteDriverModal onClose={() => { setInviting(false); void loadData(); }} />
+        <InviteDriverModal onClose={() => { setInviting(false); void loadData(); }} onSubscriptionRequired={() => { setInviting(false); onNavigate("plans"); }} />
       )}
 
       {confirmDeleteInv && (
@@ -795,40 +822,6 @@ function DriversTab({ drivers, refreshDrivers }: DriversTabProps) {
 }
 
 // ── Subcomponentes presentacionales ────────────────────────────────────────
-
-function Toolbar({
-  title,
-  actionLabel,
-  onAction,
-  disabled = false,
-}: {
-  title: string;
-  actionLabel: string;
-  onAction: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 14,
-      }}
-    >
-      <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--c-ink)" }}>{title}</h3>
-      <button
-        className="st-btn-primary"
-        style={{ padding: "10px 16px", opacity: disabled ? 0.45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
-        onClick={disabled ? undefined : onAction}
-        disabled={disabled}
-        title={disabled ? "Alcanzaste el límite de camiones de tu plan" : undefined}
-      >
-        <Icons.Plus size={14} /> {actionLabel}
-      </button>
-    </div>
-  );
-}
 
 const PLAN_NEXT: Record<string, string> = {
   starter: "pro",
@@ -965,15 +958,70 @@ function Hint({
   return <p style={{ color, fontSize: "0.88rem", margin: "12px 0" }}>{children}</p>;
 }
 
+function SubscriptionNotice({ onGoToPlans }: { onGoToPlans: () => void }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+      background: "#fffbeb", border: "1px solid #fde68a",
+      borderRadius: 10, padding: "10px 16px", marginBottom: 16,
+      fontSize: "0.85rem",
+    }}>
+      <span style={{ color: "#92400e", fontWeight: 600 }}>
+        Necesitás un plan activo para usar estas funciones.
+      </span>
+      <button
+        type="button"
+        onClick={onGoToPlans}
+        style={{
+          background: "none", border: "none", color: "#e53935",
+          fontWeight: 700, fontSize: "0.85rem", cursor: "pointer",
+          padding: 0, fontFamily: "inherit", textDecoration: "underline",
+        }}
+      >
+        Ver planes →
+      </button>
+    </div>
+  );
+}
+
+function SubscriptionBanner({ onGoToPlans }: { onGoToPlans: () => void }) {
+  return (
+    <div style={{
+      background: "rgba(229,57,53,0.06)", border: "1px solid rgba(229,57,53,0.2)",
+      borderRadius: 12, padding: "16px 20px", marginTop: 16,
+      display: "flex", flexDirection: "column", gap: 10,
+    }}>
+      <div>
+        <p style={{ color: "#c62828", fontWeight: 700, fontSize: "0.9rem", margin: "0 0 4px" }}>
+          Necesitás una suscripción activa
+        </p>
+        <p style={{ color: "#6b7280", fontSize: "0.85rem", margin: 0, lineHeight: 1.5 }}>
+          Para usar esta función debés tener un plan activo.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onGoToPlans}
+        style={{
+          alignSelf: "flex-start", background: "#e53935", color: "#fff",
+          border: "none", borderRadius: 8, padding: "8px 16px",
+          fontSize: "0.82rem", fontWeight: 700, cursor: "pointer",
+        }}
+      >
+        Ver planes y precios
+      </button>
+    </div>
+  );
+}
+
 // ── Helpers de presentación ────────────────────────────────────────────────
 
-function truckEstadoStyle(estado: string): { className: string; dotColor: string } {
+function truckEstadoStyle(estado: string): { className: string } {
   switch (estado) {
-    case "Activo":         return { className: "st-badge-activo",     dotColor: "#22c55e" };
-    case "En ruta":        return { className: "st-badge-encurso",    dotColor: "#e53935" };
-    case "Mantenimiento":  return { className: "st-badge-cancelado",  dotColor: "#f59e0b" };
-    case "Inactivo":       return { className: "st-badge-inactivo",   dotColor: "#9ca3af" };
-    default:               return { className: "st-badge-inactivo",   dotColor: "#9ca3af" };
+    case "Activo":         return { className: "st-badge-activo" };
+    case "En ruta":        return { className: "st-badge-encurso" };
+    case "Mantenimiento":  return { className: "st-badge-cancelado" };
+    default:               return { className: "st-badge-inactivo" };
   }
 }
 

@@ -64,7 +64,7 @@ export default function Dashboard() {
         <AdminTopBar title={TITLE[page]} onToggleSidebar={() => setCollapsed((c) => !c)} />
         <div className="admin-content">
           {page === "map"     && <LiveMapContainer onNavigate={handleSetPage} />}
-          {page === "fleet"   && <FleetView />}
+          {page === "fleet"   && <FleetView onNavigate={handleSetPage} />}
           {page === "trips"   && <TripHistoryView />}
           {page === "account" && <AccountView onNavigate={setPage} billingSuccess={billingSuccess} />}
           {page === "plans"   && <PlansView />}
