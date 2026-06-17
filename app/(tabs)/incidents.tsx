@@ -26,17 +26,15 @@ const INCIDENT_LABELS: Record<string, string> = {
   objeto_en_via:    '⚠️ Objeto en vía',
 }
 
-const INCIDENT_COLORS: Record<string, string> = {
-  multa:            '#FF3B30',
-  control_policial: '#FF9500',
-  accidente:        '#FF3B30',
-  obra:             '#FF9500',
-  puente_bajo:      '#FF3B30',
-  corte:            '#FF3B30',
-  control_peso:     '#FF9500',
-  otro:             '#8E8E93',
-  trafico:          '#FF9500',
-  objeto_en_via:    '#FF9500',
+// Mapa de tipo de incidente -> token de marca.
+// Peligro/bloqueo => danger; advertencia => warning; resto => textSoft.
+const INCIDENT_DANGER = ['multa', 'accidente', 'puente_bajo', 'corte']
+const INCIDENT_WARNING = ['control_policial', 'obra', 'control_peso', 'trafico', 'objeto_en_via']
+
+function incidentColor(type: string, t: Theme): string {
+  if (INCIDENT_DANGER.includes(type)) return t.danger
+  if (INCIDENT_WARNING.includes(type)) return t.warning
+  return t.textSoft
 }
 
 const FILTERS = ['multa', 'accidente', 'control_policial', 'obra', 'puente_bajo', 'corte']
@@ -174,7 +172,7 @@ export default function IncidentsScreen() {
         renderItem={({ item }) => (
           // --dash-incident-card: flat, franja lateral de color
           <View style={s.card}>
-            <View style={[s.cardAccent, { backgroundColor: INCIDENT_COLORS[item.incident_type] || '#8E8E93' }]} />
+            <View style={[s.cardAccent, { backgroundColor: incidentColor(item.incident_type, t) }]} />
             <View style={s.cardBody}>
               <View style={s.cardTop}>
                 <Text style={s.cardType}>{INCIDENT_LABELS[item.incident_type] || '⚠️ Incidente'}</Text>

@@ -4,11 +4,12 @@ import {
   Modal, ScrollView, TextInput, Keyboard,
 } from 'react-native'
 import { WebView } from 'react-native-webview'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { supabase } from '../../src/services/supabase'
-import { Theme, getTheme } from '../../src/theme'
+import { Theme, getTheme, isDarkTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
 import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, fetchMyAssignedTruck, type AssignedTrip } from '../../src/services/assignedTrips'
@@ -333,6 +334,7 @@ export default function MapScreen() {
   const toggleTheme = useStore(st => st.toggleTheme)
   const t = getTheme(isDark)
   const s = useMemo(() => makeStyles(t), [isDark])
+  const insets = useSafeAreaInsets()
 
   const { activeVehicle, currentRoute, setCurrentRoute, setOrigin, setDestination, setActiveVehicle } = useStore()
   const profile = useStore(st => st.profile)
@@ -900,8 +902,8 @@ export default function MapScreen() {
               onSubmitEditing={() => searchAddress(searchText)}
             />
             {searchText.length > 0 && (
-              <TouchableOpacity onPress={() => { setSearchText(''); setSearchResults([]); setShowSearch(false) }}>
-                <Text style={s.searchClear}>✕</Text>
+              <TouchableOpacity onPress={() => { setSearchText(''); setSearchResults([]); setShowSearch(false) }} style={{ paddingHorizontal: 4 }}>
+                <Ionicons name="close" size={18} color={t.textMuted} />
               </TouchableOpacity>
             )}
           </View>
@@ -942,8 +944,9 @@ export default function MapScreen() {
 
       {/* Banner sin vehículo */}
       {!activeVehicle && (
-        <View style={s.banner}>
-          <Text style={s.bannerText}>⚠️ Tu empresa aún no te asignó un camión</Text>
+        <View style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}>
+          <Ionicons name="warning-outline" size={15} color={t.warning} />
+          <Text style={s.bannerText}>Tu empresa aún no te asignó un camión</Text>
         </View>
       )}
 
@@ -966,13 +969,14 @@ export default function MapScreen() {
 
       {/* Tarjeta de ruta */}
       {showInfo && currentRoute && !navMode && (
-        <View style={s.routeCard}>
+        <View style={[s.routeCard, { paddingBottom: insets.bottom + 16 }]}>
           <View style={s.routeCardHeader}>
             <View>
               <Text style={s.routeCardTitle}>Ruta calculada</Text>
               {currentRoute.has_unauthorized && (
-                <View style={s.warnBadge}>
-                  <Text style={s.warnBadgeText}>⚠️ Tramos no habilitados</Text>
+                <View style={[s.warnBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                  <Ionicons name="alert-circle-outline" size={12} color={t.warning} />
+                  <Text style={s.warnBadgeText}>Tramos no habilitados</Text>
                 </View>
               )}
             </View>
@@ -1012,7 +1016,7 @@ export default function MapScreen() {
 
       {/* HUD de navegación */}
       {navMode && currentRoute && (
-        <View style={s.navHUD}>
+        <View style={[s.navHUD, { paddingBottom: insets.bottom + 16 }]}>
           <View style={{ flex: 1, marginRight: 16 }}>
             <Text style={s.navDest} numberOfLines={1}>{searchText || 'Destino'}</Text>
             <View style={s.navStats}>
@@ -1060,20 +1064,20 @@ export default function MapScreen() {
         onPress={openReportModal}
         activeOpacity={0.85}
       >
-        <Ionicons name="warning" size={32} color="#fff" />
+        <Ionicons name="alert-circle" size={28} color="#fff" />
       </TouchableOpacity>
 
       {/* Modal de incidente */}
       <Modal visible={showIncidentModal} transparent animationType="slide">
         <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
+          <View style={[s.modalCard, { paddingBottom: insets.bottom + 16 }]}>
             <View style={s.modalHeader}>
               <View>
                 <Text style={s.modalTitle}>Reportar incidente</Text>
                 <Text style={s.modalSubtitle}>¿Dónde y qué está pasando?</Text>
               </View>
               <TouchableOpacity style={s.modalClose} onPress={closeReportModal}>
-                <Text style={s.modalCloseText}>✕</Text>
+                <Ionicons name="close" size={18} color={t.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -1083,13 +1087,19 @@ export default function MapScreen() {
                 style={[s.locModeBtn, reportLocMode === 'current' && s.locModeBtnActive]}
                 onPress={() => { setReportLocMode('current'); setIncidentLocation(location) }}
               >
-                <Text style={[s.locModeText, reportLocMode === 'current' && s.locModeTextActive]}>📍 Donde estoy</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="location-outline" size={15} color={reportLocMode === 'current' ? t.accent : t.textMuted} />
+                  <Text style={[s.locModeText, reportLocMode === 'current' && s.locModeTextActive]}>Donde estoy</Text>
+                </View>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.locModeBtn, reportLocMode === 'search' && s.locModeBtnActive]}
                 onPress={() => { setReportLocMode('search'); setIncidentLocation(null) }}
               >
-                <Text style={[s.locModeText, reportLocMode === 'search' && s.locModeTextActive]}>🔍 Buscar calle</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="search-outline" size={15} color={reportLocMode === 'search' ? t.accent : t.textMuted} />
+                  <Text style={[s.locModeText, reportLocMode === 'search' && s.locModeTextActive]}>Buscar calle</Text>
+                </View>
               </TouchableOpacity>
             </View>
 
@@ -1116,12 +1126,13 @@ export default function MapScreen() {
             )}
 
             {/* Ubicación elegida (feedback) */}
-            <View style={s.locChosen}>
-              <Text style={s.locChosenText}>
+            <View style={[s.locChosen, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+              {incidentLocation && <Ionicons name="pin-outline" size={14} color={t.textMuted} />}
+              <Text style={[s.locChosenText, { flex: 1 }]}>
                 {incidentLocation
                   ? (reportLocMode === 'current'
-                      ? '📌 Tu ubicación actual'
-                      : `📌 ${reportSearchText || `${incidentLocation.lat.toFixed(5)}, ${incidentLocation.lng.toFixed(5)}`}`)
+                      ? 'Tu ubicación actual'
+                      : (reportSearchText || `${incidentLocation.lat.toFixed(5)}, ${incidentLocation.lng.toFixed(5)}`))
                   : (reportLocMode === 'search' ? 'Buscá y elegí una calle' : 'Esperando GPS...')}
               </Text>
             </View>
@@ -1149,7 +1160,7 @@ export default function MapScreen() {
 
       {/* ── Trip Sheet (Google Maps style bottom panel) ─────────────── */}
       {tripSheet && !navMode && !showInfo && (
-        <View style={s.tripSheet}>
+        <View style={[s.tripSheet, { paddingBottom: insets.bottom + 20 }]}>
           {/* Handle */}
           <View style={s.tripSheetHandle} />
 
@@ -1189,14 +1200,14 @@ export default function MapScreen() {
 
             {/* Close */}
             <TouchableOpacity onPress={() => { setTripSheet(null); webRef.current?.injectJavaScript('clearRoute(); true;'); router.replace('/(tabs)/') }} style={{ backgroundColor: t.surface2, borderRadius: 8, padding: 8, marginLeft: 12 }}>
-              <Text style={{ color: t.textMuted, fontSize: 14, fontWeight: '700' }}>✕</Text>
+              <Ionicons name="close" size={18} color={t.textMuted} />
             </TouchableOpacity>
           </View>
 
           {/* Truck badge */}
           {(tripSheet.truck_patente || tripSheet.truck_name) && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <Text style={{ fontSize: 14, color: t.textMuted }}>🚛</Text>
+              <Ionicons name="bus" size={14} color={t.textMuted} />
               <Text style={{ fontSize: 13, fontWeight: '600', color: t.textMuted }}>{tripSheet.truck_name ?? ''}</Text>
               {tripSheet.truck_patente && (
                 <View style={{ backgroundColor: t.surface2, borderRadius: 4, borderWidth: 1, borderColor: t.border, paddingHorizontal: 6, paddingVertical: 2 }}>
@@ -1258,7 +1269,7 @@ function makeStyles(t: Theme) {
     fab: {
       position: 'absolute', bottom: 24, right: 16,
       width: 62, height: 62, borderRadius: 31,
-      backgroundColor: t.accent,
+      backgroundColor: t.navy,
       alignItems: 'center', justifyContent: 'center',
       shadowColor: '#000', shadowOpacity: 0.25,
       shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 7,
@@ -1341,13 +1352,13 @@ function makeStyles(t: Theme) {
       position: 'absolute', top: 110, left: 16, right: 16,
       flexDirection: 'row', alignItems: 'center', gap: 10,
       backgroundColor: t.card, borderRadius: 999,
-      borderWidth: 1, borderColor: '#007AFF',
+      borderWidth: 1, borderColor: t.info,
       paddingHorizontal: 10, paddingVertical: 8,
       shadowColor: '#000', shadowOpacity: isDarkTheme(t) ? 0.4 : 0.12,
       shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
     },
     simBarBtn: {
-      backgroundColor: '#007AFF', borderRadius: 999,
+      backgroundColor: t.info, borderRadius: 999,
       width: 34, height: 34, alignItems: 'center', justifyContent: 'center',
     },
     simBarText: { flex: 1, color: t.text, fontSize: 13, fontWeight: '600' },
@@ -1481,5 +1492,3 @@ function makeStyles(t: Theme) {
     blockBadgeText: { color: t.warning, fontSize: 11, fontWeight: '600' },
   })
 }
-
-function isDarkTheme(t: Theme) { return t.bg === '#1C1C1E' }

@@ -4,6 +4,7 @@ import {
   ScrollView, ActivityIndicator, RefreshControl, Alert,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
@@ -58,7 +59,7 @@ function NavRow({ label, detail, danger = false, isLast = false, onPress, t }: {
     }}>
       <Text style={{ fontSize: 14, fontWeight: '500', color: danger ? t.danger : t.text, flex: 1 }}>{label}</Text>
       {detail && <Text style={{ fontSize: 13, color: t.textSoft, marginRight: 6 }}>{detail}</Text>}
-      {!danger && onPress && <Text style={{ fontSize: 16, color: t.textSoft }}>›</Text>}
+      {!danger && onPress && <Ionicons name="chevron-forward" size={16} color={t.textSoft} />}
     </TouchableOpacity>
   )
 }
@@ -183,7 +184,7 @@ export default function ProfileScreen() {
                     width: 46, height: 46, borderRadius: 8,
                     backgroundColor: t.accentSoft, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   }}>
-                    <Text style={{ fontSize: 22 }}>🚛</Text>
+                    <Ionicons name="bus" size={22} color={t.accent} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 15, fontWeight: '700', color: t.text, letterSpacing: -0.3 }}>

@@ -4,6 +4,7 @@ import {
   TouchableOpacity, ActivityIndicator, Animated,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
@@ -131,7 +132,7 @@ function TripCard({ trip, onView, t }: { trip: AssignedTrip; onView: () => void;
       {/* Footer */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: t.border }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-          <Text style={{ fontSize: 15, color: t.textMuted }}>🚛</Text>
+          <Ionicons name="bus" size={14} color={t.textMuted} />
           <Text style={{ fontSize: 13, fontWeight: '600', color: t.text }} numberOfLines={1}>
             {trip.truck_name ?? 'Camión asignado'}
           </Text>
