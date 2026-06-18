@@ -93,6 +93,7 @@ export default function PlansView() {
 
   return (
     <div style={{ padding: 24, height: "100%", background: "var(--c-bg)", overflowY: "auto" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
 
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
@@ -172,7 +173,6 @@ export default function PlansView() {
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: 16,
-          maxWidth: 960,
         }}
       >
         {PLANS.map((plan) => {
@@ -259,6 +259,7 @@ export default function PlansView() {
         })}
       </div>
 
+      </div>
     </div>
   );
 }

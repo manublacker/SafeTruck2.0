@@ -115,7 +115,7 @@ export default function AdminSidebar({ page, setPage, collapsed }: Props) {
                   {user.full_name}
                 </div>
                 <div className="st-sidebar-user-role" style={{ textTransform: "capitalize" }}>
-                  Plan {plan ?? "starter"}
+                  {plan ? `Plan ${plan}` : "Sin plan"}
                 </div>
               </div>
               <span

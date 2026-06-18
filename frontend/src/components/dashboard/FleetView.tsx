@@ -338,7 +338,7 @@ function TrucksTab({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
       {subscriptionError && <SubscriptionBanner onGoToPlans={() => onNavigate("plans")} />}
       {error && <Hint tone="error">{error}</Hint>}
       {!loading && !error && trucks.length === 0 && (
-        <EmptyState title="No tenés camiones registrados" actionLabel="Agregar camión" onAction={() => setCreating(true)} disabled={atLimit} />
+        <EmptyState title="No tenés camiones registrados" />
       )}
 
       {!loading && !error && trucks.length > 0 && (
@@ -756,7 +756,7 @@ function DriversTab({ drivers, refreshDrivers, onNavigate }: DriversTabProps) {
           </span>
         </h3>
         <button
-          className="st-btn-navy"
+          className="st-btn-primary"
           style={{ padding: "10px 16px", opacity: hasSubscription ? 1 : 0.45, cursor: hasSubscription ? "pointer" : "not-allowed" }}
           onClick={hasSubscription ? () => setInviting(true) : undefined}
           disabled={!hasSubscription}
@@ -767,7 +767,7 @@ function DriversTab({ drivers, refreshDrivers, onNavigate }: DriversTabProps) {
       </div>
 
       {drivers.length === 0 && pendingInvitations.length === 0 ? (
-        <EmptyState title="No tenés conductores registrados" actionLabel="Invitar conductor" onAction={() => setInviting(true)} />
+        <EmptyState title="No tenés conductores registrados" />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14, paddingBottom: 48 }}>
           {pendingInvitations.map(inv => <InvitationCard key={`inv-${inv.id}`} inv={inv} onDeleteClick={() => setConfirmDeleteInv(inv)} />)}
@@ -908,39 +908,20 @@ function FleetUsageBar({
   );
 }
 
-function EmptyState({
-  title,
-  actionLabel,
-  onAction,
-  disabled = false,
-}: {
-  title: string;
-  actionLabel: string;
-  onAction: () => void;
-  disabled?: boolean;
-}) {
+function EmptyState({ title }: { title: string }) {
   return (
     <div
       style={{
         border: "1px dashed #e0e0e0",
         borderRadius: 14,
-        padding: 36,
+        padding: 48,
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
-        gap: 14,
+        justifyContent: "center",
         background: "#fafafa",
       }}
     >
-      <p style={{ margin: 0, color: "#6b7280", fontSize: "0.95rem" }}>{title}</p>
-      <button
-        className="st-btn-primary"
-        style={{ padding: "10px 18px", opacity: disabled ? 0.45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
-        onClick={disabled ? undefined : onAction}
-        disabled={disabled}
-      >
-        <Icons.Plus size={14} /> {actionLabel}
-      </button>
+      <p style={{ margin: 0, color: "#9ca3af", fontSize: "1.05rem", fontWeight: 500 }}>{title}</p>
     </div>
   );
 }
