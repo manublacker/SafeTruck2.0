@@ -64,7 +64,6 @@ function FullOnboardingState({
 }) {
   return (
     <Card>
-      <Eyebrow>Primeros pasos</Eyebrow>
       <Title>Configurá tu flota</Title>
       <Body>
         Para empezar a planificar viajes necesitás registrar al menos un
@@ -85,7 +84,6 @@ function FullOnboardingState({
 function NoTrucksBlockingState({ onAddTrucks }: { onAddTrucks: () => void }) {
   return (
     <Card>
-      <Eyebrow>Falta tu flota</Eyebrow>
       <Title>Agregá un camión para continuar</Title>
       <Body>
         No podemos calcular rutas sin un camión registrado. Una vez que cargues
@@ -107,7 +105,6 @@ function NoAvailableDriversNotice({
 }) {
   return (
     <Card tone="warning">
-      <Eyebrow>Sin conductores activos</Eyebrow>
       <Title>Podés calcular rutas, pero no asignar viajes</Title>
       <Body>
         Activá un conductor o agregá uno nuevo para crear viajes desde el
@@ -125,7 +122,6 @@ function NoAvailableDriversNotice({
 function AllTrucksOnRouteNotice() {
   return (
     <Card tone="warning">
-      <Eyebrow>Flota ocupada</Eyebrow>
       <Title>Todos los camiones están en ruta</Title>
       <Body>
         Cuando alguno finalice su viaje volverá a estar disponible para
@@ -163,10 +159,6 @@ function Card({
       {children}
     </div>
   );
-}
-
-function Eyebrow({ children }: { children: React.ReactNode }) {
-  return <div className="st-section-eyebrow">{children}</div>;
 }
 
 function Title({ children }: { children: React.ReactNode }) {

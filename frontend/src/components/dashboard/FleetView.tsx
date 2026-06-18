@@ -43,10 +43,6 @@ export default function FleetView({ onNavigate, initialTab = "trucks" }: { onNav
 
   return (
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
-      <div style={{ marginBottom: 16 }}>
-        <div className="st-section-eyebrow">Operaciones</div>
-      </div>
-
       <Tabs current={tab} onChange={setTab} />
 
       <div style={{ marginTop: 20 }}>

@@ -97,8 +97,7 @@ export default function PlansView() {
 
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
-        <p className="st-section-eyebrow">Suscripción</p>
-        <p style={{ margin: "6px 0 0", fontSize: "0.9rem", color: "var(--c-ink-2)" }}>
+        <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--c-ink-2)" }}>
           Elegí el plan que mejor se adapte al tamaño de tu operación.
         </p>
       </div>

@@ -61,10 +61,6 @@ export default function AccountView({ onNavigate, billingSuccess }: Props) {
   return (
     <div style={{ padding: 24, height: "100%", background: "var(--c-bg)", overflowY: "auto" }}>
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
-      <div style={{ marginBottom: 24 }}>
-        <p className="st-section-eyebrow" style={{ fontSize: "0.85rem" }}>Configuración</p>
-      </div>
-
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
         {/* Perfil */}

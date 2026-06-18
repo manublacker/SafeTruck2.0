@@ -57,7 +57,6 @@ export default function TripCreator({
 
   return (
     <div>
-      <p className="st-section-eyebrow" style={{ marginBottom: 4 }}>Asignar</p>
       <h2 className="st-section-title" style={{ marginBottom: 14 }}>Nuevo viaje</h2>
 
       {!hasSubscription && onSubscriptionRequired && (
