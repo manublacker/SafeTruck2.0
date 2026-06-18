@@ -208,31 +208,46 @@ function isEdgeAllowed(edge: GraphEdge, vehicle: VehicleProfile): boolean {
     return true;
   }
   
-  function edgeCost(edge: GraphEdge, options: RoutingOptions = {}, mode: 'normal' | 'alternative' = 'normal'): number {    
+  // Datos cooperativos (scores/incidentes) que cambian seguido. Se pasan como
+  // "overlay" externo para NO mutar el grafo (que puede estar cacheado y compartido).
+  export interface EdgeOverlay {
+    trustScore?: number;
+    trustStatus?: string;
+    incidentType?: string;
+    incidentCount?: number;
+  }
+
+  function edgeCost(edge: GraphEdge, options: RoutingOptions = {}, mode: 'normal' | 'alternative' = 'normal', overlay?: EdgeOverlay): number {
     let cost = edge.lengthM;
-  
+
     // Si la calle no está habilitada para camiones, penalizo fuerte
     // El camión la puede usar solo si no hay otra opción
     if (edge.truckAllowed === false) {
       cost += 10000;
     }
-  
+
     if (options.avoidTolls && edge.toll) cost += 2000;
     if (options.avoidDirt && edge.surface === "dirt") cost += 5000;
     if (options.avoidGravel && edge.surface === "gravel") cost += 1500;
     if (options.preferHighways && edge.highway) cost -= 300;
     if (edge.trafficPenalty !== undefined) cost += edge.trafficPenalty;
 
+    // Datos cooperativos: del overlay si se pasa, si no del propio edge (compat).
+    const trustStatus  = overlay?.trustStatus  ?? edge.trustStatus;
+    const trustScore   = overlay?.trustScore   ?? edge.trustScore;
+    const incidentType = overlay?.incidentType ?? edge.incidentType;
+    const incidentCount = overlay?.incidentCount ?? edge.incidentCount;
+
     // penalización del sistema cooperativo
-    if (edge.trustStatus === 'bloqueada') {
+    if (trustStatus === 'bloqueada') {
         return Infinity; // excluye la arista del ruteo
     }
-    if (edge.trustScore !== undefined && edge.trustScore < 0) {
+    if (trustScore !== undefined && trustScore < 0) {
         // penalización proporcional al score negativo
-        cost += Math.abs(edge.trustScore) * 500;
+        cost += Math.abs(trustScore) * 500;
     }
     // penalización por incidentes temporales
-    if (edge.incidentType) {
+    if (incidentType) {
         if (mode === 'alternative') {
           // en modo alternativo, evita completamente los incidentes
           return Infinity;
@@ -246,7 +261,7 @@ function isEdgeAllowed(edge: GraphEdge, vehicle: VehicleProfile): boolean {
             control_policial: 100,
             objeto_en_via:    200,
           };
-          cost += (basePenalty[edge.incidentType] ?? 200) * (edge.incidentCount ?? 1);
+          cost += (basePenalty[incidentType] ?? 200) * (incidentCount ?? 1);
         }
       }
 
@@ -280,22 +295,12 @@ function validateGraphInput(graph: Graph, origin: NodeId, destination: NodeId): 
 //found: indica si se encontró una ruta
 
 //Función que busca la ruta más corta entre el origen y el destino teniendo en cuenta el grafo y las restricciones del camión
-export function astar(graph: Graph, origin: NodeId, destination: NodeId, vehicle: VehicleProfile, mode: 'normal' | 'alternative' = 'normal'): AStarResult {    validateGraphInput(graph, origin, destination); //verifica que el grafo y los nodos existan
+export function astar(graph: Graph, origin: NodeId, destination: NodeId, vehicle: VehicleProfile, mode: 'normal' | 'alternative' = 'normal', overlays?: Map<number, EdgeOverlay>): AStarResult {    validateGraphInput(graph, origin, destination); //verifica que el grafo y los nodos existan
 
     //si el origen y el destino son el mismo nodo, no hace falta buscar una ruta
     if (origin === destination) {
-        const prev: Record<NodeId, NodeId | null> = {}; //la clave es el nodo actual y el valor es el nodo anterior desde el que llegaste, o null en este caso
-
-        //inicializa todos los nodos con null porque no hace falta venir desde ningún lado
-        //Recorre todos los nodos del grafo y les asigna null en prev al inicio
-        // Inicializa prev dejando todos los nodos con valor null al principio
-        //Se inicializa todo en null para que todas las claves existan, no haya errores tipo “no existe esa clave” y el objeto esté completo desde el principio. Pero después solo se usan las que forman parte del camino real.
-        for (const nodeId of Object.keys(graph.nodes)) {
-            prev[nodeId] = null;
-        }
-
         return {
-            prev,
+            prev: {},
             distance: 0,
             found: true,
         };
@@ -313,12 +318,8 @@ export function astar(graph: Graph, origin: NodeId, destination: NodeId, vehicle
     const gScore: Record<NodeId, number> = {}; //guarda la distancia mínima conocida desde el origen hasta cada nodo
     const visited = new Set<NodeId>(); //guarda los nodos ya procesados para no repetirlos
 
-    // Inicializa todos los nodos sin nodo anterior y con distancia infinita porque al empezar
-    // todavía no se sabe desde dónde se llega a cada nodo ni cuál es la distancia mínima hasta ellos
-    for (const nodeId of Object.keys(graph.nodes)) {
-        prev[nodeId] = null;
-        gScore[nodeId] = Infinity;
-    }
+    // Inicialización perezosa: un nodo sin entrada en gScore se asume Infinity.
+    // Evita recorrer los ~700k nodos del grafo cacheado en cada cálculo.
     gScore[origin] = 0; //la distancia desde el origen hasta sí mismo es 0
 
     //agrega el origen al heap con g = 0 y f = 0
@@ -365,10 +366,11 @@ export function astar(graph: Graph, origin: NodeId, destination: NodeId, vehicle
                 continue;
             }
 
-            const tentativeG = gScore[currentNode] + edgeCost(edge, {}, mode);//calcula la nueva distancia acumulada usando la longitud de la arista
+            const overlay = edge.aristaId !== undefined ? overlays?.get(edge.aristaId) : undefined;
+            const tentativeG = (gScore[currentNode] ?? Infinity) + edgeCost(edge, {}, mode, overlay);//calcula la nueva distancia acumulada usando la longitud de la arista
 
             //si encontró un camino más corto hacia el vecino, actualiza los datos
-            if (tentativeG < gScore[neighbor]) {
+            if (tentativeG < (gScore[neighbor] ?? Infinity)) {
                 gScore[neighbor] = tentativeG;
                 prev[neighbor] = currentNode;
 
@@ -560,9 +562,10 @@ export function findTruckRoute(
     origin: NodeId,
     destination: NodeId,
     vehicle: VehicleProfile,
-    mode: 'normal' | 'alternative' = 'normal'
+    mode: 'normal' | 'alternative' = 'normal',
+    overlays?: Map<number, EdgeOverlay>
   ): { path: NodeId[]; distance: number; found: boolean } {
-    const result = astar(graph, origin, destination, vehicle, mode);    
+    const result = astar(graph, origin, destination, vehicle, mode, overlays);
     if (!result.found) {
         return {
         path: [],

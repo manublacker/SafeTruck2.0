@@ -18,6 +18,7 @@ import assignedTripsRouter from './routes/assigned-trips'
 import invitationsRouter from './routes/invitations'
 import locationsRouter from './routes/locations'
 import pushTokensRouter from './routes/push-tokens'
+import { loadGraphCache } from './graphCache'
 
 const app = express()
 app.use(cors({ maxAge: 86400 }))
@@ -91,4 +92,9 @@ app.get('/health', (_, res) => res.json({ status: 'ok' }))
 // La gestión de conductores ahora usa /api/drivers (Aiven) + /api/invitations.
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => console.log(`SafeTruck backend en puerto ${PORT}`))
+app.listen(PORT, () => {
+  console.log(`SafeTruck backend en puerto ${PORT}`)
+  // Carga el grafo del AMBA en memoria en segundo plano (no bloquea el arranque).
+  // Mientras carga, /api/routes usa el método por query como fallback.
+  loadGraphCache()
+})

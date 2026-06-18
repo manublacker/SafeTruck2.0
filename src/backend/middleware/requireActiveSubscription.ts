@@ -32,6 +32,14 @@ export async function requireActiveSubscription(
 ): Promise<void> {
   const userId = req.user!.id;
 
+  // Bypass solo para desarrollo local: se activa con BYPASS_SUBSCRIPTION=true
+  // en el .env (gitignoreado). Railway no define esta var, así que producción
+  // sigue exigiendo suscripción activa.
+  if (process.env.BYPASS_SUBSCRIPTION === "true") {
+    next();
+    return;
+  }
+
   try {
     if (await hasActiveSubscription(userId)) {
       next();

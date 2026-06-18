@@ -15,11 +15,15 @@
  *******************************************************/
 
 import { Router, Request, Response } from "express";
-import { findTruckRoute } from "../algorithm/astar";
+import { findTruckRoute, EdgeOverlay } from "../algorithm/astar";
+import { getCachedGraph, isInAMBA } from "../graphCache";
 import pool from "../db";
 
 const router = Router();
-const MARGIN = 0.15;
+// Límites del margen (colchón) que se suma al bounding box origen↔destino.
+// Antes era fijo 0.15 (~16 km), que traía ~550k aristas y forzaba un Seq Scan.
+const MARGIN_MIN = 0.02;
+const MARGIN_MAX = 0.08;
 
 async function snapToRoads(points: Array<{lat: number, lon: number}>): Promise<Array<{lat: number, lon: number}>> {
   const apiKey = process.env.GOOGLE_ROADS_API_KEY;
@@ -51,66 +55,75 @@ router.post("/", async (req: Request, res: Response) => {
   }
 
   try {
-    const minLon = Math.min(origin.lon, destination.lon) - MARGIN;
-    const maxLon = Math.max(origin.lon, destination.lon) + MARGIN;
-    const minLat = Math.min(origin.lat, destination.lat) - MARGIN;
-    const maxLat = Math.max(origin.lat, destination.lat) + MARGIN;
+    type Grafo = { nodes: Record<string, { id: string; lat: number; lon: number }>; adjacency: Record<string, any[]> };
+    let grafo: Grafo;
 
-    // traigo aristas del bounding box
-    const resAristas = await pool.query(
-      `SELECT a.id AS arista_id, a.source, a.target, a.costo, a.costo_reverso, a.camion_permitido
-       FROM aristas a
-       WHERE a.costo > 0
-         AND a.x1 BETWEEN $1 AND $2
-         AND a.y1 BETWEEN $3 AND $4`,
-      [minLon, maxLon, minLat, maxLat]
-    );
+    // ¿Usamos el grafo cacheado del AMBA? Solo si está listo y ambos extremos
+    // caen dentro del AMBA. Si no, fallback: traer el bbox por query.
+    const cached = getCachedGraph();
+    const usarCache = cached !== null &&
+      isInAMBA(origin.lat, origin.lon) && isInAMBA(destination.lat, destination.lon);
 
-    if (resAristas.rows.length === 0) {
-      res.status(200).json({
-        found: false, routeId: null,
-        originLabel: originLabel ?? "", destinationLabel: destinationLabel ?? "",
-        distanceM: 0, estimatedDurationMin: 0,
-        routeSummary: "No se encontraron calles en el área seleccionada.",
-        path: [], warnings: ["Probá con un destino diferente."],
-      });
-      return;
-    }
+    if (usarCache) {
+      grafo = cached as Grafo;
+    } else {
+      // Margen adaptativo: proporcional a la separación origen↔destino, acotado.
+      // El bbox ya contiene ambos puntos; el margen es solo el colchón para desvíos.
+      const span = Math.max(
+        Math.abs(origin.lon - destination.lon),
+        Math.abs(origin.lat - destination.lat)
+      );
+      const MARGIN = Math.min(MARGIN_MAX, Math.max(MARGIN_MIN, span * 0.5));
 
-    // traigo nodos únicos
-    const nodeIds = new Set<number>();
-    for (const row of resAristas.rows) {
-      nodeIds.add(row.source);
-      nodeIds.add(row.target);
-    }
-    const resNodos = await pool.query(
-      `SELECT id, ST_Y(geom) AS lat, ST_X(geom) AS lon FROM nodos WHERE id = ANY($1::bigint[])`,
-      [Array.from(nodeIds)]
-    );
+      const minLon = Math.min(origin.lon, destination.lon) - MARGIN;
+      const maxLon = Math.max(origin.lon, destination.lon) + MARGIN;
+      const minLat = Math.min(origin.lat, destination.lat) - MARGIN;
+      const maxLat = Math.max(origin.lat, destination.lat) + MARGIN;
 
-    // construyo el grafo
-    const nodes: Record<string, { id: string; lat: number; lon: number }> = {};
-    for (const row of resNodos.rows) {
-      nodes[String(row.id)] = { id: String(row.id), lat: row.lat, lon: row.lon };
-    }
+      // aristas del bbox (incluye x1,y1=source y x2,y2=target → nodos sin 2ª query)
+      const resAristas = await pool.query(
+        `SELECT a.id AS arista_id, a.source, a.target, a.costo, a.costo_reverso, a.camion_permitido,
+                a.x1, a.y1, a.x2, a.y2
+         FROM aristas a
+         WHERE a.costo > 0
+           AND a.x1 BETWEEN $1 AND $2
+           AND a.y1 BETWEEN $3 AND $4
+           -- descarta aristas-salto espurias (extremos a >~5,5 km en línea recta)
+           AND abs(a.x2 - a.x1) < 0.06 AND abs(a.y2 - a.y1) < 0.05`,
+        [minLon, maxLon, minLat, maxLat]
+      );
 
-    const adjacency: Record<string, any[]> = {};
-    for (const row of resAristas.rows) {
-      const src = String(row.source);
-      const tgt = String(row.target);
-      if (!adjacency[src]) adjacency[src] = [];
-      if (!adjacency[tgt]) adjacency[tgt] = [];
-      if (row.costo > 0) {
-        adjacency[src].push({ to: tgt, lengthM: row.costo, truckAllowed: row.camion_permitido, aristaId: row.arista_id });
+      if (resAristas.rows.length === 0) {
+        res.status(200).json({
+          found: false, routeId: null,
+          originLabel: originLabel ?? "", destinationLabel: destinationLabel ?? "",
+          distanceM: 0, estimatedDurationMin: 0,
+          routeSummary: "No se encontraron calles en el área seleccionada.",
+          path: [], warnings: ["Probá con un destino diferente."],
+        });
+        return;
       }
-      if (row.costo_reverso > 0) {
-        adjacency[tgt].push({ to: src, lengthM: row.costo_reverso, truckAllowed: row.camion_permitido, aristaId: row.arista_id });
+
+      const nodes: Record<string, { id: string; lat: number; lon: number }> = {};
+      const adjacency: Record<string, any[]> = {};
+      for (const row of resAristas.rows) {
+        const src = String(row.source);
+        const tgt = String(row.target);
+        if (!nodes[src]) nodes[src] = { id: src, lat: row.y1, lon: row.x1 };
+        if (!nodes[tgt]) nodes[tgt] = { id: tgt, lat: row.y2, lon: row.x2 };
+        if (!adjacency[src]) adjacency[src] = [];
+        if (!adjacency[tgt]) adjacency[tgt] = [];
+        if (row.costo > 0) {
+          adjacency[src].push({ to: tgt, lengthM: row.costo, truckAllowed: row.camion_permitido, aristaId: row.arista_id });
+        }
+        if (row.costo_reverso > 0) {
+          adjacency[tgt].push({ to: src, lengthM: row.costo_reverso, truckAllowed: row.camion_permitido, aristaId: row.arista_id });
+        }
       }
+      grafo = { nodes, adjacency };
     }
 
-    const grafo = { nodes, adjacency };
-
-    // nodos más cercanos
+    // nodos más cercanos (siempre por query: requiere búsqueda espacial con índice)
     const resOrigen = await pool.query("SELECT id FROM nearest_graph_node($1, $2)", [origin.lon, origin.lat]);
     const resDestino = await pool.query("SELECT id FROM nearest_graph_node($1, $2)", [destination.lon, destination.lat]);
 
@@ -128,34 +141,47 @@ router.post("/", async (req: Request, res: Response) => {
     const nodoOrigen = String(resOrigen.rows[0].id);
     const nodoDestino = String(resDestino.rows[0].id);
 
-    // scores cooperativos
-    const resScores = await pool.query("SELECT arista_id, score, status FROM edge_trust_scores");
-    const scoreMap: Record<number, { score: number; status: string }> = {};
-    for (const row of resScores.rows) scoreMap[row.arista_id] = { score: row.score, status: row.status };
-    for (const nodeId of Object.keys(grafo.adjacency)) {
-      for (const edge of grafo.adjacency[nodeId]) {
-        const s = scoreMap[edge.aristaId];
-        if (s) { edge.trustScore = s.score; edge.trustStatus = s.status; }
-      }
+    // Borde raro: el nodo más cercano cae fuera del grafo cacheado.
+    if (!grafo.nodes[nodoOrigen] || !grafo.nodes[nodoDestino]) {
+      res.status(404).json({
+        found: false, routeId: null,
+        originLabel: originLabel ?? "", destinationLabel: destinationLabel ?? "",
+        distanceM: 0, estimatedDurationMin: 0,
+        routeSummary: "No se encontró un nodo cercano dentro del área cubierta.",
+        path: [], warnings: ["Probá con un punto un poco más cercano a una calle."],
+      });
+      return;
     }
 
-    // incidentes
+    // Scores e incidentes → overlay (NO se mutan las aristas del grafo cacheado).
+    const overlays = new Map<number, EdgeOverlay>();
+
+    const resScores = await pool.query("SELECT arista_id, score, status FROM edge_trust_scores");
+    for (const row of resScores.rows) {
+      const o = overlays.get(row.arista_id) ?? {};
+      o.trustScore = row.score;
+      o.trustStatus = row.status;
+      overlays.set(row.arista_id, o);
+    }
+
     const resIncidents = await pool.query("SELECT * FROM get_active_incidents()");
     const incidentMap: Record<number, { type: string; count: number }> = {};
     for (const row of resIncidents.rows) {
       if (!incidentMap[row.arista_id]) incidentMap[row.arista_id] = { type: row.incident_type, count: 0 };
       incidentMap[row.arista_id].count += row.confirmed_count;
     }
-    for (const nodeId of Object.keys(grafo.adjacency)) {
-      for (const edge of grafo.adjacency[nodeId]) {
-        const incident = incidentMap[edge.aristaId];
-        if (incident) { edge.incidentType = incident.type; edge.incidentCount = incident.count; }
-      }
+    for (const aristaIdStr of Object.keys(incidentMap)) {
+      const aid = Number(aristaIdStr);
+      const inc = incidentMap[aid];
+      const o = overlays.get(aid) ?? {};
+      o.incidentType = inc.type;
+      o.incidentCount = inc.count;
+      overlays.set(aid, o);
     }
 
     // A*
-    const resultado = findTruckRoute(grafo, nodoOrigen, nodoDestino, vehicle, 'normal');
-    const resultadoAlternativo = findTruckRoute(grafo, nodoOrigen, nodoDestino, vehicle, 'alternative');
+    const resultado = findTruckRoute(grafo, nodoOrigen, nodoDestino, vehicle, 'normal', overlays);
+    const resultadoAlternativo = findTruckRoute(grafo, nodoOrigen, nodoDestino, vehicle, 'alternative', overlays);
 
     if (!resultado.found) {
       res.status(200).json({
@@ -168,61 +194,97 @@ router.post("/", async (req: Request, res: Response) => {
       return;
     }
 
-    async function buildPath(nodePath: string[]) {
-      return Promise.all(nodePath.map(async (nodeId: string, index: number) => {
+    // Devuelve la mejor arista (menor longitud) que sale de `src` hacia `tgt`,
+    // tomándola del grafo ya cargado en memoria — sin consultar la DB.
+    function findEdge(src: string, tgt: string): any | null {
+      const edges = grafo.adjacency[src] ?? [];
+      let best: any = null;
+      for (const e of edges) {
+        if (e.to === tgt && (best === null || e.lengthM < best.lengthM)) best = e;
+      }
+      return best;
+    }
+
+    // Recolecta los aristaId de un camino reusando las aristas en memoria.
+    function aristaIdsDePath(nodePath: string[]): number[] {
+      const ids: number[] = [];
+      for (let i = 0; i < nodePath.length - 1; i++) {
+        const e = findEdge(nodePath[i], nodePath[i + 1]);
+        if (e?.aristaId !== undefined) ids.push(e.aristaId);
+      }
+      return ids;
+    }
+
+    // UNA sola query trae nombre + geometría de todas las aristas usadas por
+    // ambos caminos (antes era una query por cada par de nodos, ×2 caminos).
+    const aristaIdsNecesarios = Array.from(new Set([
+      ...aristaIdsDePath(resultado.path),
+      ...(resultadoAlternativo.found ? aristaIdsDePath(resultadoAlternativo.path) : []),
+    ]));
+
+    const edgeDetailMap: Record<number, { nombre: string; geomJson: string | null; src: number }> = {};
+    if (aristaIdsNecesarios.length > 0) {
+      const resDetalles = await pool.query(
+        `SELECT a.id AS arista_id,
+                COALESCE(a.nombre, rv.nombre_buscable, '') AS nombre_buscable,
+                ST_AsGeoJSON(a.geom) AS geom_json,
+                a.source AS src
+         FROM aristas a LEFT JOIN red_vial rv ON rv.id = a.red_vial_id
+         WHERE a.id = ANY($1::bigint[])`,
+        [aristaIdsNecesarios]
+      );
+      for (const row of resDetalles.rows) {
+        edgeDetailMap[row.arista_id] = {
+          nombre: row.nombre_buscable ?? "",
+          geomJson: row.geom_json ?? null,
+          src: row.src,
+        };
+      }
+    }
+
+    // Arma el path en memoria, sin tocar la DB.
+    function buildPath(nodePath: string[]) {
+      return nodePath.map((nodeId: string, index: number) => {
         let label = "";
         let geometry: Array<{lat: number, lon: number}> = [];
         let aristaId: number | undefined = undefined;
         if (index < nodePath.length - 1) {
-          const siguienteId = nodePath[index + 1];
-          const resArista = await pool.query(
-            `SELECT COALESCE(a.nombre, rv.nombre_buscable, '') AS nombre_buscable,
-                ST_AsGeoJSON(a.geom) AS geom_json, a.source AS src, a.id AS arista_id
-             FROM aristas a LEFT JOIN red_vial rv ON rv.id = a.red_vial_id
-             WHERE (a.source = $1::integer AND a.target = $2::integer)
-                OR (a.source = $2::integer AND a.target = $1::integer)
-             ORDER BY a.costo ASC LIMIT 1`,
-            [nodeId, siguienteId]
-          );
-          if (resArista.rows.length > 0) {
-            label = resArista.rows[0].nombre_buscable ?? "";
-            aristaId = resArista.rows[0].arista_id ?? undefined;
-            if (resArista.rows[0].geom_json) {
-              const geoj = JSON.parse(resArista.rows[0].geom_json);
-              const coords = geoj.coordinates.map(([lon, lat]: [number, number]) => ({ lat, lon }));
-              const esInversa = resArista.rows[0].src !== Number(nodeId);
-              geometry = esInversa ? [...coords].reverse() : coords;
+          const edge = findEdge(nodeId, nodePath[index + 1]);
+          if (edge?.aristaId !== undefined) {
+            aristaId = edge.aristaId;
+            const detalle = edgeDetailMap[edge.aristaId];
+            if (detalle) {
+              label = detalle.nombre;
+              if (detalle.geomJson) {
+                const geoj = JSON.parse(detalle.geomJson);
+                const coords = geoj.coordinates.map(([lon, lat]: [number, number]) => ({ lat, lon }));
+                const esInversa = detalle.src !== Number(nodeId);
+                geometry = esInversa ? [...coords].reverse() : coords;
+              }
             }
           }
         }
         return { nodeId, lat: grafo.nodes[nodeId]?.lat ?? 0, lon: grafo.nodes[nodeId]?.lon ?? 0, label, geometry, aristaId };
-      }));
+      });
     }
 
-    const path = await buildPath(resultado.path);
+
+    const path = buildPath(resultado.path);
     const sonIguales = resultadoAlternativo.path.join(',') === resultado.path.join(',');
-    const pathAlternativo = resultadoAlternativo.found && !sonIguales ? await buildPath(resultadoAlternativo.path) : null;
+    const pathAlternativo = resultadoAlternativo.found && !sonIguales ? buildPath(resultadoAlternativo.path) : null;
 
-    // distancia real
-    let distanciaRealM = 0;
-    for (let i = 0; i < resultado.path.length - 1; i++) {
-      const resArista = await pool.query(
-        `SELECT LEAST(costo, 10000) AS costo FROM aristas WHERE source = $1::integer AND target = $2::integer ORDER BY costo ASC LIMIT 1`,
-        [resultado.path[i], resultado.path[i + 1]]
-      );
-      if (resArista.rows.length > 0) distanciaRealM += resArista.rows[0].costo;
-    }
-
-    let distanciaAlternativaM = 0;
-    if (pathAlternativo) {
-      for (let i = 0; i < resultadoAlternativo.path.length - 1; i++) {
-        const resArista = await pool.query(
-          `SELECT LEAST(costo, 10000) AS costo FROM aristas WHERE source = $1::integer AND target = $2::integer ORDER BY costo ASC LIMIT 1`,
-          [resultadoAlternativo.path[i], resultadoAlternativo.path[i + 1]]
-        );
-        if (resArista.rows.length > 0) distanciaAlternativaM += resArista.rows[0].costo;
+    // distancia real: suma de longitudes desde el grafo en memoria (sin queries).
+    function distanciaDePath(nodePath: string[]): number {
+      let total = 0;
+      for (let i = 0; i < nodePath.length - 1; i++) {
+        const e = findEdge(nodePath[i], nodePath[i + 1]);
+        if (e) total += Math.min(e.lengthM, 10000);
       }
+      return total;
     }
+
+    const distanciaRealM = distanciaDePath(resultado.path);
+    const distanciaAlternativaM = pathAlternativo ? distanciaDePath(resultadoAlternativo.path) : 0;
 
     // snap-to-road
     const allGeometryPoints: Array<{lat: number, lon: number}> = [];
@@ -231,10 +293,13 @@ router.post("/", async (req: Request, res: Response) => {
       else allGeometryPoints.push({ lat: point.lat, lon: point.lon });
     }
     const CHUNK_SIZE = 100;
-    const snappedPoints: Array<{lat: number, lon: number}> = [];
+    const chunks: Array<Array<{lat: number, lon: number}>> = [];
     for (let i = 0; i < allGeometryPoints.length; i += CHUNK_SIZE) {
-      snappedPoints.push(...await snapToRoads(allGeometryPoints.slice(i, i + CHUNK_SIZE)));
+      chunks.push(allGeometryPoints.slice(i, i + CHUNK_SIZE));
     }
+    // los chunks se snapean en paralelo; map preserva el orden original
+    const snappedChunks = await Promise.all(chunks.map((c) => snapToRoads(c)));
+    const snappedPoints: Array<{lat: number, lon: number}> = ([] as Array<{lat: number, lon: number}>).concat(...snappedChunks);
 
     // guardo viaje
     const aristaIds: number[] = path.filter(p => p.aristaId !== undefined).map(p => p.aristaId as number);
