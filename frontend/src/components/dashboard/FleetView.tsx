@@ -160,12 +160,14 @@ function TruckDetailPanel({
   onClose,
   onSaved,
   onDeleted,
+  onNavigate,
 }: {
   truck: Truck;
   drivers: Driver[];
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
+  onNavigate: (page: AdminPage) => void;
 }) {
   const [deleting, setDeleting]       = useState(false);
   const [editing, setEditing]         = useState(false);
@@ -259,7 +261,7 @@ function TruckDetailPanel({
         </div>
       </div>
 
-      {editing && <TruckEditModal truck={truck} onSave={() => { setEditing(false); onSaved(); }} onClose={() => setEditing(false)} />}
+      {editing && <TruckEditModal truck={truck} onSave={() => { setEditing(false); onSaved(); }} onClose={() => setEditing(false)} onSubscriptionRequired={() => { setEditing(false); onClose(); onNavigate("plans"); }} />}
       {assigning && <AssignDriverModal truck={truck} drivers={drivers} onDone={() => { setAssigning(false); onSaved(); }} onClose={() => setAssigning(false)} />}
     </div>
   );
@@ -352,9 +354,10 @@ function TrucksTab({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
           onClose={() => setSelected(null)}
           onSaved={() => { setSelected(null); handleSaved(); }}
           onDeleted={() => { setSelected(null); void loadTrucks(); void refreshTrucks(); }}
+          onNavigate={onNavigate}
         />
       )}
-      {creating && <TruckEditModal truck={null} onSave={handleSaved} onClose={() => setCreating(false)} />}
+      {creating && <TruckEditModal truck={null} onSave={handleSaved} onClose={() => setCreating(false)} onSubscriptionRequired={() => { setCreating(false); onNavigate("plans"); }} />}
       {fromTemplate && <TruckTemplateModal onSaved={handleSaved} onClose={() => setFromTemplate(false)} />}
     </div>
   );
