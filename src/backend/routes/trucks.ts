@@ -172,7 +172,7 @@ router.post("/", async (req: Request, res: Response) => {
   try {
     // ── Validar límite de flota según plan ──────────────────────────────────
     const { data: profile } = await supabase
-      .from("st_profiles")
+      .from("profiles")
       .select("plan")
       .eq("id", userId)
       .single();
@@ -343,7 +343,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
 
   try {
     const { data: profile } = await supabase
-      .from('st_profiles').select('plan').eq('id', userId).single();
+      .from('profiles').select('plan').eq('id', userId).single();
     const plan = (profile?.plan as string | null) ?? 'starter';
     const limit = PLAN_TRUCK_LIMITS[plan] ?? 5;
 

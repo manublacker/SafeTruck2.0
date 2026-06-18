@@ -1,30 +1,53 @@
-import { Tabs, Redirect } from 'expo-router'
+import { Redirect, Tabs } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '../../src/store/useStore'
 import { getTheme } from '../../src/theme'
 
+type IoniconName = keyof typeof Ionicons.glyphMap
+
+const ICONS: Record<string, [IoniconName, IoniconName]> = {
+  index:   ['map-outline', 'map'],
+  trips:   ['list-outline', 'list'],
+  profile: ['person-outline', 'person'],
+}
+
 export default function TabLayout() {
   const profile = useStore(s => s.profile)
-  const isDark = useStore(s => s.isDark)
-  const t = getTheme(isDark)
+  const isDark  = useStore(s => s.isDark)
+  const t       = getTheme(isDark)
+  const insets  = useSafeAreaInsets()
 
   if (!profile) return <Redirect href="/auth/login" />
+
+  const renderIcon = (name: string) =>
+    ({ focused, color }: { focused: boolean; color: string }) => {
+      const pair = ICONS[name]
+      if (!pair) return null
+      return <Ionicons name={pair[focused ? 1 : 0]} size={22} color={color} />
+    }
 
   return (
     <Tabs screenOptions={{
       headerShown: false,
       tabBarStyle: {
-        backgroundColor: t.card,
-        borderTopWidth: 1,
-        borderTopColor: t.border,
+        backgroundColor: t.navy,
+        borderTopWidth: 0,
+        elevation: 0,
+        shadowOpacity: 0,
+        height: 58 + insets.bottom,
+        paddingTop: 8,
+        paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
       },
-      tabBarActiveTintColor: t.accent,
-      tabBarInactiveTintColor: t.textMuted,
+      tabBarActiveTintColor: '#FFFFFF',
+      tabBarInactiveTintColor: t.navyText,
       tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+      tabBarItemStyle: { paddingTop: 2 },
     }}>
-      <Tabs.Screen name="index"     options={{ title: 'Mapa',    tabBarIcon: () => null }} />
-      <Tabs.Screen name="trips"     options={{ title: 'Viajes',  tabBarIcon: () => null }} />
-      <Tabs.Screen name="incidents" options={{ title: 'Alertas', tabBarIcon: () => null }} />
-      <Tabs.Screen name="profile"   options={{ title: 'Perfil',  tabBarIcon: () => null }} />
+      <Tabs.Screen name="index"     options={{ title: 'Mapa',   tabBarIcon: renderIcon('index') }} />
+      <Tabs.Screen name="trips"     options={{ title: 'Viajes', tabBarIcon: renderIcon('trips') }} />
+      <Tabs.Screen name="profile"   options={{ title: 'Perfil', tabBarIcon: renderIcon('profile') }} />
+      <Tabs.Screen name="incidents" options={{ href: null }} />
     </Tabs>
   )
 }

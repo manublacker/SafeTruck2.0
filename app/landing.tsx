@@ -95,7 +95,7 @@ function PlansSection({ onChoose }: { onChoose: () => void }) {
           <Text style={s.planName}>{plan.name}</Text>
           <View style={s.planPriceRow}>
             <Text style={s.planPrice}>{plan.price}</Text>
-            <Text style={s.planPeriod}>USD/mes</Text>
+            <Text style={s.planPeriod}>ARS/mes</Text>
           </View>
           {plan.features.map(feature => (
             <Text key={feature} style={s.planFeature}>

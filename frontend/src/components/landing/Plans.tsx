@@ -12,7 +12,7 @@ const plans: Plan[] = [
   {
     name: "Starter",
     slug: "starter",
-    price: "$29",
+    price: "$43.500",
     features: [
       "Hasta 5 camiones",
       "Tracking en tiempo real",
@@ -24,7 +24,7 @@ const plans: Plan[] = [
   {
     name: "Pro",
     slug: "pro",
-    price: "$79",
+    price: "$118.500",
     features: [
       "Hasta 20 camiones",
       "Todo lo de Starter",
@@ -38,7 +38,7 @@ const plans: Plan[] = [
   {
     name: "Enterprise",
     slug: "enterprise",
-    price: "$199",
+    price: "$298.500",
     features: [
       "Camiones ilimitados",
       "Todo lo de Pro",
@@ -72,7 +72,7 @@ const Plans = () => (
             <p className="landing-plan-card__name">{p.name}</p>
             <div className="landing-plan-card__price-row">
               <span className="landing-plan-card__price">{p.price}</span>
-              <span className="landing-plan-card__period">USD/mes</span>
+              <span className="landing-plan-card__period">ARS/mes</span>
             </div>
             <ul className="landing-plan-card__features">
               {p.features.map((f) => (

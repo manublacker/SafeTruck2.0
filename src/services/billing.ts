@@ -15,7 +15,7 @@
 import * as WebBrowser from 'expo-web-browser'
 import { supabase } from './supabase'
 
-const BACKEND = 'https://safetruck20-production.up.railway.app'
+const BACKEND = (process.env.EXPO_PUBLIC_API_URL ?? 'https://safetruck20-production.up.railway.app').replace(/\/$/, '')
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 

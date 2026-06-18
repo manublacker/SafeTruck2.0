@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Truck } from "@/types/auth";
 import { createTruck, updateTruck, deleteTruck } from "@/services/api";
 import { Icons } from "./DashboardIcons";
@@ -140,6 +140,16 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
   const title = isEdit ? "Editar camión" : "Nuevo camión";
   const today = new Date().toISOString().slice(0, 10);
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (confirmDelete) setConfirmDelete(false);
+      else onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmDelete, onClose]);
+
   async function handleDelete() {
     if (!truck) return;
     setDeleting(true);
@@ -202,9 +212,9 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <Field label="Modelo*" required>
+            <Field label="Modelo" required>
               <input
-                className="st-input"
+                className="st-field"
                 value={draft.modelo}
                 onChange={update("modelo")}
                 placeholder="Iveco Tector"
@@ -213,7 +223,7 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
             </Field>
             <Field label="Patente">
               <input
-                className="st-input"
+                className="st-field"
                 value={draft.patente}
                 onChange={updateMasked("patente", sanitizePatente)}
                 placeholder="AC-742-PT"
@@ -224,7 +234,7 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
             </Field>
             <Field label="Año">
               <input
-                className="st-input"
+                className="st-field"
                 type="text"
                 inputMode="numeric"
                 value={draft.anio}
@@ -235,7 +245,7 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
             </Field>
             <Field label="Km actuales">
               <input
-                className="st-input"
+                className="st-field"
                 type="text"
                 inputMode="numeric"
                 value={draft.km_actual}
@@ -246,9 +256,9 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <Field label="Peso máx (kg)*" required>
+            <Field label="Peso máx (kg)" required>
               <input
-                className="st-input"
+                className="st-field"
                 type="text"
                 inputMode="decimal"
                 value={draft.max_weight_kg}
@@ -256,9 +266,9 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
                 placeholder="15000"
               />
             </Field>
-            <Field label="Alto máx (m)*" required>
+            <Field label="Alto máx (m)" required>
               <input
-                className="st-input"
+                className="st-field"
                 type="text"
                 inputMode="decimal"
                 value={draft.max_height_m}
@@ -266,9 +276,9 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
                 placeholder="3.5"
               />
             </Field>
-            <Field label="Ancho máx (m)*" required>
+            <Field label="Ancho máx (m)" required>
               <input
-                className="st-input"
+                className="st-field"
                 type="text"
                 inputMode="decimal"
                 value={draft.max_width_m}
@@ -276,9 +286,9 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
                 placeholder="2.5"
               />
             </Field>
-            <Field label="Largo máx (m)*" required>
+            <Field label="Largo máx (m)" required>
               <input
-                className="st-input"
+                className="st-field"
                 type="text"
                 inputMode="decimal"
                 value={draft.max_length_m}
@@ -289,7 +299,7 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <Field label="Último service">
                 <input
-                  className="st-input"
+                  className="st-field"
                   type="date"
                   value={draft.fecha_service}
                   onChange={update("fecha_service")}
@@ -298,7 +308,7 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
               </Field>
               <Field label="Próximo service">
                 <input
-                  className="st-input"
+                  className="st-field"
                   type="date"
                   value={draft.proximo_service}
                   onChange={update("proximo_service")}
@@ -310,9 +320,20 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
         </div>
 
         {error && (
-          <p style={{ color: "#c62828", fontWeight: 600, fontSize: "0.85rem", margin: "14px 0 0" }}>
+          <div
+            style={{
+              background: "var(--c-danger-soft)",
+              border: "1px solid var(--c-danger)",
+              color: "var(--c-accent-hover)",
+              borderRadius: "var(--r-md)",
+              padding: "10px 14px",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              marginTop: 14,
+            }}
+          >
             {error}
-          </p>
+          </div>
         )}
 
         <div
@@ -327,17 +348,9 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
           {isEdit && (
             <button
               type="button"
+              className="st-btn-danger"
               onClick={() => setConfirmDelete(true)}
               disabled={saving || deleting}
-              style={{
-                background: "transparent",
-                border: "1px solid #e53935",
-                color: "#e53935",
-                padding: "10px 16px",
-                borderRadius: 8,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
             >
               Eliminar camión
             </button>
@@ -348,8 +361,7 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
             </button>
             <button
               type="submit"
-              className="st-btn-primary"
-              style={{ padding: "12px 20px" }}
+              className="st-btn-cta"
               disabled={saving || deleting}
             >
               {saving ? "Guardando…" : isEdit ? "Guardar cambios" : "Crear camión"}
@@ -369,7 +381,7 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
             style={{ maxWidth: 420 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ fontSize: "1.05rem", fontWeight: 800, margin: "0 0 10px" }}>
+            <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: "0 0 10px" }}>
               ¿Eliminar este camión?
             </h3>
             <p style={{ color: "#4b5563", fontSize: "0.9rem", margin: "0 0 18px" }}>
@@ -387,17 +399,9 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
               </button>
               <button
                 type="button"
+                className="st-btn-danger solid"
                 onClick={handleDelete}
                 disabled={deleting}
-                style={{
-                  background: "#e53935",
-                  color: "white",
-                  border: "none",
-                  padding: "10px 18px",
-                  borderRadius: 8,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
               >
                 {deleting ? "Eliminando…" : "Sí, eliminar"}
               </button>
@@ -421,7 +425,7 @@ function ModalHeader({ title, onClose }: { title: string; onClose: () => void })
         marginBottom: 18,
       }}
     >
-      <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0d0d0d", margin: 0 }}>
+      <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#0d0d0d", margin: 0 }}>
         {title}
       </h3>
       <button
@@ -459,7 +463,7 @@ function Field({
     <div>
       <label className="st-label">
         {label}
-        {required && <span style={{ color: "#e53935" }}> </span>}
+        {required && <span style={{ color: "var(--c-accent)" }}>*</span>}
       </label>
       {children}
     </div>

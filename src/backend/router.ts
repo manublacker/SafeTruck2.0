@@ -86,6 +86,36 @@ export async function calculateRoute(
   }
 }
 
+/**
+ * Registra una denuncia de un chofer sobre la arista más cercana a un punto.
+ * Usa el MISMO pool/DB que el ruteo (pgr_edges), así la penalización que escribe
+ * la "ve" pgr_route_truck en el próximo cálculo de ruta.
+ *
+ * Toda la lógica vive en la función SQL denunciar_punto() (ver migración
+ * src/backend/migrations/003_denuncia_penalty_pgr.sql): snap a pgr_edges +
+ * INSERT en edge_reports + recálculo de pgr_edges.denuncia_penalty por umbral.
+ *
+ * Devuelve el edge_id (pgr_edges.id) afectado.
+ */
+export async function denunciarPunto(
+  lat: number,
+  lng: number,
+  tipo: 'multa' | 'sin_problemas',
+  tripId: number | null = null,
+  notes: string | null = null
+): Promise<number> {
+  const client = await getPool().connect()
+  try {
+    const r = await client.query(
+      'SELECT denunciar_punto($1, $2, $3, $4, $5) AS edge_id',
+      [lat, lng, tipo, tripId, notes]
+    )
+    return r.rows[0].edge_id
+  } finally {
+    client.release()
+  }
+}
+
 function parseGeom(geom: any): { lat: number; lng: number }[] {
   if (!geom) return []
   try {

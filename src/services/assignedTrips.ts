@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { supabase } from './supabase'
 
 export interface AssignedTrip {
@@ -25,7 +26,7 @@ export interface AssignedTrip {
   truck_name?: string | null
 }
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'https://safetruck20-production.up.railway.app').replace(/\/$/, '')
 
 async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession()
@@ -36,26 +37,40 @@ async function authHeaders(): Promise<Record<string, string>> {
   }
 }
 
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = await authHeaders()
   const res = await fetch(`${API_URL}${path}`, { ...options, headers: { ...headers, ...options?.headers } })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error((data as any).error ?? `HTTP ${res.status}`)
+  if (!res.ok) throw new ApiError(res.status, (data as any).error ?? `HTTP ${res.status}`)
   return data as T
 }
 
 export async function fetchAllMyTrips(): Promise<AssignedTrip[]> {
-  return apiRequest<AssignedTrip[]>('/api/assigned-trips/mine')
+  const data = await apiRequest<AssignedTrip[]>('/api/assigned-trips/mine')
+  return Array.isArray(data) ? data : []
 }
 
 export async function updateTripStatus(
   tripId: string,
   status: AssignedTrip['status']
-): Promise<void> {
-  await apiRequest(`/api/assigned-trips/${tripId}/status`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status }),
-  })
+): Promise<AssignedTrip | null> {
+  const res = await apiRequest<{ success: boolean; trip: AssignedTrip }>(
+    `/api/assigned-trips/${tripId}/status`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }
+  )
+  return res.trip ?? null
 }
 
 export async function sendLocation(
@@ -104,4 +119,27 @@ export interface AssignedTruck {
 
 export async function fetchMyAssignedTruck(): Promise<AssignedTruck | null> {
   return apiRequest<AssignedTruck | null>('/api/drivers/me/truck')
+}
+
+export interface DriverProfile {
+  id: number
+  nombre: string
+  telefono: string | null
+  estado: string
+}
+
+export async function fetchMyDriverProfile(): Promise<DriverProfile | null> {
+  return apiRequest<DriverProfile | null>('/api/drivers/me')
+}
+
+/**
+ * Sincroniza el teléfono de la cuenta hacia la ficha de empresa (drivers).
+ * Best-effort: si el conductor no está vinculado a un driver, el backend
+ * devuelve 404 y se ignora (su teléfono queda solo en la cuenta).
+ */
+export async function syncMyPhoneToFleet(telefono: string | null): Promise<void> {
+  await apiRequest('/api/drivers/me', {
+    method: 'PATCH',
+    body: JSON.stringify({ telefono }),
+  }).catch(() => null)
 }

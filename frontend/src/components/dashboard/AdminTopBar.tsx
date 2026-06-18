@@ -20,18 +20,7 @@ export default function AdminTopBar({ title, onToggleSidebar }: Props) {
   const [today] = useState(() => formatDateEsAR());
 
   return (
-    <header
-      style={{
-        background: "#fff",
-        borderBottom: "1px solid #f0f0f0",
-        height: 56,
-        padding: "0 24px 0 12px",
-        flexShrink: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-      }}
-    >
+    <header className="st-topbar">
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <button
           className="st-toggle-btn"
@@ -41,7 +30,7 @@ export default function AdminTopBar({ title, onToggleSidebar }: Props) {
         >
           <Icons.PanelLeft size={20} />
         </button>
-        <h1 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0d0d0d", margin: 0 }}>
+        <h1 className="st-topbar-title">
           {title}
         </h1>
         {today && (
@@ -49,7 +38,7 @@ export default function AdminTopBar({ title, onToggleSidebar }: Props) {
             className="hide-on-mobile"
             style={{
               fontSize: "0.82rem",
-              color: "#9ca3af",
+              color: "var(--c-ink-3)",
               fontWeight: 500,
               textTransform: "capitalize",
               marginLeft: 4,

@@ -42,11 +42,15 @@ async function searchBackend(query: string): Promise<GeoSuggestion[]> {
 async function searchNominatim(query: string): Promise<GeoSuggestion[]> {
   try {
     const params = new URLSearchParams({
-      q:            `${query}, Buenos Aires, Argentina`,
+      // Sin sufijo "Buenos Aires": sesgaba hacia CABA y ocultaba el conurbano
+      // (Adrogué, Quilmes, etc.). El viewbox + countrycodes ya acotan al AMBA.
+      q:            `${query}, Argentina`,
       format:       "jsonv2",
-      limit:        "5",
+      limit:        "8",
       countrycodes: "ar",
-      viewbox:      "-58.5312,-34.5270,-58.3351,-34.7058",
+      // Recuadro de sugerencias = AMBA completo (mismo bbox que el grafo cacheado).
+      // Antes era solo CABA + sur, por eso no aparecían Tigre, Quilmes, etc.
+      viewbox:      "-59.0,-34.3,-58.1,-34.9",
       bounded:      "1",
     });
 
@@ -76,7 +80,12 @@ async function searchNominatim(query: string): Promise<GeoSuggestion[]> {
 
 /**
  * Combina backend + Nominatim, deduplica por label.
- * Orden: buenos del backend (score >= 0.4) → Nominatim → resto del backend.
+ *
+ * Prioriza Nominatim (direcciones reales de todo el AMBA) porque la búsqueda
+ * del backend infla el "parecido" con palabras genéricas (p. ej. cualquier
+ * "Avenida X" matchea "Avenida Adrogué") y tapaba los resultados buenos.
+ * El backend solo entra como complemento cuando la coincidencia es casi exacta,
+ * o como respaldo total si Nominatim no respondió (rate limit / red).
  */
 export async function searchLocations(query: string): Promise<GeoSuggestion[]> {
   const q = normalizeQuery(query);
@@ -87,9 +96,12 @@ export async function searchLocations(query: string): Promise<GeoSuggestion[]> {
     searchNominatim(q),
   ]);
 
-  const buenos    = backendResults.filter((r) => r.score >= 0.4);
-  const mediocres = backendResults.filter((r) => r.score < 0.4);
-  const combined  = [...buenos, ...nominatimResults, ...mediocres];
+  // Solo coincidencias casi exactas del backend (evita la basura por palabras comunes).
+  const backendExactos = backendResults.filter((r) => r.score >= 0.6);
+
+  const combined = nominatimResults.length > 0
+    ? [...nominatimResults, ...backendExactos]               // direcciones reales primero
+    : [...backendExactos, ...backendResults];                // sin Nominatim: respaldo al backend
 
   const seen = new Set<string>();
   return combined.filter((r) => {

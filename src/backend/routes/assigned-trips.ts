@@ -1,9 +1,11 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware } from '../middleware/authMiddleware'
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription'
 import pool from '../db'
 
 const router = Router()
 router.use(authMiddleware)
+router.use(requireActiveSubscription)
 
 // POST / — Admin crea un viaje asignado y notifica al conductor
 router.post('/', async (req: Request, res: Response) => {
@@ -135,8 +137,8 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
   }
 
   try {
-    const existing = await pool.query<{ empresa_user_id: string; driver_app_user_id: string | null }>(
-      'SELECT empresa_user_id, driver_app_user_id FROM assigned_trips WHERE id = $1',
+    const existing = await pool.query<{ empresa_user_id: string; driver_app_user_id: string | null; driver_id: number }>(
+      'SELECT empresa_user_id, driver_app_user_id, driver_id FROM assigned_trips WHERE id = $1',
       [req.params.id]
     )
     if (!existing.rowCount) return res.status(404).json({ error: 'Viaje no encontrado' })
@@ -144,6 +146,21 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
     const trip = existing.rows[0]
     if (trip.empresa_user_id !== userId && trip.driver_app_user_id !== userId) {
       return res.status(403).json({ error: 'Sin permiso' })
+    }
+
+    // Un conductor sólo puede tener UN viaje en curso a la vez: un viaje está
+    // "in_progress" únicamente mientras el conductor lo está realizando.
+    if (status === 'in_progress') {
+      const inProgress = await pool.query<{ id: number }>(
+        `SELECT id FROM assigned_trips
+         WHERE id <> $1 AND status = 'in_progress' AND driver_id = $2`,
+        [req.params.id, trip.driver_id]
+      )
+      if (inProgress.rowCount) {
+        return res.status(409).json({
+          error: 'El conductor ya tiene un viaje en curso. Finalizalo antes de iniciar otro.',
+        })
+      }
     }
 
     let extra = ''

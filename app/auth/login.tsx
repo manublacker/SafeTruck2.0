@@ -3,15 +3,18 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../src/services/supabase'
 import { signInWithGoogle } from '../../src/services/auth'
+import { registerForPushNotifications } from '../../src/services/push'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 
 export default function LoginScreen() {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading]   = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
 
@@ -29,17 +32,23 @@ export default function LoginScreen() {
       if (error) throw error
 
       let { data: profile } = await supabase
-        .from('st_profiles').select('*').eq('id', data.user.id).single()
+        .from('profiles').select('*').eq('id', data.user.id).single()
 
       if (!profile) {
+        // No usar el email como nombre: cae al nombre del registro o un placeholder editable.
+        const metaName = (data.user.user_metadata?.full_name as string)?.trim()
         const { data: newProfile } = await supabase
-          .from('st_profiles')
-          .insert({ id: data.user.id, full_name: data.user.email || 'Usuario' })
+          .from('profiles')
+          .insert({ id: data.user.id, full_name: metaName || 'Conductor', email: data.user.email })
           .select().single()
         profile = newProfile
       }
 
-      if (profile) { setProfile(profile); router.replace('/(tabs)/') }
+      if (profile) {
+        setProfile(profile)
+        void registerForPushNotifications()
+        router.replace('/(tabs)/')
+      }
     } catch (e: any) {
       Alert.alert('Error al ingresar', e.message)
     } finally {
@@ -72,16 +81,32 @@ export default function LoginScreen() {
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
+          autoCorrect={false}
           keyboardType="email-address"
+          textContentType="emailAddress"
+          autoComplete="email"
         />
-        <TextInput
-          style={s.input}
-          placeholder="Contraseña"
-          placeholderTextColor={t.textSoft}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
+        <View style={s.passwordWrap}>
+          <TextInput
+            style={s.passwordInput}
+            placeholder="Contraseña"
+            placeholderTextColor={t.textSoft}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            textContentType="password"
+            autoComplete="password"
+          />
+          <TouchableOpacity
+            onPress={() => setShowPassword(v => !v)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={s.eyeBtn}
+            accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+          >
+            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.textMuted} />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity style={s.forgotLink} onPress={() => router.push('/auth/forgot-password')}>
           <Text style={s.forgotText}>¿Olvidaste tu contraseña?</Text>
@@ -121,8 +146,15 @@ function makeStyles(t: Theme) {
       borderRadius: 12, padding: 16, marginBottom: 12, fontSize: 16,
       borderWidth: 1, borderColor: t.border,
     },
+    passwordWrap: {
+      flexDirection: 'row', alignItems: 'center',
+      backgroundColor: t.card, borderRadius: 12, marginBottom: 12,
+      borderWidth: 1, borderColor: t.border, paddingRight: 10,
+    },
+    passwordInput: { flex: 1, color: t.text, padding: 16, fontSize: 16 },
+    eyeBtn: { padding: 6 },
     forgotLink: { alignSelf: 'flex-end', marginBottom: 8 },
-    forgotText: { color: t.accent, fontSize: 13 },
+    forgotText: { color: t.info, fontSize: 13 },
     btnPrimary: {
       backgroundColor: t.accent, borderRadius: 12,
       padding: 16, alignItems: 'center', marginTop: 8,
@@ -138,6 +170,6 @@ function makeStyles(t: Theme) {
     },
     btnGhostText: { color: t.text, fontSize: 16, fontWeight: '600' },
     link:     { marginTop: 20, alignItems: 'center' },
-    linkText: { color: t.accent, fontSize: 14 },
+    linkText: { color: t.info, fontSize: 14, fontWeight: '600' },
   })
 }

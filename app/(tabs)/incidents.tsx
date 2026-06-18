@@ -1,70 +1,105 @@
 import { useState, useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 
+const BACKEND = (process.env.EXPO_PUBLIC_API_URL ?? 'https://safetruck20-production.up.railway.app').replace(/\/$/, '')
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 const INCIDENT_LABELS: Record<string, string> = {
-  fine:         '💸 Multa a camión',
-  police_check: '👮 Control policial',
-  accident:     '🚨 Accidente',
-  road_work:    '🚧 Obras',
-  low_bridge:   '🌉 Puente bajo',
-  road_closed:  '🚫 Calle cerrada',
-  weight_check: '⚖️ Control de peso',
-  other:        '⚠️ Otro',
+  multa:            '💸 Multa a camión',
+  control_policial: '👮 Control policial',
+  accidente:        '🚨 Accidente',
+  obra:             '🚧 Obras',
+  puente_bajo:      '🌉 Puente bajo',
+  corte:            '🚫 Calle cerrada',
+  control_peso:     '⚖️ Control de peso',
+  otro:             '⚠️ Otro',
+  trafico:          '🚗 Tráfico',
+  objeto_en_via:    '⚠️ Objeto en vía',
 }
 
-const INCIDENT_COLORS: Record<string, string> = {
-  fine:         '#FF3B30',
-  police_check: '#FF9500',
-  accident:     '#FF3B30',
-  road_work:    '#FF9500',
-  low_bridge:   '#FF3B30',
-  road_closed:  '#FF3B30',
-  weight_check: '#FF9500',
-  other:        '#8E8E93',
+// Mapa de tipo de incidente -> token de marca.
+// Peligro/bloqueo => danger; advertencia => warning; resto => textSoft.
+const INCIDENT_DANGER = ['multa', 'accidente', 'puente_bajo', 'corte']
+const INCIDENT_WARNING = ['control_policial', 'obra', 'control_peso', 'trafico', 'objeto_en_via']
+
+function incidentColor(type: string, t: Theme): string {
+  if (INCIDENT_DANGER.includes(type)) return t.danger
+  if (INCIDENT_WARNING.includes(type)) return t.warning
+  return t.textSoft
 }
 
-const FILTERS = ['fine', 'accident', 'police_check', 'road_work', 'low_bridge', 'road_closed']
+const FILTERS = ['multa', 'accidente', 'control_policial', 'obra', 'puente_bajo', 'corte']
+
+// Etiqueta corta para los chips de filtro (emoji + texto, no solo emoji).
+const FILTER_SHORT: Record<string, string> = {
+  multa:            '💸 Multa',
+  accidente:        '🚨 Accidente',
+  control_policial: '👮 Control',
+  obra:             '🚧 Obra',
+  puente_bajo:      '🌉 Puente bajo',
+  corte:            '🚫 Corte',
+}
 
 export default function IncidentsScreen() {
   const profile = useStore(s => s.profile)
   const isDark = useStore(s => s.isDark)
   const t = getTheme(isDark)
   const s = useMemo(() => makeStyles(t), [isDark])
+  const insets = useSafeAreaInsets()
+  const router = useRouter()
 
   const [incidents, setIncidents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<string | null>(null)
 
   useEffect(() => {
     loadIncidents()
-    const sub = supabase
-      .channel('incidents')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'st_incidents' }, () => loadIncidents())
-      .subscribe()
-    return () => { supabase.removeChannel(sub) }
   }, [])
 
   const loadIncidents = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('st_incidents')
-      .select('*')
-      .eq('is_active', true)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-    setIncidents(data || [])
-    setLoading(false)
+    try {
+      const res = await fetch(`${BACKEND}/api/incidents`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      setIncidents(json.incidents ?? [])
+      setError(null)
+    } catch (e) {
+      console.log('loadIncidents error:', e)
+      setError('No se pudieron cargar las alertas. Revisá tu conexión.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const deactivate = async (incidentId: string) => {
+  const deactivate = async (incidentId: string | number) => {
     Alert.alert('Desactivar', '¿Este incidente ya no está activo?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Sí', style: 'destructive', onPress: async () => {
-        await supabase.from('st_incidents').update({ is_active: false }).eq('id', incidentId)
-        loadIncidents()
+        try {
+          const headers = await authHeaders()
+          const res = await fetch(`${BACKEND}/api/incidents/${incidentId}/deactivate`, {
+            method: 'PATCH',
+            headers,
+          })
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          loadIncidents()
+        } catch (e) {
+          console.log('deactivate error:', e)
+          Alert.alert('Error', 'No se pudo desactivar la alerta. Intentá de nuevo.')
+        }
       }},
     ])
   }
@@ -72,8 +107,18 @@ export default function IncidentsScreen() {
   const timeAgo = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime()
     const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'recién'
     if (mins < 60) return `hace ${mins} min`
     return `hace ${Math.floor(mins / 60)}h`
+  }
+
+  // expires_at es futuro: mostramos cuánto FALTA, no "hace -X".
+  const timeUntil = (dateStr: string) => {
+    const diff = new Date(dateStr).getTime() - Date.now()
+    if (diff <= 0) return 'expirada'
+    const mins = Math.floor(diff / 60000)
+    if (mins < 60) return `en ${mins} min`
+    return `en ${Math.floor(mins / 60)}h`
   }
 
   const filtered = filter ? incidents.filter(i => i.incident_type === filter) : incidents
@@ -81,7 +126,16 @@ export default function IncidentsScreen() {
   return (
     <View style={s.container}>
       {/* Topbar */}
-      <View style={s.topbar}>
+      <View style={[s.topbar, { paddingTop: insets.top + 14 }]}>
+        <TouchableOpacity
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/'))}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={s.backBtn}
+          accessibilityLabel="Volver"
+        >
+          <Ionicons name="chevron-back" size={20} color={t.text} />
+          <Text style={s.backText}>Mapa</Text>
+        </TouchableOpacity>
         <Text style={s.topbarTitle}>Alertas activas</Text>
         <Text style={s.topbarSub}>
           {incidents.length} incidente{incidents.length !== 1 ? 's' : ''} en el AMBA
@@ -103,7 +157,7 @@ export default function IncidentsScreen() {
             onPress={() => setFilter(filter === f ? null : f)}
           >
             <Text style={[s.chipText, filter === f && s.chipTextActive]}>
-              {INCIDENT_LABELS[f].split(' ')[0]}
+              {FILTER_SHORT[f] ?? INCIDENT_LABELS[f]}
             </Text>
           </TouchableOpacity>
         ))}
@@ -111,36 +165,48 @@ export default function IncidentsScreen() {
 
       <FlatList
         data={filtered}
-        keyExtractor={item => item.id}
+        keyExtractor={item => String(item.id)}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadIncidents} tintColor={t.accent} />}
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 100, width: '100%', maxWidth: 640, alignSelf: 'center' }}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         ListEmptyComponent={
-          <View style={s.empty}>
-            <View style={s.emptyIcon}><Text style={{ fontSize: 28 }}>✅</Text></View>
-            <Text style={s.emptyTitle}>Sin alertas activas</Text>
-            <Text style={s.emptyText}>El área está despejada por el momento</Text>
-          </View>
+          loading ? null : error ? (
+            <View style={s.empty}>
+              <View style={s.emptyIcon}><Text style={{ fontSize: 28 }}>📡</Text></View>
+              <Text style={s.emptyTitle}>No se pudo cargar</Text>
+              <Text style={s.emptyText}>{error}</Text>
+              <TouchableOpacity
+                onPress={loadIncidents}
+                activeOpacity={0.85}
+                style={{ marginTop: 16, backgroundColor: t.accent, borderRadius: 10, paddingHorizontal: 22, paddingVertical: 11 }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13.5 }}>Reintentar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={s.empty}>
+              <View style={s.emptyIcon}><Text style={{ fontSize: 28 }}>✅</Text></View>
+              <Text style={s.emptyTitle}>Sin alertas activas</Text>
+              <Text style={s.emptyText}>El área está despejada por el momento</Text>
+            </View>
+          )
         }
         renderItem={({ item }) => (
           // --dash-incident-card: flat, franja lateral de color
           <View style={s.card}>
-            <View style={[s.cardAccent, { backgroundColor: INCIDENT_COLORS[item.incident_type] || '#8E8E93' }]} />
+            <View style={[s.cardAccent, { backgroundColor: incidentColor(item.incident_type, t) }]} />
             <View style={s.cardBody}>
               <View style={s.cardTop}>
                 <Text style={s.cardType}>{INCIDENT_LABELS[item.incident_type] || '⚠️ Incidente'}</Text>
-                <Text style={s.cardTime}>{timeAgo(item.created_at)}</Text>
+                <Text style={s.cardTime}>{timeAgo(item.reported_at)}</Text>
               </View>
               <View style={s.cardBottom}>
-                <Text style={s.cardExpiry}>⏱ Expira {timeAgo(item.expires_at)}</Text>
+                <Text style={s.cardExpiry}>⏱ Expira {timeUntil(item.expires_at)}</Text>
                 {/* --dash-vote-btn: pill */}
                 <View style={s.votes}>
-                  <TouchableOpacity style={s.voteBtn}>
-                    <Text style={s.voteBtnText}>👍 {item.upvotes || 0}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.voteBtn}>
-                    <Text style={s.voteBtnText}>👎 {item.downvotes || 0}</Text>
-                  </TouchableOpacity>
+                  <View style={s.voteCount}>
+                    <Text style={s.voteBtnText}>✅ {item.confirmed_count || 0}</Text>
+                  </View>
                   {item.user_id === profile?.id && (
                     <TouchableOpacity
                       style={[s.voteBtn, { backgroundColor: 'rgba(255,59,48,0.15)' }]}
@@ -168,6 +234,8 @@ function makeStyles(t: Theme) {
       borderBottomWidth: 1, borderBottomColor: t.border,
       backgroundColor: t.bg,
     },
+    backBtn: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, marginLeft: -4 },
+    backText: { color: t.text, fontSize: 15, fontWeight: '600', marginLeft: 2 },
     topbarTitle: { color: t.text, fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
     topbarSub: { color: t.textMuted, fontSize: 14, marginTop: 3 },
 
@@ -203,7 +271,11 @@ function makeStyles(t: Theme) {
     cardExpiry: { color: t.textSoft, fontSize: 11 },
 
     // --dash-vote-btn: pill shape
-    votes: { flexDirection: 'row', gap: 6 },
+    votes: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    voteCount: {
+      backgroundColor: t.surface2, borderRadius: 999,
+      paddingHorizontal: 12, paddingVertical: 5,
+    },
     voteBtn: {
       backgroundColor: t.surface2, borderRadius: 999,
       paddingHorizontal: 12, paddingVertical: 5,
