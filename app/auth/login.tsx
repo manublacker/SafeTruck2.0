@@ -6,7 +6,6 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../src/services/supabase'
-import { signInWithGoogle } from '../../src/services/auth'
 import { registerForPushNotifications } from '../../src/services/push'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
@@ -16,7 +15,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading]   = useState(false)
-  const [googleLoading, setGoogleLoading] = useState(false)
 
   const setProfile = useStore(s => s.setProfile)
   const isDark     = useStore(s => s.isDark)
@@ -54,13 +52,6 @@ export default function LoginScreen() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleGoogle = async () => {
-    setGoogleLoading(true)
-    try { await signInWithGoogle() }
-    catch (e: any) { Alert.alert('Error con Google', e.message) }
-    finally { setGoogleLoading(false) }
   }
 
   return (
@@ -114,16 +105,6 @@ export default function LoginScreen() {
 
         <TouchableOpacity style={[s.btnPrimary, loading && s.btnDisabled]} onPress={handleLogin} disabled={loading}>
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Ingresar</Text>}
-        </TouchableOpacity>
-
-        <View style={s.dividerRow}>
-          <View style={s.dividerLine} />
-          <Text style={s.dividerText}>o</Text>
-          <View style={s.dividerLine} />
-        </View>
-
-        <TouchableOpacity style={[s.btnGhost, googleLoading && s.btnDisabled]} onPress={handleGoogle} disabled={googleLoading}>
-          {googleLoading ? <ActivityIndicator color={t.text} /> : <Text style={s.btnGhostText}>Continuar con Google</Text>}
         </TouchableOpacity>
 
         <TouchableOpacity style={s.link} onPress={() => router.push('/auth/register')}>

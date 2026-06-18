@@ -128,7 +128,11 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <Image source={require('../../camion_padding.png')} style={s.logo} resizeMode="contain" />
+        <Image
+          source={isDark ? require('../../camion_padding.png') : require('../../logo-DARK.png')}
+          style={s.logo}
+          resizeMode="contain"
+        />
 
         {/* Progress */}
         <View style={s.progressRow}>
