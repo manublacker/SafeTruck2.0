@@ -94,7 +94,13 @@ app.get('/health', (_, res) => res.json({ status: 'ok' }))
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
   console.log(`SafeTruck backend en puerto ${PORT}`)
-  // Carga el grafo del AMBA en memoria en segundo plano (no bloquea el arranque).
-  // Mientras carga, /api/routes usa el método por query como fallback.
-  loadGraphCache()
+  // El cache del grafo del AMBA acelera el ruteo (~2,5s) pero usa bastante RAM.
+  // Por eso es OPCIONAL: se activa solo con GRAPH_CACHE=true, y requiere subir
+  // el heap de Node (NODE_OPTIONS=--max-old-space-size=4096) o crashea por OOM.
+  // Sin la variable, /api/routes usa el fallback por query (más lento pero seguro).
+  if (process.env.GRAPH_CACHE === 'true') {
+    loadGraphCache()
+  } else {
+    console.log('[graphCache] desactivado (GRAPH_CACHE != true) — /api/routes usa fallback por query')
+  }
 })
