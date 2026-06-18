@@ -36,6 +36,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
   const [driverLocations, setDriverLocations]   = useState<DriverLocation[]>([]);
   const [assignedTrips, setAssignedTrips]       = useState<AssignedTrip[]>([]);
   const [tripsLoading, setTripsLoading]         = useState(true);
+  const [creatorOpen, setCreatorOpen]           = useState(false);
 
   const locationPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tripsPollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -82,24 +83,34 @@ export default function LiveMapContainer({ onNavigate }: Props) {
     return () => { if (tripsPollRef.current) clearInterval(tripsPollRef.current); };
   }, [refreshTrips]);
 
+  // Cerrar el modal de "Nuevo viaje" con Escape
+  useEffect(() => {
+    if (!creatorOpen) return;
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setCreatorOpen(false); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [creatorOpen]);
+
   const assignedTruck = trucks.find((t) => t.driver?.id === selectedDriverId) ?? null;
   const hasTrucks           = trucks.length > 0;
   const hasAvailableTrucks  = availableTrucks.length > 0;
   const hasAvailableDrivers = availableDrivers.length > 0;
   const blocking = !fleetLoading && !hasTrucks;
 
+  const canCreate = !blocking && hasAvailableDrivers && hasAvailableTrucks;
+
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "2fr 1fr",
+        gridTemplateColumns: "minmax(0, 1fr) 380px",
         height: "100%",
         minHeight: 0,
         background: "#fff",
         overflow: "hidden",
       }}
     >
-      {/* Columna mapa */}
+      {/* Columna mapa (ahora a pleno: sin formulario encima) */}
       <div style={{ position: "relative", padding: 20, background: "#fff", minHeight: 0 }}>
         <MapDisplay
           routeResponse={routeResult}
@@ -109,7 +120,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
         />
       </div>
 
-      {/* Panel derecho */}
+      {/* Panel derecho: solo lectura (operaciones) + disparador del modal */}
       <div
         className="scroll-y"
         style={{
@@ -132,7 +143,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
           />
         ) : (
           <>
-            {(!hasAvailableDrivers || !hasAvailableTrucks) && (
+            {!canCreate && (
               <EmptyStateManager
                 hasTrucks={hasTrucks}
                 hasAvailableDrivers={hasAvailableDrivers}
@@ -141,23 +152,18 @@ export default function LiveMapContainer({ onNavigate }: Props) {
               />
             )}
 
-            {/* Sección 1: Crear viaje */}
-            <section style={{ marginBottom: 20 }}>
-              <TripCreator
-                routeResult={routeResult}
-                availableDrivers={availableDrivers}
-                assignedTruck={assignedTruck}
-                selectedDriverId={selectedDriverId}
-                onSelectDriver={setSelectedDriverId}
-                onRouteCalculated={(r) => { setRouteResult(r); setOriginPin(null); setDestinationPin(null); }}
-                onTripCreated={refreshTrips}
-                onOriginPinned={(p) => setOriginPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
-                onDestinationPinned={(p) => setDestinationPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
-                onSubscriptionRequired={() => onNavigate("plans")}
-              />
-            </section>
+            {/* Disparador: abre el formulario en un modal enfocado */}
+            <button
+              className="st-btn-cta"
+              style={{ width: "100%", marginBottom: 20 }}
+              onClick={() => setCreatorOpen(true)}
+              disabled={!canCreate}
+              title={!canCreate ? "Activá un conductor con camión para asignar viajes" : undefined}
+            >
+              + Nuevo viaje
+            </button>
 
-            {/* Sección 2: Viajes activos */}
+            {/* Viajes activos (lectura) */}
             <section style={{ borderTop: "1px solid #f0f0f0", paddingTop: 20 }}>
               <p className="st-section-eyebrow" style={{ marginBottom: 4 }}>Operaciones</p>
               <h2 className="st-section-title" style={{ marginBottom: 14 }}>Viajes activos</h2>
@@ -166,6 +172,44 @@ export default function LiveMapContainer({ onNavigate }: Props) {
           </>
         )}
       </div>
+
+      {/* Modal de creación: aísla la carga de datos del mapa interactivo */}
+      {creatorOpen && (
+        <div
+          className="st-modal-backdrop"
+          onClick={(e) => { if (e.target === e.currentTarget) setCreatorOpen(false); }}
+        >
+          <div
+            className="st-modal"
+            style={{ maxWidth: 480, maxHeight: "88vh", overflowY: "auto", position: "relative" }}
+          >
+            <button
+              aria-label="Cerrar"
+              onClick={() => setCreatorOpen(false)}
+              style={{
+                position: "absolute", top: 16, right: 16, zIndex: 1,
+                width: 30, height: 30, borderRadius: 8, border: "1px solid var(--c-border)",
+                background: "var(--c-bg)", color: "var(--c-ink-2)", cursor: "pointer",
+                fontSize: "1.1rem", lineHeight: 1, fontFamily: "inherit",
+              }}
+            >
+              ×
+            </button>
+            <TripCreator
+              routeResult={routeResult}
+              availableDrivers={availableDrivers}
+              assignedTruck={assignedTruck}
+              selectedDriverId={selectedDriverId}
+              onSelectDriver={setSelectedDriverId}
+              onRouteCalculated={(r) => { setRouteResult(r); setOriginPin(null); setDestinationPin(null); }}
+              onTripCreated={() => { void refreshTrips(); setCreatorOpen(false); }}
+              onOriginPinned={(p) => setOriginPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
+              onDestinationPinned={(p) => setDestinationPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
+              onSubscriptionRequired={() => onNavigate("plans")}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

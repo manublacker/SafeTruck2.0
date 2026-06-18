@@ -28,6 +28,7 @@
   --c-success:       #1f9d57;  --c-success-soft: #e7f6ee;
   --c-warning:       #d9881a;  --c-warning-soft: #fbf1e0;
   --c-danger:        #e5392f;  --c-danger-soft:  #fdecea;
+  --c-info:          #2563eb;  --c-info-soft:    #eff4ff;
 
   /* Radios */
   --r-sm:   8px;    /* badges, chips, action-btn */
@@ -318,6 +319,28 @@
   cursor: not-allowed;
 }
 
+/* Navy: acción primaria NO destructiva (reserva el rojo para alertas/borrados) */
+.st-btn-navy {
+  background: var(--c-navy);
+  color: #fff;
+  font-weight: 600;
+  border-radius: var(--r-md);
+  padding: 11px 18px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  font-family: inherit;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.st-btn-navy:hover:not(:disabled) { background: var(--c-navy-2); }
+.st-btn-navy:active:not(:disabled) { transform: translateY(1px); }
+.st-btn-navy:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .st-btn-secondary {
   background: var(--c-bg);
   color: var(--c-ink);
@@ -455,10 +478,13 @@
   letter-spacing: 0.01em;
 }
 
-.st-badge-encurso   { background: var(--c-warning-soft); color: var(--c-warning); }
+/* Estados de viaje — paleta única compartida con la app mobile (theme.ts):
+   pendiente=ámbar, aceptado=azul, en curso=verde, completado=gris, cancelado=rojo. */
+.st-badge-encurso   { background: var(--c-success-soft); color: var(--c-success); }
 .st-badge-pendiente { background: var(--c-warning-soft); color: var(--c-warning); }
-.st-badge-completado{ background: var(--c-success-soft); color: var(--c-success); }
-.st-badge-cancelado { background: var(--c-surface-2);    color: var(--c-ink-2); }
+.st-badge-aceptado  { background: var(--c-info-soft);    color: var(--c-info); }
+.st-badge-completado{ background: var(--c-surface-2);    color: var(--c-ink-2); }
+.st-badge-cancelado { background: var(--c-danger-soft);  color: var(--c-danger); }
 .st-badge-activo    { background: var(--c-success-soft); color: var(--c-success); }
 .st-badge-inactivo  { background: var(--c-surface-2);    color: var(--c-ink-2); }
 
@@ -646,6 +672,7 @@
   transition: background .12s ease, border-color .12s ease;
 }
 .upcoming-card:hover { background: var(--c-surface) !important; }
+.upcoming-card.live:hover { background: var(--c-success-soft) !important; }
 
 /* ── Skeleton shimmer ── */
 @keyframes shimmer {

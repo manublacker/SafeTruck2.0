@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  View, Text, TouchableOpacity,
+  View, Text, TouchableOpacity, TextInput, Modal,
   ScrollView, ActivityIndicator, RefreshControl, Alert,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -11,6 +11,7 @@ import { getTheme, Theme } from '../../src/theme'
 import {
   fetchMyAssignedTruck,
   fetchMyDriverProfile,
+  syncMyPhoneToFleet,
   type AssignedTruck,
   type DriverProfile,
 } from '../../src/services/assignedTrips'
@@ -39,13 +40,19 @@ function Card({ children, style, t }: { children: React.ReactNode; style?: objec
   )
 }
 
-function DataRow({ label, value, isLast = false, t }: { label: string; value: string | null; isLast?: boolean; t: Theme }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: isLast ? 0 : 1, borderBottomColor: t.border }}>
+function DataRow({ label, value, isLast = false, onPress, t }: { label: string; value: string | null; isLast?: boolean; onPress?: () => void; t: Theme }) {
+  const rowStyle = { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: isLast ? 0 : 1, borderBottomColor: t.border }
+  const content = (
+    <>
       <Text style={{ fontSize: 13.5, color: t.textMuted, flex: 1 }}>{label}</Text>
       <Text style={{ fontSize: 13.5, fontWeight: '600', color: t.text }}>{value ?? '—'}</Text>
-    </View>
+      {onPress && <Ionicons name="create-outline" size={16} color={t.textSoft} style={{ marginLeft: 8 }} />}
+    </>
   )
+  if (onPress) {
+    return <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={rowStyle}>{content}</TouchableOpacity>
+  }
+  return <View style={rowStyle}>{content}</View>
 }
 
 function NavRow({ label, detail, danger = false, isLast = false, onPress, t }: {
@@ -79,6 +86,42 @@ export default function ProfileScreen() {
   const [profileLoading, setProfileLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const [editField, setEditField] = useState<null | 'name' | 'phone'>(null)
+  const [draft, setDraft]         = useState('')
+  const [saving, setSaving]       = useState(false)
+
+  // El teléfono vive en la cuenta (profiles); si falta, caemos al de la ficha de empresa.
+  const currentPhone = profile?.phone ?? driverProfile?.telefono ?? null
+
+  const openEdit = (field: 'name' | 'phone') => {
+    setDraft(field === 'name' ? (profile?.full_name ?? '') : (currentPhone ?? ''))
+    setEditField(field)
+  }
+
+  async function saveEdit() {
+    if (!profile || !editField) return
+    setSaving(true)
+    try {
+      const value = draft.trim() || null
+      if (editField === 'name') {
+        if (!value) { Alert.alert('Nombre', 'Ingresá un nombre o alias.'); setSaving(false); return }
+        const { error: e } = await supabase.from('profiles').update({ full_name: value }).eq('id', profile.id)
+        if (e) throw e
+        setProfile({ ...profile, full_name: value })
+      } else {
+        const { error: e } = await supabase.from('profiles').update({ phone: value }).eq('id', profile.id)
+        if (e) throw e
+        setProfile({ ...profile, phone: value ?? undefined })
+        void syncMyPhoneToFleet(value) // best-effort: refleja en la ficha de empresa
+      }
+      setEditField(null)
+    } catch {
+      Alert.alert('Error', 'No se pudo guardar. Intentá de nuevo.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const load = useCallback(async () => {
     setProfileLoading(true)
     const [dp, at] = await Promise.allSettled([
@@ -111,6 +154,9 @@ export default function ProfileScreen() {
 
   useEffect(() => { void load() }, [load])
 
+  const comingSoon = (feature: string) =>
+    Alert.alert(feature, 'Esta función estará disponible próximamente.')
+
   const logout = () => {
     Alert.alert('Cerrar sesión', '¿Querés salir de tu cuenta?', [
       { text: 'Cancelar', style: 'cancel' },
@@ -132,7 +178,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: bgColor }}
-      contentContainerStyle={{ padding: 18, paddingTop: insets.top + 14, paddingBottom: 60 }}
+      contentContainerStyle={{ padding: 18, paddingTop: insets.top + 14, paddingBottom: 60, width: '100%', maxWidth: 640, alignSelf: 'center' }}
       refreshControl={<RefreshControl refreshing={profileLoading} onRefresh={load} tintColor={t.accent} />}
     >
 
@@ -150,7 +196,10 @@ export default function ProfileScreen() {
           <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{initials}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 22, fontWeight: '800', color: t.text, letterSpacing: -0.5, lineHeight: 26 }}>{profile?.full_name ?? '—'}</Text>
+          <TouchableOpacity onPress={() => openEdit('name')} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 22, fontWeight: '800', color: t.text, letterSpacing: -0.5, lineHeight: 26 }}>{profile?.full_name ?? '—'}</Text>
+            <Ionicons name="create-outline" size={17} color={t.textSoft} />
+          </TouchableOpacity>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
             <Text style={{ fontSize: 12.5, color: t.textMuted }}>Conductor</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -215,16 +264,16 @@ export default function ProfileScreen() {
           {/* ── Datos de contacto ────────────────────────────────────── */}
           <SectionLabel>Datos de contacto</SectionLabel>
           <Card style={{ marginBottom: 22 }} t={t}>
-            <DataRow label="Teléfono" value={driverProfile?.telefono ?? null} t={t} />
+            <DataRow label="Teléfono" value={currentPhone} onPress={() => openEdit('phone')} t={t} />
             <DataRow label="Email" value={profile?.email ?? null} isLast t={t} />
           </Card>
 
           {/* ── Cuenta ──────────────────────────────────────────────── */}
           <SectionLabel>Cuenta</SectionLabel>
           <Card style={{ marginBottom: 18 }} t={t}>
-            <NavRow label="Notificaciones" detail="Activadas" t={t} />
-            <NavRow label="Seguridad y datos" t={t} />
-            <NavRow label="Ayuda y soporte" t={t} />
+            <NavRow label="Notificaciones" detail="Activadas" onPress={() => comingSoon('Notificaciones')} t={t} />
+            <NavRow label="Seguridad y datos" onPress={() => comingSoon('Seguridad y datos')} t={t} />
+            <NavRow label="Ayuda y soporte" onPress={() => comingSoon('Ayuda y soporte')} t={t} />
             <NavRow label="Cerrar sesión" danger isLast onPress={logout} t={t} />
           </Card>
 
@@ -233,6 +282,34 @@ export default function ProfileScreen() {
           </Text>
         </>
       )}
+
+      <Modal visible={editField !== null} transparent animationType="fade" onRequestClose={() => setEditField(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: t.card, borderRadius: 16, padding: 20 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: t.text, marginBottom: 14 }}>
+              {editField === 'name' ? 'Editar nombre o alias' : 'Editar teléfono'}
+            </Text>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder={editField === 'name' ? 'Nombre o alias' : 'Teléfono'}
+              placeholderTextColor={t.textSoft}
+              keyboardType={editField === 'phone' ? 'phone-pad' : 'default'}
+              textContentType={editField === 'phone' ? 'telephoneNumber' : 'name'}
+              autoFocus
+              style={{ backgroundColor: bgColor, color: t.text, borderRadius: 10, borderWidth: 1, borderColor: t.border, padding: 14, fontSize: 16, marginBottom: 16 }}
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
+              <TouchableOpacity onPress={() => setEditField(null)} disabled={saving} style={{ paddingVertical: 10, paddingHorizontal: 16 }}>
+                <Text style={{ color: t.textMuted, fontWeight: '600' }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={saveEdit} disabled={saving} style={{ backgroundColor: t.accent, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 18 }}>
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Guardar</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   )
 }

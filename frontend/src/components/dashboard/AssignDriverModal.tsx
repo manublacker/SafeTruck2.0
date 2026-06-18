@@ -97,7 +97,6 @@ export default function AssignDriverModal({ truck, drivers, onDone, onClose }: P
                       <div style={{ fontWeight: 700, color: "#0d0d0d" }}>{d.nombre}</div>
                       <div style={{ fontSize: "0.82rem", color: "#6b7280" }}>
                         {d.telefono ?? "—"}
-                        {d.licencia ? ` · ${d.licencia}` : ""}
                       </div>
                     </div>
                     {isCurrent && (

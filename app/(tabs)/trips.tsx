@@ -11,12 +11,16 @@ import { getTheme, Theme } from '../../src/theme'
 import { fetchAllMyTrips, type AssignedTrip } from '../../src/services/assignedTrips'
 
 // ── Status config ──────────────────────────────────────────────────────────
-const STATUS: Record<string, { label: string; color: string; softBg: string }> = {
-  in_progress: { label: 'En curso',   color: '#1F9D57', softBg: '#E7F6EE' },
-  accepted:    { label: 'Aceptado',   color: '#1A56C4', softBg: '#EFF4FF' },
-  pending:     { label: 'Pendiente',  color: '#D9881A', softBg: '#FBF1E0' },
-  completed:   { label: 'Completado', color: '#9AA3AD', softBg: '#F2F4F7' },
-  cancelled:   { label: 'Cancelado',  color: '#E5342B', softBg: '#FDECEA' },
+// Paleta única de estados (espeja admin.css en la web vía tokens del theme):
+// pendiente=ámbar, aceptado=azul, en curso=verde, completado=gris, cancelado=rojo.
+function statusConfig(t: Theme): Record<string, { label: string; color: string; softBg: string }> {
+  return {
+    in_progress: { label: 'En curso',   color: t.success,  softBg: t.successSoft },
+    accepted:    { label: 'Aceptado',   color: t.info,     softBg: t.infoSoft },
+    pending:     { label: 'Pendiente',  color: t.warning,  softBg: t.warningSoft },
+    completed:   { label: 'Completado', color: t.textSoft, softBg: t.surface2 },
+    cancelled:   { label: 'Cancelado',  color: t.danger,   softBg: t.dangerSoft },
+  }
 }
 
 function PulseDot({ color }: { color: string }) {
@@ -39,8 +43,9 @@ function PulseDot({ color }: { color: string }) {
   )
 }
 
-function StatusPill({ status }: { status: string }) {
-  const cfg = STATUS[status] ?? STATUS.pending
+function StatusPill({ status, t }: { status: string; t: Theme }) {
+  const map = statusConfig(t)
+  const cfg = map[status] ?? map.pending
   const isActive = status === 'in_progress'
   return (
     <View style={{
@@ -80,7 +85,7 @@ function RouteBlock({ from, to, dim, t }: { from: string; to: string; dim: boole
       </View>
       {/* Destination */}
       <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
-        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: dim ? t.textSoft : t.accent, marginTop: 3, flexShrink: 0 }} />
+        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: dim ? t.textSoft : t.info, marginTop: 3, flexShrink: 0 }} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 14.5, fontWeight: '700', color: ink, lineHeight: 18 }} numberOfLines={1}>{toCity?.trim() || to}</Text>
           {toRest.length > 0 && <Text style={{ fontSize: 11.5, color: addrColor, marginTop: 2 }} numberOfLines={1}>{toRest.join(',').trim()}</Text>}
@@ -115,7 +120,7 @@ function TripCard({ trip, onView, t }: { trip: AssignedTrip; onView: () => void;
     }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <StatusPill status={trip.status} />
+        <StatusPill status={trip.status} t={t} />
         <Text style={{ fontSize: 11.5, fontWeight: '600', color: t.textMuted, letterSpacing: 0.3 }}>
           {dateStr}{timeStr ? `  ·  ${timeStr}` : ''}
         </Text>
@@ -202,14 +207,14 @@ export default function TripsScreen() {
   const completados  = trips.filter(tr => tr.status === 'completed' || tr.status === 'cancelled').slice(0, 10)
 
   const goToMap = (trip: AssignedTrip) =>
-    router.push({ pathname: '/(tabs)/', params: { tripId: String(trip.id) } } as any)
+    router.navigate({ pathname: '/(tabs)/', params: { tripId: String(trip.id) } } as any)
 
   const bgColor = isDark ? t.bg : '#F7F8FA'
 
   return (
     <FlatList
       style={{ flex: 1, backgroundColor: bgColor }}
-      contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 40 }}
+      contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 40, width: '100%', maxWidth: 640, alignSelf: 'center' }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadTrips('refresh')} tintColor={t.accent} />}
       data={[]}
       renderItem={null}

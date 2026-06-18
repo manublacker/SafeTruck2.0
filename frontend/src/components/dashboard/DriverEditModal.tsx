@@ -7,25 +7,10 @@ import { Icons } from "./DashboardIcons";
 const DRIVER_ESTADOS = ["Activo", "De licencia", "Inactivo"] as const;
 type DriverEstado = (typeof DRIVER_ESTADOS)[number];
 
-const LICENCIA_CATEGORIAS = [
-  "B1", "B2",
-  "C1", "C2", "C3",
-  "D1", "D2", "D3",
-  "E1", "E2",
-  "G1", "G2", "G3",
-] as const;
-
 function sanitizeTelefono(raw: string): string {
   const hasPlus = raw.trim().startsWith("+");
   const digits = raw.replace(/\D/g, "").slice(0, 15);
   return hasPlus ? `+${digits}` : digits;
-}
-
-function sanitizeLicencia(raw: string): string {
-  const digits = raw.replace(/\D/g, "").slice(0, 8);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, -3)}.${digits.slice(-3)}`;
-  return `${digits.slice(0, -6)}.${digits.slice(-6, -3)}.${digits.slice(-3)}`;
 }
 
 interface Props {
@@ -37,28 +22,19 @@ interface Props {
 interface DraftDriver {
   nombre: string;
   telefono: string;
-  licencia: string;
-  categoria_licencia: string;
-  vencimiento_licencia: string;
   estado: DriverEstado;
 }
 
 const EMPTY_DRAFT: DraftDriver = {
-  nombre:               "",
-  telefono:             "",
-  licencia:             "",
-  categoria_licencia:   "",
-  vencimiento_licencia: "",
-  estado:               "Activo",
+  nombre:   "",
+  telefono: "",
+  estado:   "Activo",
 };
 
 function fromDriver(d: Driver): DraftDriver {
   return {
-    nombre:               d.nombre,
-    telefono:             d.telefono ?? "",
-    licencia:             d.licencia ?? "",
-    categoria_licencia:   d.categoria_licencia ?? "",
-    vencimiento_licencia: d.vencimiento_licencia ?? "",
+    nombre:   d.nombre,
+    telefono: d.telefono ?? "",
     estado: (DRIVER_ESTADOS as readonly string[]).includes(d.estado)
       ? (d.estado as DriverEstado)
       : "Activo",
@@ -77,11 +53,8 @@ function buildPayload(draft: DraftDriver): BuildResult {
     ok: true,
     data: {
       nombre,
-      telefono:             draft.telefono.trim() || null,
-      licencia:             draft.licencia.trim() || null,
-      categoria_licencia:   draft.categoria_licencia.trim() || null,
-      vencimiento_licencia: draft.vencimiento_licencia || null,
-      estado:               draft.estado,
+      telefono: draft.telefono.trim() || null,
+      estado:   draft.estado,
     },
   };
 }
@@ -133,8 +106,6 @@ export default function DriverEditModal({ driver, onSave, onClose }: Props) {
     (k: keyof DraftDriver, mask: (s: string) => string) =>
     (e: React.ChangeEvent<HTMLInputElement>) =>
       setDraft((d) => ({ ...d, [k]: mask(e.target.value) }));
-
-  const today = new Date().toISOString().slice(0, 10);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -207,41 +178,6 @@ export default function DriverEditModal({ driver, onSave, onClose }: Props) {
               </select>
             </Field>
           </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Field label="Licencia">
-              <input
-                className="st-field"
-                inputMode="numeric"
-                value={draft.licencia}
-                onChange={updateMasked("licencia", sanitizeLicencia)}
-                placeholder="1.234.567"
-                maxLength={10}
-              />
-            </Field>
-            <Field label="Categoría licencia">
-              <select
-                className="st-field"
-                value={draft.categoria_licencia}
-                onChange={update("categoria_licencia")}
-              >
-                <option value="">—</option>
-                {LICENCIA_CATEGORIAS.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-
-          <Field label="Vencimiento licencia">
-            <input
-              className="st-field"
-              type="date"
-              value={draft.vencimiento_licencia}
-              onChange={update("vencimiento_licencia")}
-              min={today}
-            />
-          </Field>
         </div>
 
         {error && (

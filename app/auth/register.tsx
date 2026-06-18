@@ -17,6 +17,7 @@ import { OTP_RESEND_COOLDOWN_SECONDS } from '../../src/constants/register'
 
 interface FormData {
   fullName: string
+  phone: string
   email: string
   password: string
   confirmPassword: string
@@ -28,7 +29,7 @@ type FieldErrors = Partial<Record<keyof FormData | 'otp' | 'general', string>>
 export default function RegisterScreen() {
   const [step, setStep]       = useState<1 | 2>(1)
   const [form, setForm]       = useState<FormData>({
-    fullName: '', email: '', password: '', confirmPassword: '', acceptedTerms: false,
+    fullName: '', phone: '', email: '', password: '', confirmPassword: '', acceptedTerms: false,
   })
   const [errors, setErrors]   = useState<FieldErrors>({})
   const [otpCode, setOtpCode] = useState('')
@@ -54,7 +55,8 @@ export default function RegisterScreen() {
 
   function validateStep1(): boolean {
     const next: FieldErrors = {}
-    if (!form.fullName.trim()) next.fullName = 'Ingresá tu nombre'
+    if (!form.fullName.trim()) next.fullName = 'Ingresá tu nombre o alias'
+    if (!form.phone.trim()) next.phone = 'Ingresá tu teléfono'
     if (!isValidEmail(form.email)) next.email = 'Email inválido'
     if (!isValidPassword(form.password)) next.password = `Mínimo ${MIN_PASSWORD_LENGTH} caracteres`
     if (form.password !== form.confirmPassword) next.confirmPassword = 'Las contraseñas no coinciden'
@@ -95,6 +97,7 @@ export default function RegisterScreen() {
           id: user.id,
           full_name: form.fullName,
           email: form.email,
+          phone: form.phone.trim() || null,
           role: 'driver',
         }, { onConflict: 'id' })
 
@@ -157,16 +160,24 @@ export default function RegisterScreen() {
             <Text style={s.subtitle}>Para conductores SafeTruck.</Text>
 
             <TextInput
-              style={s.input} placeholder="Tu nombre completo"
+              style={s.input} placeholder="Tu nombre o alias"
               placeholderTextColor={t.textSoft} value={form.fullName}
               onChangeText={v => update('fullName', v)}
             />
             {errors.fullName && <Text style={s.error}>{errors.fullName}</Text>}
 
             <TextInput
+              style={s.input} placeholder="Teléfono" placeholderTextColor={t.textSoft}
+              value={form.phone} onChangeText={v => update('phone', v)}
+              keyboardType="phone-pad" textContentType="telephoneNumber" autoComplete="tel"
+            />
+            {errors.phone && <Text style={s.error}>{errors.phone}</Text>}
+
+            <TextInput
               style={s.input} placeholder="Email" placeholderTextColor={t.textSoft}
               value={form.email} onChangeText={v => update('email', v)}
               autoCapitalize="none" keyboardType="email-address"
+              textContentType="emailAddress" autoComplete="email" autoCorrect={false}
             />
             {errors.email && <Text style={s.error}>{errors.email}</Text>}
 

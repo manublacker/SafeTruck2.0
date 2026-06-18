@@ -106,7 +106,7 @@ export default function TripCreator({
             {!hasDrivers && <option value="">Sin conductores disponibles</option>}
             {availableDrivers.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.nombre}{d.licencia ? ` · ${d.licencia}` : ""}
+                {d.nombre}
               </option>
             ))}
           </select>

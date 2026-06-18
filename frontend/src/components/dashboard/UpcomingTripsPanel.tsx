@@ -11,10 +11,10 @@ const STATUS_LABELS: Record<string, string> = {
 
 function badgeClass(status: string) {
   if (status === "in_progress") return "st-badge st-badge-encurso";
+  if (status === "accepted")    return "st-badge st-badge-aceptado";
   if (status === "completed")   return "st-badge st-badge-completado";
   if (status === "cancelled")   return "st-badge st-badge-cancelado";
-  if (status === "pending")     return "st-badge st-badge-pendiente";
-  return "st-badge st-badge-inactivo"; // accepted
+  return "st-badge st-badge-pendiente"; // pending
 }
 
 function formatHour(iso: string | null): string {
@@ -80,15 +80,16 @@ export default function UpcomingTripsPanel({ trips, loading }: Props) {
             return (
               <div
                 key={trip.id}
-                className="upcoming-card"
+                className={`upcoming-card${isLive ? " live" : ""}`}
                 style={{
                   display: "flex",
                   gap: 10,
                   alignItems: "stretch",
-                  border: "1px solid var(--c-border)",
+                  border: isLive ? "1px solid var(--c-success)" : "1px solid var(--c-border)",
+                  borderLeft: isLive ? "4px solid var(--c-success)" : "1px solid var(--c-border)",
                   borderRadius: "var(--r-md)",
                   padding: "10px 12px",
-                  background: "var(--c-bg)",
+                  background: isLive ? "var(--c-success-soft)" : "var(--c-bg)",
                   cursor: "default",
                 }}
               >

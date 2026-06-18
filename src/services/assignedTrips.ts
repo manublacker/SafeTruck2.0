@@ -125,12 +125,21 @@ export interface DriverProfile {
   id: number
   nombre: string
   telefono: string | null
-  licencia: string | null
-  categoria_licencia: string | null
-  vencimiento_licencia: string | null
   estado: string
 }
 
 export async function fetchMyDriverProfile(): Promise<DriverProfile | null> {
   return apiRequest<DriverProfile | null>('/api/drivers/me')
+}
+
+/**
+ * Sincroniza el teléfono de la cuenta hacia la ficha de empresa (drivers).
+ * Best-effort: si el conductor no está vinculado a un driver, el backend
+ * devuelve 404 y se ignora (su teléfono queda solo en la cuenta).
+ */
+export async function syncMyPhoneToFleet(telefono: string | null): Promise<void> {
+  await apiRequest('/api/drivers/me', {
+    method: 'PATCH',
+    body: JSON.stringify({ telefono }),
+  }).catch(() => null)
 }

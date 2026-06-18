@@ -22,9 +22,6 @@ export interface Driver {
   id: number;
   nombre: string;
   telefono: string | null;
-  licencia: string | null;
-  categoria_licencia: string | null;
-  vencimiento_licencia: string | null;
   estado: string;
   is_active: boolean;
   created_at: string;

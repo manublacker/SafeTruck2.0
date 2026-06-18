@@ -13,6 +13,7 @@ import { Theme, getTheme, isDarkTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
 import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, fetchMyAssignedTruck, type AssignedTrip } from '../../src/services/assignedTrips'
+import { getRecentDestinations, addRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
 
 async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession()
@@ -92,7 +93,7 @@ html,body,#map { width:100%;height:100%; }
     destMarker = L.marker([e.latlng.lat, e.latlng.lng], {
       icon: L.divIcon({
         className: '',
-        html: '<div style="background:#E5342B;width:14px;height:14px;border-radius:50%;border:2.5px solid white"></div>'
+        html: '<div style="background:#2563EB;width:14px;height:14px;border-radius:50%;border:2.5px solid white"></div>'
       })
     }).addTo(map);
   });
@@ -222,12 +223,12 @@ html,body,#map { width:100%;height:100%; }
       latlngs = [[originLat, originLng], [destLat, destLng]];
     }
     if (latlngs.length < 2) return;
-    var poly = L.polyline(latlngs, { color: '#E5342B', weight: 5, opacity: 0.9, lineCap: 'round' }).addTo(map);
+    var poly = L.polyline(latlngs, { color: '#2563EB', weight: 5, opacity: 0.9, lineCap: 'round' }).addTo(map);
     routeLayers.push(poly);
-    // Origen (verde) y destino (rojo) — distintos de la ubicación actual (azul).
+    // Origen (verde) y destino (azul) — el rojo se reserva para tramos no habilitados.
     var oMarker = L.circleMarker(latlngs[0], { radius: 9, fillColor: '#1F9D57', color: 'white', weight: 3, fillOpacity: 1 }).addTo(map);
     var dest = latlngs[latlngs.length - 1];
-    var dMarker = L.circleMarker(dest, { radius: 9, fillColor: '#E5342B', color: 'white', weight: 3, fillOpacity: 1 }).addTo(map);
+    var dMarker = L.circleMarker(dest, { radius: 9, fillColor: '#2563EB', color: 'white', weight: 3, fillOpacity: 1 }).addTo(map);
     tripMarkers.push(oMarker, dMarker);
     map.fitBounds(poly.getBounds(), { padding: [80, 80] });
   }
@@ -380,6 +381,7 @@ export default function MapScreen() {
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
+  const [recents, setRecents] = useState<RecentDest[]>([])
   const [navMode, setNavMode] = useState(false)
   const watchRef = useRef<any>(null)
 
@@ -615,6 +617,8 @@ export default function MapScreen() {
     return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
   }
 
+  useEffect(() => { void getRecentDestinations().then(setRecents) }, [])
+
   const searchAddress = async (query: string) => {
     if (query.length < 3) { setSearchResults([]); return }
     setSearching(true)
@@ -645,6 +649,11 @@ export default function MapScreen() {
     setSearchResults([])
     setShowSearch(false)
     Keyboard.dismiss()
+    void addRecentDestination({
+      display_name: result.display_name,
+      lat: String(result.lat),
+      lon: String(result.lon),
+    }).then(setRecents)
     webRef.current?.injectJavaScript(`map.setView([${lat}, ${lng}], 15); true;`)
     calculateRoute(lat, lng)
   }
@@ -908,6 +917,10 @@ export default function MapScreen() {
             )}
           </View>
 
+          <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/(tabs)/incidents')} accessibilityLabel="Ver alertas activas">
+            <Ionicons name="warning-outline" size={18} color={t.text} />
+          </TouchableOpacity>
+
           <TouchableOpacity style={s.iconBtn} onPress={toggleTheme}>
             <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={18} color={t.text} />
           </TouchableOpacity>
@@ -935,6 +948,24 @@ export default function MapScreen() {
               >
                 <Text style={s.searchResultName} numberOfLines={1}>
                   {result.display_name.split(',')[0]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {showSearch && !searching && searchText.length === 0 && searchResults.length === 0 && recents.length > 0 && (
+          <View style={s.searchResults}>
+            <Text style={s.searchSectionLabel}>Recientes</Text>
+            {recents.map((r, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[s.searchResultItem, idx < recents.length - 1 && s.searchResultBorder]}
+                onPress={() => selectResult(r)}
+              >
+                <Ionicons name="time-outline" size={16} color={t.textMuted} style={{ marginRight: 8 }} />
+                <Text style={s.searchResultName} numberOfLines={1}>
+                  {r.display_name.split(',')[0]}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1321,6 +1352,11 @@ function makeStyles(t: Theme) {
     searchResultTexts: { flex: 1 },
     searchResultName: { color: t.text, fontSize: 14, fontWeight: '500' },
     searchResultAddr: { color: t.textMuted, fontSize: 12, marginTop: 2 },
+    searchSectionLabel: {
+      color: t.textMuted, fontSize: 11, fontWeight: '700',
+      letterSpacing: 1, textTransform: 'uppercase',
+      paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4,
+    },
 
     banner: {
       position: 'absolute', top: 110, left: 16, right: 16,

@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
@@ -39,12 +41,23 @@ function incidentColor(type: string, t: Theme): string {
 
 const FILTERS = ['multa', 'accidente', 'control_policial', 'obra', 'puente_bajo', 'corte']
 
+// Etiqueta corta para los chips de filtro (emoji + texto, no solo emoji).
+const FILTER_SHORT: Record<string, string> = {
+  multa:            '💸 Multa',
+  accidente:        '🚨 Accidente',
+  control_policial: '👮 Control',
+  obra:             '🚧 Obra',
+  puente_bajo:      '🌉 Puente bajo',
+  corte:            '🚫 Corte',
+}
+
 export default function IncidentsScreen() {
   const profile = useStore(s => s.profile)
   const isDark = useStore(s => s.isDark)
   const t = getTheme(isDark)
   const s = useMemo(() => makeStyles(t), [isDark])
   const insets = useSafeAreaInsets()
+  const router = useRouter()
 
   const [incidents, setIncidents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -114,6 +127,15 @@ export default function IncidentsScreen() {
     <View style={s.container}>
       {/* Topbar */}
       <View style={[s.topbar, { paddingTop: insets.top + 14 }]}>
+        <TouchableOpacity
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/'))}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={s.backBtn}
+          accessibilityLabel="Volver"
+        >
+          <Ionicons name="chevron-back" size={20} color={t.text} />
+          <Text style={s.backText}>Mapa</Text>
+        </TouchableOpacity>
         <Text style={s.topbarTitle}>Alertas activas</Text>
         <Text style={s.topbarSub}>
           {incidents.length} incidente{incidents.length !== 1 ? 's' : ''} en el AMBA
@@ -135,7 +157,7 @@ export default function IncidentsScreen() {
             onPress={() => setFilter(filter === f ? null : f)}
           >
             <Text style={[s.chipText, filter === f && s.chipTextActive]}>
-              {INCIDENT_LABELS[f].split(' ')[0]}
+              {FILTER_SHORT[f] ?? INCIDENT_LABELS[f]}
             </Text>
           </TouchableOpacity>
         ))}
@@ -145,7 +167,7 @@ export default function IncidentsScreen() {
         data={filtered}
         keyExtractor={item => String(item.id)}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadIncidents} tintColor={t.accent} />}
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 100, width: '100%', maxWidth: 640, alignSelf: 'center' }}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         ListEmptyComponent={
           loading ? null : error ? (
@@ -182,9 +204,9 @@ export default function IncidentsScreen() {
                 <Text style={s.cardExpiry}>⏱ Expira {timeUntil(item.expires_at)}</Text>
                 {/* --dash-vote-btn: pill */}
                 <View style={s.votes}>
-                  <TouchableOpacity style={s.voteBtn}>
+                  <View style={s.voteCount}>
                     <Text style={s.voteBtnText}>✅ {item.confirmed_count || 0}</Text>
-                  </TouchableOpacity>
+                  </View>
                   {item.user_id === profile?.id && (
                     <TouchableOpacity
                       style={[s.voteBtn, { backgroundColor: 'rgba(255,59,48,0.15)' }]}
@@ -212,6 +234,8 @@ function makeStyles(t: Theme) {
       borderBottomWidth: 1, borderBottomColor: t.border,
       backgroundColor: t.bg,
     },
+    backBtn: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, marginLeft: -4 },
+    backText: { color: t.text, fontSize: 15, fontWeight: '600', marginLeft: 2 },
     topbarTitle: { color: t.text, fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
     topbarSub: { color: t.textMuted, fontSize: 14, marginTop: 3 },
 
@@ -247,7 +271,11 @@ function makeStyles(t: Theme) {
     cardExpiry: { color: t.textSoft, fontSize: 11 },
 
     // --dash-vote-btn: pill shape
-    votes: { flexDirection: 'row', gap: 6 },
+    votes: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    voteCount: {
+      backgroundColor: t.surface2, borderRadius: 999,
+      paddingHorizontal: 12, paddingVertical: 5,
+    },
     voteBtn: {
       backgroundColor: t.surface2, borderRadius: 999,
       paddingHorizontal: 12, paddingVertical: 5,

@@ -14,9 +14,10 @@ const STATUS_LABELS: Record<AssignedTrip["status"], string> = {
 
 function badgeClass(status: AssignedTrip["status"]) {
   if (status === "in_progress") return "st-badge st-badge-encurso";
+  if (status === "accepted")    return "st-badge st-badge-aceptado";
   if (status === "completed")   return "st-badge st-badge-completado";
   if (status === "cancelled")   return "st-badge st-badge-cancelado";
-  return "st-badge st-badge-inactivo"; // pending / accepted
+  return "st-badge st-badge-pendiente"; // pending
 }
 
 // ── Helpers de presentación ────────────────────────────────────────────────

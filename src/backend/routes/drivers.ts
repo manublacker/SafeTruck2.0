@@ -5,17 +5,34 @@
  *******************************************************/
 import { Router, Request, Response } from "express";
 import pool from "../db";
+import { supabase } from "../supabaseClient";
 
 const router = Router();
+
+/**
+ * Sincroniza el teléfono de la ficha (drivers) hacia la cuenta del conductor
+ * (profiles en Supabase), si el driver está vinculado a un usuario de la app.
+ * Best-effort: nunca rompe la operación principal.
+ */
+async function syncPhoneToProfile(driverId: number, telefono: unknown): Promise<void> {
+  try {
+    const r = await pool.query<{ app_user_id: string | null }>(
+      "SELECT app_user_id FROM drivers WHERE id = $1",
+      [driverId]
+    );
+    const appUserId = r.rows[0]?.app_user_id;
+    if (!appUserId) return;
+    await supabase.from("profiles").update({ phone: telefono ?? null }).eq("id", appUserId);
+  } catch (err) {
+    console.error("syncPhoneToProfile falló (no bloqueante):", err);
+  }
+}
 
 const ALLOWED_ESTADOS = new Set(["Activo", "De licencia", "Inactivo"]);
 
 const UPDATABLE_FIELDS = [
   "nombre",
   "telefono",
-  "licencia",
-  "categoria_licencia",
-  "vencimiento_licencia",
   "estado",
   "is_active",
 ] as const;
@@ -27,17 +44,13 @@ interface DriverRow {
   user_id: string;
   nombre: string;
   telefono: string | null;
-  licencia: string | null;
-  categoria_licencia: string | null;
-  vencimiento_licencia: string | null;
   estado: string;
   is_active: boolean;
   created_at: string;
 }
 
 const DRIVER_COLUMNS = `
-  id, user_id, nombre, telefono, licencia, categoria_licencia,
-  vencimiento_licencia, estado, is_active, created_at
+  id, user_id, nombre, telefono, estado, is_active, created_at
 `;
 
 function pickUpdates(body: Record<string, unknown>): Partial<Record<UpdatableField, unknown>> {
@@ -73,14 +86,7 @@ router.get("/", async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.post("/", async (req: Request, res: Response) => {
   const userId = req.user!.id;
-  const {
-    nombre,
-    telefono,
-    licencia,
-    categoria_licencia,
-    vencimiento_licencia,
-    estado,
-  } = req.body ?? {};
+  const { nombre, telefono, estado } = req.body ?? {};
 
   if (!nombre || typeof nombre !== "string") {
     res.status(400).json({ error: "nombre es requerido." });
@@ -93,20 +99,10 @@ router.post("/", async (req: Request, res: Response) => {
 
   try {
     const result = await pool.query<DriverRow>(
-      `INSERT INTO drivers (
-         user_id, nombre, telefono, licencia, categoria_licencia,
-         vencimiento_licencia, estado
-       ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 'Activo'))
+      `INSERT INTO drivers (user_id, nombre, telefono, estado)
+       VALUES ($1, $2, $3, COALESCE($4, 'Activo'))
        RETURNING ${DRIVER_COLUMNS}`,
-      [
-        userId,
-        nombre,
-        telefono ?? null,
-        licencia ?? null,
-        categoria_licencia ?? null,
-        vencimiento_licencia ?? null,
-        estado ?? null,
-      ]
+      [userId, nombre, telefono ?? null, estado ?? null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -164,6 +160,8 @@ router.patch("/:id", async (req: Request, res: Response) => {
       values
     );
 
+    if ("telefono" in updates) await syncPhoneToProfile(driverId, updates.telefono);
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error("Error en PATCH /api/drivers/:id:", err);
@@ -207,7 +205,7 @@ router.get('/me', async (req: Request, res: Response) => {
   const appUserId = req.user!.id
   try {
     const result = await pool.query(
-      `SELECT id, nombre, telefono, licencia, categoria_licencia, vencimiento_licencia, estado
+      `SELECT id, nombre, telefono, estado
        FROM drivers WHERE app_user_id = $1 AND is_active = true LIMIT 1`,
       [appUserId]
     )
@@ -247,7 +245,7 @@ router.get('/me/truck', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.patch("/me", async (req: Request, res: Response) => {
   const appUserId = req.user!.id;
-  const allowed = ["nombre", "telefono", "licencia", "categoria_licencia", "vencimiento_licencia"] as const;
+  const allowed = ["nombre", "telefono"] as const;
   const updates: Record<string, unknown> = {};
 
   for (const field of allowed) {
@@ -276,7 +274,7 @@ router.patch("/me", async (req: Request, res: Response) => {
     const result = await pool.query(
       `UPDATE drivers SET ${setClauses}, updated_at = NOW()
        WHERE id = $${fields.length + 1}
-       RETURNING id, nombre, telefono, licencia, categoria_licencia, vencimiento_licencia, estado`,
+       RETURNING id, nombre, telefono, estado`,
       values
     );
     res.json(result.rows[0]);

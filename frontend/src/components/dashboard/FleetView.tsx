@@ -586,13 +586,8 @@ function DriverDetailPanel({
     }
   }
 
-  const venceStyle = licenseExpiryStyle(driver.vencimiento_licencia);
-
   const rows: { label: string; value: string; style?: React.CSSProperties }[] = [
     { label: "Teléfono", value: driver.telefono ?? "—" },
-    { label: "Licencia", value: driver.licencia ?? "—" },
-    { label: "Categoría", value: driver.categoria_licencia ?? "—" },
-    { label: "Vencimiento", value: venceStyle.text, style: { color: venceStyle.color, fontWeight: venceStyle.bold ? 700 : undefined } },
     { label: "Camión asignado", value: truck ?? "Sin asignar" },
   ];
 
@@ -758,7 +753,7 @@ function DriversTab({ drivers, refreshDrivers, onNavigate }: DriversTabProps) {
           </span>
         </h3>
         <button
-          className="st-btn-primary"
+          className="st-btn-navy"
           style={{ padding: "10px 16px", opacity: hasSubscription ? 1 : 0.45, cursor: hasSubscription ? "pointer" : "not-allowed" }}
           onClick={hasSubscription ? () => setInviting(true) : undefined}
           disabled={!hasSubscription}
@@ -1037,19 +1032,6 @@ function nextServiceStyle(date: string | null): { color: string; bold: boolean }
 function formatServiceDate(date: string | null): string {
   if (!date) return "—";
   return formatDate(date);
-}
-
-function licenseExpiryStyle(date: string | null): { text: string; color: string; bold: boolean } {
-  if (!date) return { text: "—", color: "#9ca3af", bold: false };
-  const days = daysUntil(date);
-  if (days === null) return { text: formatDate(date), color: "#6b7280", bold: false };
-  if (days < 0) {
-    return { text: `${formatDate(date)} · Vencida`, color: "#c62828", bold: true };
-  }
-  if (days <= LICENSE_WARN_DAYS) {
-    return { text: `${formatDate(date)} · Próx. a vencer`, color: "#f59e0b", bold: true };
-  }
-  return { text: formatDate(date), color: "#6b7280", bold: false };
 }
 
 function daysUntil(isoDate: string): number | null {
