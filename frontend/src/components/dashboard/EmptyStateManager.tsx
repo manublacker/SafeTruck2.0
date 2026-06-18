@@ -32,19 +32,19 @@ export default function EmptyStateManager({
   if (!hasTrucks && !hasAvailableDrivers) {
     return (
       <FullOnboardingState
-        onAddTrucks={() => onNavigate("fleet")}
-        onAddDrivers={() => onNavigate("fleet")}
+        onAddTrucks={() => onNavigate("fleet-trucks")}
+        onAddDrivers={() => onNavigate("fleet-drivers")}
       />
     );
   }
 
   if (!hasTrucks) {
-    return <NoTrucksBlockingState onAddTrucks={() => onNavigate("fleet")} />;
+    return <NoTrucksBlockingState onAddTrucks={() => onNavigate("fleet-trucks")} />;
   }
 
   if (!hasAvailableDrivers) {
     return (
-      <NoAvailableDriversNotice onAddDrivers={() => onNavigate("fleet")} />
+      <NoAvailableDriversNotice onAddDrivers={() => onNavigate("fleet-drivers")} />
     );
   }
 

@@ -22,10 +22,10 @@ const PLAN_TRUCK_LIMITS: Record<string, number> = {
 
 type FleetTab = "trucks" | "drivers";
 
-export default function FleetView({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
+export default function FleetView({ onNavigate, initialTab = "trucks" }: { onNavigate: (page: AdminPage) => void; initialTab?: FleetTab }) {
   const { refreshDrivers } = useAuth();
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [tab, setTab] = useState<FleetTab>("drivers");
+  const [tab, setTab] = useState<FleetTab>(initialTab);
 
   const loadDrivers = useCallback(async () => {
     try {
@@ -45,7 +45,6 @@ export default function FleetView({ onNavigate }: { onNavigate: (page: AdminPage
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
       <div style={{ marginBottom: 16 }}>
         <div className="st-section-eyebrow">Operaciones</div>
-        <h2 className="st-section-title">Flota</h2>
       </div>
 
       <Tabs current={tab} onChange={setTab} />
@@ -309,7 +308,7 @@ function TrucksTab({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--c-ink)" }}>
           Camiones
-          <span style={{ marginLeft: 8, fontSize: "0.82rem", fontWeight: 600, color: "#9AA3AD" }}>{trucks.length}</span>
+          {hasSubscription && <span style={{ marginLeft: 8, fontSize: "0.82rem", fontWeight: 600, color: "#9AA3AD" }}>{trucks.length}</span>}
         </h3>
         <div style={{ display: "flex", gap: 8 }}>
           <button

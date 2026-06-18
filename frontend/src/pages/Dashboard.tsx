@@ -14,11 +14,13 @@ import "@/styles/admin.css";
 const VALID_PAGES: AdminPage[] = ["map", "fleet", "trips", "account"];
 
 const TITLE: Record<AdminPage, string> = {
-  map:     "Live Map",
-  fleet:   "Flota",
-  trips:   "Historial de viajes",
-  account: "Mi cuenta",
-  plans:   "Planes y suscripción",
+  map:            "Live Map",
+  fleet:          "Flota",
+  "fleet-trucks": "Flota",
+  "fleet-drivers":"Flota",
+  trips:          "Historial de viajes",
+  account:        "Mi cuenta",
+  plans:          "Planes y suscripción",
 };
 
 function getInitialPage(): AdminPage {
@@ -63,8 +65,10 @@ export default function Dashboard() {
       <main className="admin-main">
         <AdminTopBar title={TITLE[page]} onToggleSidebar={() => setCollapsed((c) => !c)} />
         <div className="admin-content">
-          {page === "map"     && <LiveMapContainer onNavigate={handleSetPage} />}
-          {page === "fleet"   && <FleetView onNavigate={handleSetPage} />}
+          {page === "map"            && <LiveMapContainer onNavigate={handleSetPage} />}
+          {page === "fleet"          && <FleetView onNavigate={handleSetPage} />}
+          {page === "fleet-trucks"   && <FleetView onNavigate={handleSetPage} initialTab="trucks" />}
+          {page === "fleet-drivers"  && <FleetView onNavigate={handleSetPage} initialTab="drivers" />}
           {page === "trips"   && <TripHistoryView />}
           {page === "account" && <AccountView onNavigate={setPage} billingSuccess={billingSuccess} />}
           {page === "plans"   && <PlansView />}

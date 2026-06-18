@@ -115,11 +115,8 @@ export default function TripHistoryView() {
 
   return (
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
-          <div className="st-section-eyebrow">Operaciones</div>
-          <h2 className="st-section-title">Historial de viajes</h2>
-        </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <div className="st-section-eyebrow" style={{ margin: 0 }}>Operaciones</div>
         <button
           className="st-btn-secondary"
           onClick={() => void loadTrips()}

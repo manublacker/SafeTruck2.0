@@ -134,7 +134,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
           overflowY: "auto",
         }}
       >
-        {blocking ? (
+        {fleetLoading ? null : blocking ? (
           <EmptyStateManager
             hasTrucks={hasTrucks}
             hasAvailableDrivers={hasAvailableDrivers}

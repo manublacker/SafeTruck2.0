@@ -3,7 +3,7 @@ import { Icons } from "./DashboardIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import safeTruckLogo from "@/assets/logo_safetruck.png";
 
-export type AdminPage = "map" | "fleet" | "trips" | "account" | "plans";
+export type AdminPage = "map" | "fleet" | "fleet-trucks" | "fleet-drivers" | "trips" | "account" | "plans";
 
 interface Props {
   page: AdminPage;
