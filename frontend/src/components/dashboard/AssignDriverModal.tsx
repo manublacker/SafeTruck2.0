@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Truck, Driver } from "@/types/auth";
 import { assignDriver, unassignDriver } from "@/services/api";
 import { Icons } from "./DashboardIcons";
@@ -18,6 +18,14 @@ export default function AssignDriverModal({ truck, drivers, onDone, onClose }: P
 
   const activeDrivers = drivers.filter((d) => d.estado === DRIVER_ESTADO_ACTIVO);
   const currentDriverId = truck.driver?.id ?? null;
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   async function handleAssign(driverId: number) {
     if (busy) return;
@@ -113,9 +121,20 @@ export default function AssignDriverModal({ truck, drivers, onDone, onClose }: P
         )}
 
         {error && (
-          <p style={{ color: "#c62828", fontWeight: 600, fontSize: "0.85rem", margin: "14px 0 0" }}>
+          <div
+            style={{
+              background: "var(--c-danger-soft)",
+              border: "1px solid var(--c-danger)",
+              color: "var(--c-accent-hover)",
+              borderRadius: "var(--r-md)",
+              padding: "10px 14px",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              marginTop: 14,
+            }}
+          >
             {error}
-          </p>
+          </div>
         )}
 
         <div
@@ -156,7 +175,7 @@ function ModalHeader({ title, onClose }: { title: string; onClose: () => void })
         marginBottom: 18,
       }}
     >
-      <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0d0d0d", margin: 0 }}>
+      <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#0d0d0d", margin: 0 }}>
         {title}
       </h3>
       <button

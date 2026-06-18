@@ -4,12 +4,13 @@ import { StyleSheet, Text, View } from 'react-native';
 export default function NotFoundScreen() {
   return (
     <>
-      <Stack.Screen options={{ title: 'Oops!' }} />
+      <Stack.Screen options={{ title: 'No encontrado' }} />
       <View style={styles.container}>
-        <Text style={styles.title}>This screen doesn't exist.</Text>
+        <Text style={styles.emoji}>🤷</Text>
+        <Text style={styles.title}>Esta pantalla no existe.</Text>
 
         <Link href="/" style={styles.link}>
-          <Text style={styles.linkText}>Go to home screen!</Text>
+          <Text style={styles.linkText}>Volver al inicio</Text>
         </Link>
       </View>
     </>
@@ -22,17 +23,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
+    backgroundColor: '#F7F8FA',
+  },
+  emoji: {
+    fontSize: 40,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#16202C',
   },
   link: {
-    marginTop: 15,
-    paddingVertical: 15,
+    marginTop: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
   },
   linkText: {
     fontSize: 14,
-    color: '#2e78b7',
+    fontWeight: '700',
+    color: '#E5342B',
   },
 });

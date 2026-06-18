@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router'
 import { supabase } from '../../src/services/supabase'
 import { signInWithGoogle } from '../../src/services/auth'
+import { registerForPushNotifications } from '../../src/services/push'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 
@@ -39,7 +40,11 @@ export default function LoginScreen() {
         profile = newProfile
       }
 
-      if (profile) { setProfile(profile); router.replace('/(tabs)/') }
+      if (profile) {
+        setProfile(profile)
+        void registerForPushNotifications()
+        router.replace('/(tabs)/')
+      }
     } catch (e: any) {
       Alert.alert('Error al ingresar', e.message)
     } finally {

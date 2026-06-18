@@ -90,9 +90,9 @@ export default function AdminSidebar({ page, setPage, collapsed }: Props) {
       {/* Footer con popover */}
       <div
         ref={footerRef}
+        className="st-sidebar-footer"
         style={{
           padding: collapsed ? "12px 8px" : "12px",
-          borderTop: "1px solid rgba(255,255,255,0.08)",
           position: "relative",
         }}
       >
@@ -109,14 +109,12 @@ export default function AdminSidebar({ page, setPage, collapsed }: Props) {
             <>
               <div style={{ lineHeight: 1.3, flex: 1, minWidth: 0 }}>
                 <div
-                  style={{
-                    fontSize: "0.88rem", fontWeight: 700, color: "#fff",
-                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  }}
+                  className="st-sidebar-user-name"
+                  style={{ overflow: "hidden", textOverflow: "ellipsis" }}
                 >
                   {user.full_name}
                 </div>
-                <div style={{ color: "rgba(255,255,255,0.50)", fontSize: "0.74rem", textTransform: "capitalize" }}>
+                <div className="st-sidebar-user-role" style={{ textTransform: "capitalize" }}>
                   Plan {plan ?? "starter"}
                 </div>
               </div>

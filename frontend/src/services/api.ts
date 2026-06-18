@@ -241,6 +241,24 @@ export async function startCheckout(plan: string): Promise<string> {
 }
 
 /**
+ * Confirma de forma SÍNCRONA el pago al volver del checkout de MercadoPago.
+ * Verifica el pago en MP y activa la suscripción sin depender del webhook.
+ * Devuelve la suscripción resultante y si se confirmó un pago.
+ */
+export async function confirmCheckout(
+  plan: string | null
+): Promise<{ subscription: any; confirmed: boolean }> {
+  const res = await fetch(`${BASE_URL}/api/billing/confirm`, {
+    method:  "POST",
+    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    body:    JSON.stringify({ plan }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
+  return data as { subscription: any; confirmed: boolean };
+}
+
+/**
  * Devuelve la suscripción activa del usuario logueado, o null si no tiene.
  */
 export async function fetchSubscription(): Promise<{

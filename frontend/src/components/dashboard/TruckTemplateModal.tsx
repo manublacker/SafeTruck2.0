@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getToken } from "@/services/api";
 
 interface Template {
@@ -47,6 +47,14 @@ export default function TruckTemplateModal({ onSaved, onClose }: Props) {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   async function handleCreate() {
     if (!prefix.trim()) { setError("Ingresá un nombre base"); return; }
     setLoading(true);
@@ -77,14 +85,29 @@ export default function TruckTemplateModal({ onSaved, onClose }: Props) {
   return (
     <div className="st-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="st-modal" style={{ maxWidth: 480 }}>
-        <h3 style={{ margin: "0 0 6px", fontSize: "1.05rem", fontWeight: 800, color: "#0d0d0d" }}>
+        <h3 style={{ margin: "0 0 6px", fontSize: "1.05rem", fontWeight: 700, color: "#0d0d0d" }}>
           Agregar camiones desde plantilla
         </h3>
         <p style={{ margin: "0 0 20px", fontSize: "0.82rem", color: "#6b7280" }}>
           Elegí un tipo, poné un nombre base y la cantidad.
         </p>
 
-        {error && <p style={{ color: "#c62828", fontSize: "0.85rem", marginBottom: 12 }}>{error}</p>}
+        {error && (
+          <div
+            style={{
+              background: "var(--c-danger-soft)",
+              border: "1px solid var(--c-danger)",
+              color: "var(--c-accent-hover)",
+              borderRadius: "var(--r-md)",
+              padding: "10px 14px",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              marginBottom: 12,
+            }}
+          >
+            {error}
+          </div>
+        )}
 
         {/* Template selector */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>

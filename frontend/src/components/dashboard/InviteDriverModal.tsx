@@ -1,25 +1,40 @@
-import { useState } from "react";
-import { createInvitation } from "@/services/api";
+import { useState, useEffect } from "react";
+import { createInvitation, SubscriptionRequiredError } from "@/services/api";
 
 interface Props {
   onClose: () => void;
+  onSubscriptionRequired?: () => void;
 }
 
-export default function InviteDriverModal({ onClose }: Props) {
-  const [loading, setLoading]   = useState(false);
-  const [link, setLink]         = useState("");
-  const [error, setError]       = useState("");
-  const [copied, setCopied]     = useState(false);
+export default function InviteDriverModal({ onClose, onSubscriptionRequired }: Props) {
+  const [loading, setLoading]             = useState(false);
+  const [link, setLink]                   = useState("");
+  const [error, setError]                 = useState("");
+  const [subscriptionError, setSubscriptionError] = useState(false);
+  const [copied, setCopied]               = useState(false);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   async function handleGenerate() {
     setLoading(true);
     setError("");
+    setSubscriptionError(false);
     try {
       const inv = await createInvitation();
       const url = `${window.location.origin}/unirse?code=${inv.code}`;
       setLink(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al generar el enlace");
+      if (err instanceof SubscriptionRequiredError) {
+        setSubscriptionError(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Error al generar el enlace");
+      }
     } finally {
       setLoading(false);
     }
@@ -41,28 +56,65 @@ export default function InviteDriverModal({ onClose }: Props) {
 
   return (
     <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 900,
-        background: "rgba(0,0,0,0.4)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}
+      className="st-modal-backdrop"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{
-        background: "#fff", borderRadius: 16, padding: 28,
-        width: "100%", maxWidth: 420,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-      }}>
-        <h3 style={{ margin: "0 0 6px", fontSize: "1.1rem", fontWeight: 800, color: "#0d0d0d" }}>
+      <div className="st-modal" style={{ maxWidth: 420 }}>
+        <h3 style={{ margin: "0 0 6px", fontSize: "1.1rem", fontWeight: 700, color: "#0d0d0d" }}>
           Invitar conductor
         </h3>
         <p style={{ margin: "0 0 24px", fontSize: "0.88rem", color: "#6b7280", lineHeight: 1.5 }}>
           Generá un enlace y mandáselo por WhatsApp. El conductor se registra con sus datos y queda vinculado automáticamente.
         </p>
 
-        {error && <p style={{ color: "#c62828", fontSize: "0.85rem", marginBottom: 12 }}>{error}</p>}
+        {error && (
+          <div
+            style={{
+              background: "var(--c-danger-soft)",
+              border: "1px solid var(--c-danger)",
+              color: "var(--c-accent-hover)",
+              borderRadius: "var(--r-md)",
+              padding: "10px 14px",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              marginBottom: 12,
+            }}
+          >
+            {error}
+          </div>
+        )}
 
-        {!link ? (
+        {subscriptionError && (
+          <div style={{
+            background: "rgba(229,57,53,0.06)", border: "1px solid rgba(229,57,53,0.2)",
+            borderRadius: 10, padding: "14px 16px", marginBottom: 12,
+            display: "flex", flexDirection: "column", gap: 10,
+          }}>
+            <div>
+              <p style={{ color: "#c62828", fontWeight: 700, fontSize: "0.88rem", margin: "0 0 4px" }}>
+                Necesitás una suscripción activa
+              </p>
+              <p style={{ color: "#6b7280", fontSize: "0.82rem", margin: 0, lineHeight: 1.45 }}>
+                Para invitar conductores debés tener un plan activo.
+              </p>
+            </div>
+            {onSubscriptionRequired && (
+              <button
+                type="button"
+                onClick={onSubscriptionRequired}
+                style={{
+                  alignSelf: "flex-start", background: "#e53935", color: "#fff",
+                  border: "none", borderRadius: 8, padding: "8px 16px",
+                  fontSize: "0.82rem", fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                Ver planes y precios
+              </button>
+            )}
+          </div>
+        )}
+
+        {!link && !subscriptionError ? (
           <button
             className="st-btn-cta"
             onClick={handleGenerate}

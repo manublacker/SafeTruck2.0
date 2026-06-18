@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  View, Text, StyleSheet, FlatList, RefreshControl,
+  View, Text, FlatList, RefreshControl,
   TouchableOpacity, ActivityIndicator, Animated,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
@@ -20,12 +22,14 @@ const STATUS: Record<string, { label: string; color: string; softBg: string }> =
 function PulseDot({ color }: { color: string }) {
   const opacity = useRef(new Animated.Value(1)).current
   useEffect(() => {
-    Animated.loop(
+    const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, { toValue: 0.25, duration: 900, useNativeDriver: true }),
         Animated.timing(opacity, { toValue: 1,    duration: 900, useNativeDriver: true }),
       ])
-    ).start()
+    )
+    anim.start()
+    return () => anim.stop()
   }, [])
   return (
     <View style={{ width: 8, height: 8, alignItems: 'center', justifyContent: 'center' }}>
@@ -54,9 +58,9 @@ function StatusPill({ status }: { status: string }) {
   )
 }
 
-function RouteBlock({ from, to, dim }: { from: string; to: string; dim: boolean }) {
-  const ink = dim ? '#9AA3AD' : '#16202C'
-  const addrColor = '#69727E'
+function RouteBlock({ from, to, dim, t }: { from: string; to: string; dim: boolean; t: Theme }) {
+  const ink = dim ? t.textSoft : t.text
+  const addrColor = t.textMuted
   const [fromCity, ...fromRest] = from.split(',')
   const [toCity,   ...toRest]   = to.split(',')
   return (
@@ -64,11 +68,11 @@ function RouteBlock({ from, to, dim }: { from: string; to: string; dim: boolean 
       {/* dashed vertical line */}
       <View style={{
         position: 'absolute', left: 5, top: 18, bottom: 18,
-        width: 0, borderLeftWidth: 2, borderLeftColor: '#D6DAE0', borderStyle: 'dashed',
+        width: 0, borderLeftWidth: 2, borderLeftColor: t.borderStrong, borderStyle: 'dashed',
       }} />
       {/* Origin */}
       <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', marginBottom: 14 }}>
-        <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2.5, borderColor: dim ? '#9AA3AD' : '#69727E', backgroundColor: 'transparent', marginTop: 3, flexShrink: 0 }} />
+        <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2.5, borderColor: dim ? t.textSoft : t.textMuted, backgroundColor: 'transparent', marginTop: 3, flexShrink: 0 }} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 14.5, fontWeight: '700', color: ink, lineHeight: 18 }} numberOfLines={1}>{fromCity?.trim() || from}</Text>
           {fromRest.length > 0 && <Text style={{ fontSize: 11.5, color: addrColor, marginTop: 2 }} numberOfLines={1}>{fromRest.join(',').trim()}</Text>}
@@ -76,7 +80,7 @@ function RouteBlock({ from, to, dim }: { from: string; to: string; dim: boolean 
       </View>
       {/* Destination */}
       <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
-        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: dim ? '#9AA3AD' : '#E5342B', marginTop: 3, flexShrink: 0 }} />
+        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: dim ? t.textSoft : t.accent, marginTop: 3, flexShrink: 0 }} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 14.5, fontWeight: '700', color: ink, lineHeight: 18 }} numberOfLines={1}>{toCity?.trim() || to}</Text>
           {toRest.length > 0 && <Text style={{ fontSize: 11.5, color: addrColor, marginTop: 2 }} numberOfLines={1}>{toRest.join(',').trim()}</Text>}
@@ -86,7 +90,7 @@ function RouteBlock({ from, to, dim }: { from: string; to: string; dim: boolean 
   )
 }
 
-function TripCard({ trip, onView }: { trip: AssignedTrip; onView: () => void }) {
+function TripCard({ trip, onView, t }: { trip: AssignedTrip; onView: () => void; t: Theme }) {
   const dim = trip.status === 'completed' || trip.status === 'cancelled'
   const formatDate = (s: string | null) => {
     if (!s) return '—'
@@ -101,10 +105,10 @@ function TripCard({ trip, onView }: { trip: AssignedTrip; onView: () => void }) 
   const timeStr = formatTime(trip.scheduled_at ?? trip.created_at)
   return (
     <TouchableOpacity onPress={onView} activeOpacity={0.85} style={{
-      backgroundColor: '#FFFFFF',
+      backgroundColor: t.card,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: trip.status === 'in_progress' ? 'rgba(31,157,87,0.3)' : '#E6E8EC',
+      borderColor: trip.status === 'in_progress' ? 'rgba(31,157,87,0.4)' : t.cardBorder,
       padding: 16, opacity: dim ? 0.8 : 1,
       shadowColor: '#10203080', shadowOpacity: 0.06, shadowRadius: 8,
       shadowOffset: { width: 0, height: 2 }, elevation: 2,
@@ -112,7 +116,7 @@ function TripCard({ trip, onView }: { trip: AssignedTrip; onView: () => void }) 
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <StatusPill status={trip.status} />
-        <Text style={{ fontSize: 11.5, fontWeight: '600', color: '#69727E', letterSpacing: 0.3 }}>
+        <Text style={{ fontSize: 11.5, fontWeight: '600', color: t.textMuted, letterSpacing: 0.3 }}>
           {dateStr}{timeStr ? `  ·  ${timeStr}` : ''}
         </Text>
       </View>
@@ -122,24 +126,25 @@ function TripCard({ trip, onView }: { trip: AssignedTrip; onView: () => void }) 
         from={trip.origin_label ?? 'Origen'}
         to={trip.destination_label ?? 'Destino'}
         dim={dim}
+        t={t}
       />
 
       {/* Footer */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E6E8EC' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: t.border }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-          <Text style={{ fontSize: 15, color: '#69727E' }}>🚛</Text>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: '#16202C' }} numberOfLines={1}>
+          <Ionicons name="bus" size={14} color={t.textMuted} />
+          <Text style={{ fontSize: 13, fontWeight: '600', color: t.text }} numberOfLines={1}>
             {trip.truck_name ?? 'Camión asignado'}
           </Text>
           {trip.truck_patente && (
-            <View style={{ backgroundColor: '#F2F4F7', borderRadius: 4, borderWidth: 1, borderColor: '#E6E8EC', paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 10.5, fontWeight: '700', fontVariantNumeric: 'tabular-nums', color: '#16202C' }}>{trip.truck_patente}</Text>
+            <View style={{ backgroundColor: t.surface2, borderRadius: 4, borderWidth: 1, borderColor: t.border, paddingHorizontal: 6, paddingVertical: 2 }}>
+              <Text style={{ fontSize: 10.5, fontWeight: '700', fontVariantNumeric: 'tabular-nums', color: t.text }}>{trip.truck_patente}</Text>
             </View>
           )}
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#E5342B' }}>Ver viaje</Text>
-          <Text style={{ fontSize: 14, color: '#E5342B', fontWeight: '700' }}>›</Text>
+          <Text style={{ fontSize: 12.5, fontWeight: '700', color: t.accent }}>Ver viaje</Text>
+          <Text style={{ fontSize: 14, color: t.accent, fontWeight: '700' }}>›</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -163,29 +168,38 @@ export default function TripsScreen() {
   const isDark   = useStore(s => s.isDark)
   const t        = getTheme(isDark)
   const router   = useRouter()
+  const insets   = useSafeAreaInsets()
 
-  const [trips, setTrips]     = useState<AssignedTrip[]>([])
-  const [loading, setLoading] = useState(true)
+  const [trips, setTrips]         = useState<AssignedTrip[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError]         = useState<string | null>(null)
 
-  const loadTrips = useCallback(async () => {
+  const loadTrips = useCallback(async (mode: 'initial' | 'refresh' | 'silent' = 'silent') => {
     if (!profile) return
+    if (mode === 'refresh') setRefreshing(true)
     try {
       const data = await fetchAllMyTrips()
       setTrips(Array.isArray(data) ? data : [])
-    } catch {}
-    setLoading(false)
+      setError(null)
+    } catch {
+      setError('No pudimos cargar tus viajes. Revisá tu conexión y reintentá.')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [profile])
 
   useEffect(() => {
-    void loadTrips()
-    const id = setInterval(() => void loadTrips(), 30_000)
+    void loadTrips('initial')
+    const id = setInterval(() => void loadTrips('silent'), 30_000)
     return () => clearInterval(id)
   }, [loadTrips])
 
   const firstName    = profile?.full_name?.split(' ')[0] ?? 'conductor'
-  const enCurso      = trips.filter(t => t.status === 'in_progress' || t.status === 'accepted')
-  const pendientes   = trips.filter(t => t.status === 'pending')
-  const completados  = trips.filter(t => t.status === 'completed' || t.status === 'cancelled').slice(0, 10)
+  const enCurso      = trips.filter(tr => tr.status === 'in_progress' || tr.status === 'accepted')
+  const pendientes   = trips.filter(tr => tr.status === 'pending')
+  const completados  = trips.filter(tr => tr.status === 'completed' || tr.status === 'cancelled').slice(0, 10)
 
   const goToMap = (trip: AssignedTrip) =>
     router.push({ pathname: '/(tabs)/', params: { tripId: String(trip.id) } } as any)
@@ -196,13 +210,13 @@ export default function TripsScreen() {
     <FlatList
       style={{ flex: 1, backgroundColor: bgColor }}
       contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 40 }}
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={loadTrips} tintColor={t.accent} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadTrips('refresh')} tintColor={t.accent} />}
       data={[]}
       renderItem={null}
       ListHeaderComponent={
         <>
           {/* Header */}
-          <View style={{ paddingTop: 60, marginBottom: 22 }}>
+          <View style={{ paddingTop: insets.top + 14, marginBottom: 22 }}>
             <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', color: t.accent, marginBottom: 8 }}>
               MIS VIAJES
             </Text>
@@ -223,7 +237,22 @@ export default function TripsScreen() {
             <ActivityIndicator color={t.accent} style={{ marginTop: 40 }} />
           )}
 
-          {!loading && trips.length === 0 && (
+          {!loading && error && trips.length === 0 && (
+            <View style={{ alignItems: 'center', paddingTop: 60 }}>
+              <Text style={{ fontSize: 32, marginBottom: 14 }}>📡</Text>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: t.text, marginBottom: 6 }}>No se pudo cargar</Text>
+              <Text style={{ fontSize: 13.5, color: t.textMuted, textAlign: 'center', marginBottom: 18 }}>{error}</Text>
+              <TouchableOpacity
+                onPress={() => loadTrips('refresh')}
+                activeOpacity={0.85}
+                style={{ backgroundColor: t.accent, borderRadius: 10, paddingHorizontal: 22, paddingVertical: 11 }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13.5 }}>Reintentar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {!loading && !error && trips.length === 0 && (
             <View style={{ alignItems: 'center', paddingTop: 60 }}>
               <Text style={{ fontSize: 32, marginBottom: 14 }}>🗺️</Text>
               <Text style={{ fontSize: 16, fontWeight: '700', color: t.text, marginBottom: 6 }}>Sin viajes asignados</Text>
@@ -235,19 +264,19 @@ export default function TripsScreen() {
 
           {enCurso.length > 0 && (
             <TripSection label="En curso" count={enCurso.length}>
-              {enCurso.map(trip => <TripCard key={trip.id} trip={trip} onView={() => goToMap(trip)} />)}
+              {enCurso.map(trip => <TripCard key={trip.id} trip={trip} onView={() => goToMap(trip)} t={t} />)}
             </TripSection>
           )}
 
           {pendientes.length > 0 && (
             <TripSection label="Pendientes" count={pendientes.length}>
-              {pendientes.map(trip => <TripCard key={trip.id} trip={trip} onView={() => goToMap(trip)} />)}
+              {pendientes.map(trip => <TripCard key={trip.id} trip={trip} onView={() => goToMap(trip)} t={t} />)}
             </TripSection>
           )}
 
           {completados.length > 0 && (
             <TripSection label="Completados" count={completados.length}>
-              {completados.map(trip => <TripCard key={trip.id} trip={trip} onView={() => goToMap(trip)} />)}
+              {completados.map(trip => <TripCard key={trip.id} trip={trip} onView={() => goToMap(trip)} t={t} />)}
             </TripSection>
           )}
         </>

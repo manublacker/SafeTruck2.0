@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 import { supabase } from '../../src/services/supabase'
+import { registerForPushNotifications } from '../../src/services/push'
 import {
   isValidEmail, isValidPassword, resendSignupOtp,
   signUpWithEmail, verifySignupOtp,
@@ -102,6 +103,7 @@ export default function RegisterScreen() {
         if (profile) setProfile(profile)
       }
 
+      void registerForPushNotifications()
       router.replace('/(tabs)/')
     } catch (e: any) {
       setErrors({ otp: e.message ?? 'Código inválido' })

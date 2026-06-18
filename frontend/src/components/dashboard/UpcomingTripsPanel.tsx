@@ -1,12 +1,21 @@
 import type { AssignedTrip } from "@/services/api";
 
-const STATUS_CFG: Record<string, { label: string; stripe: string; badgeBg: string; badgeFg: string }> = {
-  pending:     { label: "Pendiente",  stripe: "#9ca3af", badgeBg: "#f3f4f6", badgeFg: "#6b7280" },
-  accepted:    { label: "Aceptado",   stripe: "#2563eb", badgeBg: "#eff6ff", badgeFg: "#2563eb" },
-  in_progress: { label: "En curso",   stripe: "#f59e0b", badgeBg: "#fffbeb", badgeFg: "#d97706" },
-  completed:   { label: "Completado", stripe: "#22c55e", badgeBg: "#f0fdf4", badgeFg: "#16a34a" },
-  cancelled:   { label: "Cancelado",  stripe: "#dc2626", badgeBg: "#fef2f2", badgeFg: "#dc2626" },
+// Misma semántica de estado que TripHistoryView (paleta de tokens en admin.css).
+const STATUS_LABELS: Record<string, string> = {
+  pending:     "Pendiente",
+  accepted:    "Aceptado",
+  in_progress: "En curso",
+  completed:   "Completado",
+  cancelled:   "Cancelado",
 };
+
+function badgeClass(status: string) {
+  if (status === "in_progress") return "st-badge st-badge-encurso";
+  if (status === "completed")   return "st-badge st-badge-completado";
+  if (status === "cancelled")   return "st-badge st-badge-cancelado";
+  if (status === "pending")     return "st-badge st-badge-pendiente";
+  return "st-badge st-badge-inactivo"; // accepted
+}
 
 function formatHour(iso: string | null): string {
   if (!iso) return "Sin hora";
@@ -51,14 +60,14 @@ export default function UpcomingTripsPanel({ trips, loading }: Props) {
       {!loading && sorted.length === 0 && (
         <div
           style={{
-            border: "1px dashed #e0e0e0",
-            borderRadius: 12,
+            border: "1px dashed var(--c-border)",
+            borderRadius: "var(--r-md)",
             padding: "28px 20px",
             textAlign: "center",
-            background: "#fafafa",
+            background: "var(--c-surface)",
           }}
         >
-          <p style={{ margin: 0, color: "#9ca3af", fontSize: "0.88rem" }}>
+          <p style={{ margin: 0, color: "var(--c-ink-3)", fontSize: "0.88rem" }}>
             No hay viajes próximos
           </p>
         </div>
@@ -67,7 +76,6 @@ export default function UpcomingTripsPanel({ trips, loading }: Props) {
       {!loading && sorted.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {sorted.map((trip) => {
-            const cfg = STATUS_CFG[trip.status] ?? STATUS_CFG.pending;
             const isLive = trip.status === "in_progress";
             return (
               <div
@@ -77,23 +85,13 @@ export default function UpcomingTripsPanel({ trips, loading }: Props) {
                   display: "flex",
                   gap: 10,
                   alignItems: "stretch",
-                  border: "1px solid #f0f0f0",
-                  borderRadius: 10,
+                  border: "1px solid var(--c-border)",
+                  borderRadius: "var(--r-md)",
                   padding: "10px 12px",
-                  background: "#fff",
+                  background: "var(--c-bg)",
                   cursor: "default",
                 }}
               >
-                <div
-                  style={{
-                    width: 3,
-                    borderRadius: 999,
-                    background: cfg.stripe,
-                    flexShrink: 0,
-                    alignSelf: "stretch",
-                    minHeight: 40,
-                  }}
-                />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     style={{
@@ -108,9 +106,9 @@ export default function UpcomingTripsPanel({ trips, loading }: Props) {
                       {isLive && <span className="live-dot" />}
                       <span
                         style={{
-                          fontWeight: 700,
+                          fontWeight: 600,
                           fontSize: "0.88rem",
-                          color: "#0d0d0d",
+                          color: "var(--c-ink)",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -119,11 +117,8 @@ export default function UpcomingTripsPanel({ trips, loading }: Props) {
                         {trip.driver_nombre ?? `Conductor #${trip.driver_id}`}
                       </span>
                     </div>
-                    <span
-                      className="st-tbadge"
-                      style={{ background: cfg.badgeBg, color: cfg.badgeFg, flexShrink: 0 }}
-                    >
-                      {cfg.label}
+                    <span className={badgeClass(trip.status)} style={{ flexShrink: 0 }}>
+                      {STATUS_LABELS[trip.status] ?? trip.status}
                     </span>
                   </div>
 
@@ -131,7 +126,7 @@ export default function UpcomingTripsPanel({ trips, loading }: Props) {
                     style={{
                       margin: "0 0 3px",
                       fontSize: "0.8rem",
-                      color: "#6b7280",
+                      color: "var(--c-ink-2)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -140,7 +135,7 @@ export default function UpcomingTripsPanel({ trips, loading }: Props) {
                     {trip.origin_label ?? "—"} → {trip.destination_label ?? "—"}
                   </p>
 
-                  <p style={{ margin: 0, fontSize: "0.75rem", color: "#9ca3af" }}>
+                  <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--c-ink-3)" }}>
                     {trip.scheduled_at
                       ? `${formatDate(trip.scheduled_at)} · ${formatHour(trip.scheduled_at)}`
                       : "Sin hora asignada"}

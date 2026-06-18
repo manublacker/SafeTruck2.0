@@ -30,6 +30,16 @@ export async function requireActiveSubscription(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  // Las lecturas (GET) NUNCA se bloquean: el usuario siempre puede VER su
+  // flota existente, tenga o no suscripción activa. De lo contrario, una
+  // cuenta sin plan ve sus camiones/conductores "desaparecidos" (402 -> lista
+  // vacía en el front), cuando en realidad los datos siguen en la base.
+  // La suscripción sólo se exige para mutaciones (POST/PATCH/DELETE).
+  if (req.method === "GET") {
+    next();
+    return;
+  }
+
   const userId = req.user!.id;
 
   // Bypass solo para desarrollo local: se activa con BYPASS_SUBSCRIPTION=true

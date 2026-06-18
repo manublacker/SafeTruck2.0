@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { bulkCreateInvitations } from "@/services/api";
 
 interface InvitationResult {
@@ -15,6 +15,14 @@ export default function BulkInviteModal({ onClose }: Props) {
   const [loading, setLoading]   = useState(false);
   const [results, setResults]   = useState<InvitationResult[] | null>(null);
   const [error, setError]       = useState("");
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   async function handleGenerate() {
     setLoading(true);
@@ -49,7 +57,7 @@ export default function BulkInviteModal({ onClose }: Props) {
     <div className="st-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="st-modal" style={{ maxWidth: 480, maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
         <div style={{ marginBottom: 16 }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: "1.05rem", fontWeight: 800, color: "#0d0d0d" }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: "1.05rem", fontWeight: 700, color: "#0d0d0d" }}>
             Invitar en masa
           </h3>
           <p style={{ margin: 0, fontSize: "0.82rem", color: "#6b7280" }}>
@@ -57,7 +65,22 @@ export default function BulkInviteModal({ onClose }: Props) {
           </p>
         </div>
 
-        {error && <p style={{ color: "#c62828", fontSize: "0.85rem", marginBottom: 12 }}>{error}</p>}
+        {error && (
+          <div
+            style={{
+              background: "var(--c-danger-soft)",
+              border: "1px solid var(--c-danger)",
+              color: "var(--c-accent-hover)",
+              borderRadius: "var(--r-md)",
+              padding: "10px 14px",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              marginBottom: 12,
+            }}
+          >
+            {error}
+          </div>
+        )}
 
         {!results ? (
           <>

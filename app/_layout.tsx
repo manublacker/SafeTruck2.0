@@ -2,11 +2,10 @@ import { useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as Notifications from 'expo-notifications'
-import Constants from 'expo-constants'
 import { Platform, View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView } from 'react-native'
 import { supabase } from '../src/services/supabase'
 import { useStore } from '../src/store/useStore'
-import { registerPushToken } from '../src/services/assignedTrips'
+import { registerForPushNotifications } from '../src/services/push'
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -17,29 +16,6 @@ Notifications.setNotificationHandler({
     shouldShowList:   true,
   }),
 })
-
-async function registerForPushNotifications() {
-  try {
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-      })
-    }
-    const { status: existingStatus } = await Notifications.getPermissionsAsync()
-    let finalStatus = existingStatus
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync()
-      finalStatus = status
-    }
-    if (finalStatus !== 'granted') return
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId
-    if (!projectId) return
-    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId })
-    await registerPushToken(tokenData.data)
-  } catch { /* no bloqueante */ }
-}
 
 function CompleteProfileScreen({ profileId, onComplete }: { profileId: string; onComplete: (phone: string) => void }) {
   const [phone, setPhone]     = useState('')
