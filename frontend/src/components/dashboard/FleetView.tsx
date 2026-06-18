@@ -328,7 +328,7 @@ function TrucksTab({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
         </div>
       </div>
 
-      {Number.isFinite(truckLimit) && <FleetUsageBar current={trucks.length} limit={truckLimit} plan={plan} />}
+      {hasSubscription && Number.isFinite(truckLimit) && <FleetUsageBar current={trucks.length} limit={truckLimit} plan={plan} />}
       {loading && <Hint>Cargando camiones…</Hint>}
       {subscriptionError && <SubscriptionBanner onGoToPlans={() => onNavigate("plans")} />}
       {error && <Hint tone="error">{error}</Hint>}
