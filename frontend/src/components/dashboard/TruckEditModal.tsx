@@ -110,6 +110,7 @@ function buildPayload(draft: DraftTruck): BuildResult {
     return { ok: false, error: "Las dimensiones (peso, alto, ancho, largo) son requeridas." };
   }
 
+
   return {
     ok: true,
     data: {
@@ -273,14 +274,14 @@ export default function TruckEditModal({ truck, onSave, onClose, onSubscriptionR
                 placeholder="15000"
               />
             </Field>
-            <Field label="Alto máx (m)" required>
+            <Field label="Alto máx (m)" required hint="Máx. 4.0 m">
               <input
                 className="st-field"
                 type="text"
                 inputMode="decimal"
                 value={draft.max_height_m}
                 onChange={updateMasked("max_height_m", onlyDecimal)}
-                placeholder="3.5"
+                placeholder="4.0"
               />
             </Field>
             <Field label="Ancho máx (m)" required>
@@ -490,17 +491,19 @@ function ModalHeader({ title, onClose }: { title: string; onClose: () => void })
 function Field({
   label,
   required,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <label className="st-label">
-        {label}
-        {required && <span style={{ color: "var(--c-accent)" }}>*</span>}
+      <label className="st-label" style={{ display: "flex", justifyContent: "space-between" }}>
+        <span>{label}{required && <span style={{ color: "var(--c-accent)" }}>*</span>}</span>
+        {hint && <span style={{ color: "#9ca3af", fontWeight: 400, fontSize: "0.75rem" }}>{hint}</span>}
       </label>
       {children}
     </div>
