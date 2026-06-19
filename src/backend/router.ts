@@ -58,6 +58,9 @@ export async function calculateRoute(
         status = 'unknown'
       }
 
+      // TODO: quitar este log después del test
+      console.log(`[DEBUG] edge=${r.edge_id} | ${r.street_name || '(sin nombre)'} | heavy_vehicle_allowed=${r.heavy_vehicle_allowed} | max_weight_kg=${r.max_weight_kg ?? '-'} | max_height_m=${r.max_height_m ?? '-'} | status=${status}`)
+
       const coords = parseGeom(r.geom)
       return {
         id: String(r.edge_id),
