@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import express, { Request, Response } from 'express'
+import { createServer } from 'http'
 import cors from 'cors'
 import { calculateRoute, denunciarPunto } from './router'
 import authRouter from './routes/auth'
@@ -19,6 +20,7 @@ import invitationsRouter from './routes/invitations'
 import locationsRouter from './routes/locations'
 import pushTokensRouter from './routes/push-tokens'
 import { loadGraphCache } from './graphCache'
+import { attachRealtime } from './realtime/hub'
 
 const app = express()
 app.use(cors({ maxAge: 86400 }))
@@ -92,7 +94,13 @@ app.get('/health', (_, res) => res.json({ status: 'ok' }))
 // La gestión de conductores ahora usa /api/drivers (Aiven) + /api/invitations.
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => {
+
+// Creamos el HTTP server explícito (en vez de app.listen) para poder engancharle
+// el servidor WebSocket: ambos comparten el mismo puerto. El WS vive en /ws.
+const server = createServer(app)
+attachRealtime(server)
+
+server.listen(PORT, () => {
   console.log(`SafeTruck backend en puerto ${PORT}`)
   // El cache del grafo del AMBA acelera el ruteo (~2,5s) pero usa bastante RAM.
   // Por eso es OPCIONAL: se activa solo con GRAPH_CACHE=true, y requiere subir
