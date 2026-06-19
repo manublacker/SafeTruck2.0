@@ -233,6 +233,36 @@ html,body,#map { width:100%;height:100%; }
     map.fitBounds(poly.getBounds(), { padding: [80, 80] });
   }
 
+  // Igual que drawRoute (colorea cada tramo por aptitud: verde apto / rojo no
+  // apto / naranja sin datos) PERO además dibuja los marcadores de origen
+  // (verde) y destino (azul). Se usa para los viajes asignados, recalculados
+  // en el momento con el camión del conductor.
+  function drawTripRoute(segments, originLat, originLng, destLat, destLng) {
+    clearRoute();
+    var colors = { ok: '#34C759', unauthorized: '#FF3B30', unknown: '#FF9500' };
+    var bounds = [];
+    (segments || []).forEach(function(seg) {
+      if (!seg.coordinates || seg.coordinates.length < 2) return;
+      var latlngs = seg.coordinates.map(function(c) { return [c.lat, c.lng]; });
+      var line = L.polyline(latlngs, {
+        color: colors[seg.status] || colors.unknown,
+        weight: 5, opacity: 0.9,
+        dashArray: seg.status === 'unauthorized' ? '10,6' : null
+      }).addTo(map);
+      routeLayers.push(line);
+      bounds = bounds.concat(latlngs);
+    });
+    if (originLat !== null && originLng !== null) {
+      var oMarker = L.circleMarker([originLat, originLng], { radius: 9, fillColor: '#1F9D57', color: 'white', weight: 3, fillOpacity: 1 }).addTo(map);
+      tripMarkers.push(oMarker); bounds.push([originLat, originLng]);
+    }
+    if (destLat !== null && destLng !== null) {
+      var dMarker = L.circleMarker([destLat, destLng], { radius: 9, fillColor: '#2563EB', color: 'white', weight: 3, fillOpacity: 1 }).addTo(map);
+      tripMarkers.push(dMarker); bounds.push([destLat, destLng]);
+    }
+    if (bounds.length > 0) map.fitBounds(bounds, { padding: [80, 80] });
+  }
+
   // ── SIMULACIÓN DE RECORRIDO ─────────────────────────────────────────────
   // Anima un marcador a lo largo de la ruta (array de [lat,lng]) interpolando
   // por segmentos. El loop corre acá en JS (suave). La cámara solo recentra al
@@ -391,6 +421,9 @@ export default function MapScreen() {
   const [simSpeed, setSimSpeed] = useState(40) // km/h
   const simSpeedRef = useRef(40)
   const tripPathRef = useRef<{ lat: number; lon?: number; lng?: number }[]>([])
+  // Segmentos coloreados (verde/rojo/naranja) de la ruta del viaje asignado,
+  // recalculada al abrirlo. Si es null, se cae al render azul del path guardado.
+  const tripSegmentsRef = useRef<any[] | null>(null)
   const SIM_SPEEDS = [10, 40, 80]
 
   // ── Trip visualization (navegado desde Viajes) ─────────────────────────
@@ -399,6 +432,61 @@ export default function MapScreen() {
   const [tripSheet, setTripSheet] = useState<AssignedTrip | null>(null)
   const [tripUpdating, setTripUpdating] = useState(false)
   const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Dibuja la ruta del viaje con el path GUARDADO (línea azul fija). Fallback
+  // cuando no se puede recalcular (sin camión asignado, sin coords o sin red).
+  const drawStoredTripPath = useCallback((trip: AssignedTrip) => {
+    const path = (() => {
+      try {
+        const p = typeof trip.path === 'string' ? JSON.parse(trip.path) : trip.path
+        return (p?.path || p?.polyline || p?.segments?.flatMap((s: any) => s.coordinates) || []) as { lat: number; lon?: number; lng?: number }[]
+      } catch { return [] }
+    })()
+    tripSegmentsRef.current = null
+    tripPathRef.current = path
+    webRef.current?.injectJavaScript(
+      `drawTripPath(${JSON.stringify(path)}, ${trip.origin_lat ?? 'null'}, ${trip.origin_lon ?? 'null'}, ${trip.destination_lat ?? 'null'}, ${trip.destination_lon ?? 'null'}); true;`
+    )
+  }, [])
+
+  // Recalcula la ruta del viaje en el momento (origen → destino) con el camión
+  // del conductor y la dibuja coloreada por tramo (verde apto / rojo no apto).
+  // Usa el MISMO motor (Aiven, /route) que el ruteo en vivo. Devuelve true si lo logró.
+  const drawColoredTripRoute = useCallback(async (trip: AssignedTrip): Promise<boolean> => {
+    const oLat = trip.origin_lat, oLng = trip.origin_lon
+    const dLat = trip.destination_lat, dLng = trip.destination_lon
+    if (oLat == null || oLng == null || dLat == null || dLng == null) return false
+    const vehicle = useStore.getState().activeVehicle
+    if (!vehicle) return false
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 60000)
+    try {
+      const res = await fetch(`${BACKEND}/route`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: { lat: oLat, lng: oLng },
+          destination: { lat: dLat, lng: dLng },
+          vehicle: { weight_kg: vehicle.weight_kg, height_m: vehicle.height_m, width_m: vehicle.width_m },
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      const segments = data?.route?.segments
+      if (!res.ok || !Array.isArray(segments) || segments.length === 0) return false
+      tripSegmentsRef.current = segments
+      tripPathRef.current = segments.flatMap((sg: any) => sg.coordinates ?? [])
+      webRef.current?.injectJavaScript(
+        `drawTripRoute(${JSON.stringify(segments)}, ${oLat}, ${oLng}, ${dLat}, ${dLng}); true;`
+      )
+      return true
+    } catch {
+      return false
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }, [])
 
   const loadTripById = useCallback(async (id: string) => {
     try {
@@ -409,21 +497,14 @@ export default function MapScreen() {
         return
       }
       setTripSheet(found)
-      // Draw trip route on map
-      const path = (() => {
-        try {
-          const p = typeof found.path === 'string' ? JSON.parse(found.path) : found.path
-          return (p?.path || p?.polyline || p?.segments?.flatMap((s: any) => s.coordinates) || []) as { lat: number; lon?: number; lng?: number }[]
-        } catch { return [] }
-      })()
-      tripPathRef.current = path
-      webRef.current?.injectJavaScript(
-        `drawTripPath(${JSON.stringify(path)}, ${found.origin_lat ?? 'null'}, ${found.origin_lon ?? 'null'}, ${found.destination_lat ?? 'null'}, ${found.destination_lon ?? 'null'}); true;`
-      )
+      // Recalculamos la ruta para colorearla por aptitud; si no se puede,
+      // mostramos el path guardado (línea azul) como fallback.
+      const colored = await drawColoredTripRoute(found)
+      if (!colored) drawStoredTripPath(found)
     } catch {
       Alert.alert('Error', 'No se pudo cargar el viaje. Revisá tu conexión e intentá de nuevo.')
     }
-  }, [])
+  }, [drawColoredTripRoute, drawStoredTripPath])
 
   // Liberar la suscripción de GPS de alta precisión si el componente se desmonta
   // (cambio de tab / logout) estando en navegación: evita fuga de batería y
@@ -500,6 +581,13 @@ export default function MapScreen() {
   // (rojo). Se usa al cargar el viaje, al recargar el WebView y al reiniciar.
   const redrawTrip = (trip: AssignedTrip | null = tripSheet) => {
     if (!trip) return
+    const segments = tripSegmentsRef.current
+    if (segments) {
+      webRef.current?.injectJavaScript(
+        `drawTripRoute(${JSON.stringify(segments)}, ${trip.origin_lat ?? 'null'}, ${trip.origin_lon ?? 'null'}, ${trip.destination_lat ?? 'null'}, ${trip.destination_lon ?? 'null'}); true;`
+      )
+      return
+    }
     const path = tripPathRef.current
     webRef.current?.injectJavaScript(
       `drawTripPath(${JSON.stringify(path)}, ${trip.origin_lat ?? 'null'}, ${trip.origin_lon ?? 'null'}, ${trip.destination_lat ?? 'null'}, ${trip.destination_lon ?? 'null'}); true;`
