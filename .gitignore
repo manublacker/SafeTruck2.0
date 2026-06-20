@@ -14,3 +14,12 @@ venv/
 SafeTruck3/node_modules/
 src/data/*.geojson
 frontend/.claude/
+.expo/
+.expo/
+node_modules_old*/
+ios_backup*/
+android_backup*/
+/android
+/ios
+.DS_Store
+**/.DS_Store

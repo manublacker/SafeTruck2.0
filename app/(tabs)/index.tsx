@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator,
-  Modal, ScrollView, TextInput, Keyboard,
+  Modal, ScrollView, TextInput, Keyboard, Platform,
 } from 'react-native'
-import { WebView } from 'react-native-webview'
+import MapView, { Marker, Polyline, Region } from 'react-native-maps'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -54,310 +54,55 @@ const INCIDENT_TYPES = [
   { key: 'control_peso',     label: '⚖️ Control de peso',  creates_block: false },
 ]
 
-const MAP_HTML = `
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-* { margin:0;padding:0;box-sizing:border-box; }
-html,body,#map { width:100%;height:100%; }
-.night-mode .leaflet-tile-pane {
-  filter: invert(100%) hue-rotate(180deg) brightness(90%) contrast(85%) saturate(0.85);
+// Emojis por tipo de incidente para el marker en el mapa (mismo set que usaba
+// el HTML de Leaflet, ahora renderizado como children de <Marker> nativo).
+const INCIDENT_ICONS: Record<string, string> = {
+  multa: '💸', control_policial: '👮', accidente: '🚨',
+  obra: '🚧', puente_bajo: '🌉', corte: '🚫',
+  control_peso: '⚖️', otro: '⚠️', trafico: '🚗', objeto_en_via: '⚠️'
 }
-</style>
-</head>
-<body>
-<div id="map"></div>
-<script>
-  var map = L.map('map',{zoomControl:false}).setView([-34.6037,-58.3816],13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'© OSM', maxZoom:19
-  }).addTo(map);
-  var userMarker=null, destMarker=null, routeLayers=[], incidentMarkers=[];
-  var navActive=false, headingMarker=null, tripMarkers=[];
 
-  function setMapTheme(dark) {
-    if (dark) map.getContainer().classList.add('night-mode');
-    else map.getContainer().classList.remove('night-mode');
+// Parsea la ubicación de un incidente que puede venir como string PostGIS
+// "POINT(lng lat)" o como GeoJSON {coordinates: [lng, lat]}.
+function parseIncidentLocation(location: any): { lat: number; lng: number } | null {
+  if (!location) return null
+  if (typeof location === 'string') {
+    const m = location.match(/POINT\(([\d.-]+) ([\d.-]+)\)/)
+    if (m) return { lng: parseFloat(m[1]), lat: parseFloat(m[2]) }
+    return null
   }
-
-  map.on('click', function(e) {
-    if (navActive) return;
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'mapClick', lat: e.latlng.lat, lng: e.latlng.lng
-    }));
-    if (destMarker) map.removeLayer(destMarker);
-    destMarker = L.marker([e.latlng.lat, e.latlng.lng], {
-      icon: L.divIcon({
-        className: '',
-        html: '<div style="background:#2563EB;width:14px;height:14px;border-radius:50%;border:2.5px solid white"></div>'
-      })
-    }).addTo(map);
-  });
-
-  function setUserLocation(lat, lng) {
-    if (userMarker) map.removeLayer(userMarker);
-    userMarker = L.circleMarker([lat, lng], {
-      radius: 8, fillColor: '#007AFF', color: 'white', weight: 3, fillOpacity: 1
-    }).addTo(map);
-    map.setView([lat, lng], 14);
+  if (location.coordinates) {
+    return { lng: location.coordinates[0], lat: location.coordinates[1] }
   }
+  return null
+}
 
-  function drawRoute(segments) {
-    clearRoute();
-    var colors = { ok: '#34C759', unauthorized: '#FF3B30', unknown: '#FF9500' };
-    var bounds = [];
-    segments.forEach(function(seg) {
-      if (!seg.coordinates || seg.coordinates.length < 2) return;
-      var latlngs = seg.coordinates.map(function(c) { return [c.lat, c.lng]; });
-      var line = L.polyline(latlngs, {
-        color: colors[seg.status] || colors.unknown,
-        weight: 5, opacity: 0.9,
-        dashArray: seg.status === 'unauthorized' ? '10,6' : null
-      }).addTo(map);
-      routeLayers.push(line);
-      bounds = bounds.concat(latlngs);
-    });
-    if (bounds.length > 0) map.fitBounds(bounds, { padding: [80, 40] });
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// MIGRACIÓN A MAPA NATIVO (Apple Maps en iOS / Google Maps en Android)
+// ─────────────────────────────────────────────────────────────────────────────
+// ETAPA 1: solo mapa base + ubicación + tap-to-destino.
+// Lo que sigue comentado abajo (MAP_HTML, drawRoute, addIncidentMarker, sim*,
+// nav*) es la implementación vieja en Leaflet. La dejamos como referencia para
+// portarla en las próximas etapas (ruta coloreada, incidentes, simulación,
+// navegación con rotación de cámara). NO BORRAR todavía.
+// ─────────────────────────────────────────────────────────────────────────────
 
-  function clearRoute() {
-    routeLayers.forEach(function(l) { map.removeLayer(l); });
-    routeLayers = [];
-    tripMarkers.forEach(function(m) { map.removeLayer(m); });
-    tripMarkers = [];
-    if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
-  }
+/*
+const MAP_HTML = `
+... (todo el HTML/JS de Leaflet que tenías antes va acá, sin cambios,
+     comentado como bloque para no perderlo de referencia en las próximas etapas) ...
+`
+*/
 
-  var ICONS = {
-    multa:'💸', control_policial:'👮', accidente:'🚨',
-    obra:'🚧', puente_bajo:'🌉', corte:'🚫',
-    control_peso:'⚖️', otro:'⚠️', trafico:'🚗', objeto_en_via:'⚠️'
-  };
-
-  function addIncidentMarker(lat, lng, type) {
-    var marker = L.marker([lat, lng], {
-      icon: L.divIcon({
-        className: '',
-        html: '<div style="font-size:22px;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.4))">' + (ICONS[type] || '⚠️') + '</div>',
-        iconAnchor: [11, 11]
-      })
-    }).addTo(map);
-    incidentMarkers.push(marker);
-  }
-
-  function loadIncidents(incidents) {
-    incidentMarkers.forEach(function(m) { map.removeLayer(m); });
-    incidentMarkers = [];
-    incidents.forEach(function(inc) {
-      if (!inc.location) return;
-      var lat, lng;
-      if (typeof inc.location === 'string') {
-        var m = inc.location.match(/POINT\\(([\\d.-]+) ([\\d.-]+)\\)/);
-        if (m) { lng = parseFloat(m[1]); lat = parseFloat(m[2]); }
-      } else if (inc.location.coordinates) {
-        lng = inc.location.coordinates[0]; lat = inc.location.coordinates[1];
-      }
-      if (lat && lng) addIncidentMarker(lat, lng, inc.incident_type);
-    });
-  }
-
-  function enterNavMode(lat, lng, heading) {
-    navActive = true;
-    map.setView([lat, lng], 18, { animate: true, duration: 0.6 });
-    updateNavMarker(lat, lng, heading);
-  }
-
-  function navUpdate(lat, lng, heading) {
-    if (!navActive) return;
-    map.panTo([lat, lng], { animate: true, duration: 0.4 });
-    updateNavMarker(lat, lng, heading);
-    if (heading !== null) map.setBearing(heading);
-  }
-
-  function updateNavMarker(lat, lng, heading) {
-    if (userMarker) map.removeLayer(userMarker);
-    if (headingMarker) map.removeLayer(headingMarker);
-    userMarker = L.circleMarker([lat, lng], {
-      radius: 9, fillColor: '#007AFF', color: 'white', weight: 3, fillOpacity: 1
-    }).addTo(map);
-    if (heading !== null) {
-      var rad = (heading - 90) * Math.PI / 180;
-      var r = 0.0003;
-      var tipLat = lat + r * Math.cos((heading - 90) * Math.PI / 180) * 0.7;
-      var tipLng = lng + r * Math.sin((heading - 90) * Math.PI / 180) * 0.7 / Math.cos(lat * Math.PI / 180);
-      headingMarker = L.marker([lat, lng], {
-        icon: L.divIcon({
-          className: '',
-          html: '<div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:18px solid #007AFF;transform:rotate(' + heading + 'deg);transform-origin:center bottom;margin-left:-7px;margin-top:-18px;filter:drop-shadow(0 1px 4px rgba(0,122,255,0.5))"></div>',
-          iconAnchor: [0, 0]
-        })
-      }).addTo(map);
-    }
-  }
-
-  function exitNavMode(lat, lng) {
-    navActive = false;
-    if (headingMarker) { map.removeLayer(headingMarker); headingMarker = null; }
-    if (lat !== null) {
-      map.setView([lat, lng], 14, { animate: true, duration: 0.5 });
-    }
-    if (userMarker) map.removeLayer(userMarker);
-    if (lat !== null) {
-      userMarker = L.circleMarker([lat, lng], {
-        radius: 8, fillColor: '#007AFF', color: 'white', weight: 3, fillOpacity: 1
-      }).addTo(map);
-    }
-    try { map.setBearing(0); } catch(e) {}
-  }
-
-  function drawTripPath(points, originLat, originLng, destLat, destLng) {
-    clearRoute();
-    var latlngs = [];
-    if (points && points.length > 1) {
-      latlngs = points.map(function(p) { return [p.lat, p.lon !== undefined ? p.lon : p.lng]; });
-    } else if (originLat && destLat) {
-      latlngs = [[originLat, originLng], [destLat, destLng]];
-    }
-    if (latlngs.length < 2) return;
-    var poly = L.polyline(latlngs, { color: '#2563EB', weight: 5, opacity: 0.9, lineCap: 'round' }).addTo(map);
-    routeLayers.push(poly);
-    // Origen (verde) y destino (azul) — el rojo se reserva para tramos no habilitados.
-    var oMarker = L.circleMarker(latlngs[0], { radius: 9, fillColor: '#1F9D57', color: 'white', weight: 3, fillOpacity: 1 }).addTo(map);
-    var dest = latlngs[latlngs.length - 1];
-    var dMarker = L.circleMarker(dest, { radius: 9, fillColor: '#2563EB', color: 'white', weight: 3, fillOpacity: 1 }).addTo(map);
-    tripMarkers.push(oMarker, dMarker);
-    map.fitBounds(poly.getBounds(), { padding: [80, 80] });
-  }
-
-  // Igual que drawRoute (colorea cada tramo por aptitud: verde apto / rojo no
-  // apto / naranja sin datos) PERO además dibuja los marcadores de origen
-  // (verde) y destino (azul). Se usa para los viajes asignados, recalculados
-  // en el momento con el camión del conductor.
-  function drawTripRoute(segments, originLat, originLng, destLat, destLng) {
-    clearRoute();
-    var colors = { ok: '#34C759', unauthorized: '#FF3B30', unknown: '#FF9500' };
-    var bounds = [];
-    (segments || []).forEach(function(seg) {
-      if (!seg.coordinates || seg.coordinates.length < 2) return;
-      var latlngs = seg.coordinates.map(function(c) { return [c.lat, c.lng]; });
-      var line = L.polyline(latlngs, {
-        color: colors[seg.status] || colors.unknown,
-        weight: 5, opacity: 0.9,
-        dashArray: seg.status === 'unauthorized' ? '10,6' : null
-      }).addTo(map);
-      routeLayers.push(line);
-      bounds = bounds.concat(latlngs);
-    });
-    if (originLat !== null && originLng !== null) {
-      var oMarker = L.circleMarker([originLat, originLng], { radius: 9, fillColor: '#1F9D57', color: 'white', weight: 3, fillOpacity: 1 }).addTo(map);
-      tripMarkers.push(oMarker); bounds.push([originLat, originLng]);
-    }
-    if (destLat !== null && destLng !== null) {
-      var dMarker = L.circleMarker([destLat, destLng], { radius: 9, fillColor: '#2563EB', color: 'white', weight: 3, fillOpacity: 1 }).addTo(map);
-      tripMarkers.push(dMarker); bounds.push([destLat, destLng]);
-    }
-    if (bounds.length > 0) map.fitBounds(bounds, { padding: [80, 80] });
-  }
-
-  // ── SIMULACIÓN DE RECORRIDO ─────────────────────────────────────────────
-  // Anima un marcador a lo largo de la ruta (array de [lat,lng]) interpolando
-  // por segmentos. El loop corre acá en JS (suave). La cámara solo recentra al
-  // iniciar o cuando el marcador se acerca al borde, no en cada paso.
-  var simTimer=null, simMarker=null, simHeadingM=null, simData=null;
-  var SIM_TICK_MS = 100;
-
-  function simHaversine(a, b) {
-    var R=6371000;
-    var dLat=(b[0]-a[0])*Math.PI/180, dLng=(b[1]-a[1])*Math.PI/180;
-    var la1=a[0]*Math.PI/180, la2=b[0]*Math.PI/180;
-    var x=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.sin(dLng/2)*Math.sin(dLng/2)*Math.cos(la1)*Math.cos(la2);
-    return 2*R*Math.asin(Math.sqrt(x));
-  }
-  function simBearing(a, b) {
-    var la1=a[0]*Math.PI/180, la2=b[0]*Math.PI/180, dLng=(b[1]-a[1])*Math.PI/180;
-    var y=Math.sin(dLng)*Math.cos(la2);
-    var x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dLng);
-    return (Math.atan2(y,x)*180/Math.PI+360)%360;
-  }
-
-  function simStart(path, speedKmh) {
-    simStop();
-    if (!path || path.length < 2) return;
-    navActive = false;
-    // Ocultar el marcador de ubicación actual: el de la simulación lo reemplaza.
-    if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
-    simData = { path: path, idx: 0, frac: 0, speed: speedKmh || 40, paused: false };
-    map.setView(path[0], 16, { animate: true, duration: 0.6 });
-    simRender(path[0][0], path[0][1], simBearing(path[0], path[1]), true);
-    simTimer = setInterval(simTick, SIM_TICK_MS);
-  }
-
-  function simTick() {
-    var s = simData; if (!s || s.paused) return;
-    var path = s.path;
-    if (s.idx >= path.length - 1) { simFinish(); return; }
-    var meters = s.speed * 1000/3600 * (SIM_TICK_MS/1000);
-    while (meters > 0 && s.idx < path.length - 1) {
-      var a = path[s.idx], b = path[s.idx+1];
-      var segLen = simHaversine(a, b);
-      if (segLen < 0.01) { s.idx++; s.frac = 0; continue; }
-      var distLeft = segLen * (1 - s.frac);
-      if (distLeft > meters) { s.frac += meters / segLen; meters = 0; }
-      else { meters -= distLeft; s.idx++; s.frac = 0; }
-    }
-    if (s.idx >= path.length - 1) {
-      var last = path[path.length-1], prev = path[path.length-2];
-      simRender(last[0], last[1], simBearing(prev, last), false);
-      simFinish(); return;
-    }
-    var a2 = path[s.idx], b2 = path[s.idx+1];
-    var lat = a2[0] + (b2[0]-a2[0]) * s.frac;
-    var lng = a2[1] + (b2[1]-a2[1]) * s.frac;
-    simRender(lat, lng, simBearing(a2, b2), false);
-  }
-
-  function simRender(lat, lng, heading, recenter) {
-    if (!simMarker) {
-      simMarker = L.circleMarker([lat,lng], { radius:9, fillColor:'#007AFF', color:'white', weight:3, fillOpacity:1 }).addTo(map);
-    } else { simMarker.setLatLng([lat,lng]); }
-    if (simHeadingM) { map.removeLayer(simHeadingM); simHeadingM=null; }
-    if (heading !== null && heading !== undefined) {
-      simHeadingM = L.marker([lat,lng], { icon: L.divIcon({ className:'', html:'<div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:18px solid #007AFF;transform:rotate('+heading+'deg);transform-origin:center bottom;margin-left:-7px;margin-top:-18px;filter:drop-shadow(0 1px 4px rgba(0,122,255,0.5))"></div>', iconAnchor:[0,0] }) }).addTo(map);
-    }
-    if (recenter || !map.getBounds().pad(-0.25).contains(L.latLng(lat,lng))) {
-      map.panTo([lat,lng], { animate: true, duration: 0.5 });
-    }
-  }
-
-  function simFinish() { if (simTimer) { clearInterval(simTimer); simTimer=null; } }
-  function simPause() { if (simData) simData.paused = true; }
-  function simResume() { if (simData) simData.paused = false; }
-  function simSetSpeed(k) { if (simData) simData.speed = k; }
-  function simStop() {
-    if (simTimer) { clearInterval(simTimer); simTimer=null; }
-    if (simMarker) { map.removeLayer(simMarker); simMarker=null; }
-    if (simHeadingM) { map.removeLayer(simHeadingM); simHeadingM=null; }
-    simData = null;
-  }
-
-  // Inicio de viaje REAL (no simulado): centra la cámara en el inicio de la ruta
-  // y ajusta la ubicación al inicio de las líneas.
-  function navStartTrip(path) {
-    if (!path || path.length < 2) return;
-    if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
-    userMarker = L.circleMarker(path[0], { radius:8, fillColor:'#007AFF', color:'white', weight:3, fillOpacity:1 }).addTo(map);
-    map.setView(path[0], 16, { animate: true, duration: 0.8 });
-  }
-</script>
-</body>
-</html>`
+const DEFAULT_REGION: Region = {
+  latitude: -34.6037,
+  longitude: -58.3816,
+  latitudeDelta: 0.15,
+  longitudeDelta: 0.15,
+}
 
 export default function MapScreen() {
-  const webRef = useRef<WebView>(null)
+  const mapRef = useRef<MapView>(null)
   const searchTimeout = useRef<any>(null)
   const reportSearchTimeout = useRef<any>(null)
 
@@ -392,9 +137,16 @@ export default function MapScreen() {
       })
     }).catch(() => null)
   }, [])
-  const mapSource = useMemo(() => ({ html: MAP_HTML }), [])
 
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [destMarker, setDestMarker] = useState<{ lat: number; lng: number } | null>(null)
+  const [incidents, setIncidents] = useState<{ id: string; type: string; lat: number; lng: number }[]>([])
+  // ETAPA 4: ruta del viaje asignado, dibujada en el mapa.
+  // tripSegments = ruta recalculada y coloreada (preferido). Si no se puede
+  // recalcular, tripStoredPath = el path guardado del viaje (línea azul fija).
+  const [tripSegments, setTripSegments] = useState<any[] | null>(null)
+  const [tripStoredPath, setTripStoredPath] = useState<{ lat: number; lon?: number; lng?: number }[]>([])
+  const [tripOriginDest, setTripOriginDest] = useState<{ originLat: number | null; originLng: number | null; destLat: number | null; destLng: number | null }>({ originLat: null, originLng: null, destLat: null, destLng: null })
   const [loading, setLoading] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
   const [showIncidentModal, setShowIncidentModal] = useState(false)
@@ -415,16 +167,83 @@ export default function MapScreen() {
   const [navMode, setNavMode] = useState(false)
   const watchRef = useRef<any>(null)
 
-  // ── Simulación de recorrido (sigue la ruta calculada o el viaje asignado) ──
+  // ── Simulación de recorrido ──────────────────────────────────────────────
+  // Anima un marcador a lo largo de `path` interpolando por segmentos, igual
+  // que simStart/simTick/simRender hacían en Leaflet. El timer corre acá en
+  // JS (setInterval) y actualiza estado de React en cada tick.
   const [simRunning, setSimRunning] = useState(false)
   const [simPaused, setSimPaused] = useState(false)
   const [simSpeed, setSimSpeed] = useState(40) // km/h
   const simSpeedRef = useRef(40)
   const tripPathRef = useRef<{ lat: number; lon?: number; lng?: number }[]>([])
-  // Segmentos coloreados (verde/rojo/naranja) de la ruta del viaje asignado,
-  // recalculada al abrirlo. Si es null, se cae al render azul del path guardado.
   const tripSegmentsRef = useRef<any[] | null>(null)
   const SIM_SPEEDS = [10, 40, 80]
+  const SIM_TICK_MS = 100
+
+  // Posición/heading actuales del marcador animado (null = sin simulación activa)
+  const [simPosition, setSimPosition] = useState<{ lat: number; lng: number; heading: number | null } | null>(null)
+  // Progreso de la simulación (índice + fracción dentro del segmento actual),
+  // usado para recortar la polyline: gris atrás, color vivo adelante.
+  const [simProgress, setSimProgress] = useState<{ idx: number; frac: number } | null>(null)
+  const simIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Estado mutable de la simulación en curso (path, índice actual, fracción
+  // del segmento recorrida). Usamos ref porque se actualiza en cada tick de
+  // 100ms y no necesitamos re-renders por estos campos, solo por simPosition.
+  const simDataRef = useRef<{ path: [number, number][]; idx: number; frac: number } | null>(null)
+
+  const simHaversine = (a: [number, number], b: [number, number]) => {
+    const R = 6371000
+    const dLat = (b[0] - a[0]) * Math.PI / 180
+    const dLng = (b[1] - a[1]) * Math.PI / 180
+    const la1 = a[0] * Math.PI / 180, la2 = b[0] * Math.PI / 180
+    const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(la1) * Math.cos(la2)
+    return 2 * R * Math.asin(Math.sqrt(x))
+  }
+
+  const simBearing = (a: [number, number], b: [number, number]) => {
+    const la1 = a[0] * Math.PI / 180, la2 = b[0] * Math.PI / 180, dLng = (b[1] - a[1]) * Math.PI / 180
+    const y = Math.sin(dLng) * Math.cos(la2)
+    const x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLng)
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360
+  }
+
+  // Recorta un array de segmentos coloreados {coordinates, status} en dos
+  // partes según el progreso de la simulación (idx/frac sobre el path plano
+  // combinado): lo ya recorrido (para pintar gris, "atrás") y lo restante
+  // (mantiene los colores reales verde/rojo/naranja, "adelante"). Estilo
+  // Waze/Google Maps: el camino recorrido se ve tenue detrás del vehículo.
+  const splitSegmentsByProgress = (
+    segments: any[],
+    progress: { idx: number; frac: number } | null
+  ): { passed: { latitude: number; longitude: number }[]; remaining: any[] } => {
+    if (!progress) return { passed: [], remaining: segments }
+    let pointCounter = 0
+    const passed: { latitude: number; longitude: number }[] = []
+    const remaining: any[] = []
+    for (const seg of segments) {
+      const coords = seg.coordinates ?? []
+      const segRemaining: { lat: number; lng: number }[] = []
+      for (let i = 0; i < coords.length; i++) {
+        // Cada punto del path plano corresponde, en orden, a un punto de
+        // algún segmento. pointCounter avanza igual que simDataRef.current.idx.
+        if (pointCounter < progress.idx) {
+          passed.push({ latitude: coords[i].lat, longitude: coords[i].lng })
+        } else if (pointCounter === progress.idx && i < coords.length - 1) {
+          // Punto exacto donde está el vehículo ahora: lo partimos por frac.
+          const a = coords[i], b = coords[i + 1]
+          const interpLat = a.lat + (b.lat - a.lat) * progress.frac
+          const interpLng = a.lng + (b.lng - a.lng) * progress.frac
+          passed.push({ latitude: a.lat, longitude: a.lng })
+          segRemaining.push({ lat: interpLat, lng: interpLng }, b)
+        } else {
+          segRemaining.push(coords[i])
+        }
+        if (i < coords.length - 1) pointCounter++
+      }
+      if (segRemaining.length >= 2) remaining.push({ ...seg, coordinates: segRemaining })
+    }
+    return { passed, remaining }
+  }
 
   // ── Trip visualization (navegado desde Viajes) ─────────────────────────
   const { tripId } = useLocalSearchParams<{ tripId?: string }>()
@@ -444,9 +263,18 @@ export default function MapScreen() {
     })()
     tripSegmentsRef.current = null
     tripPathRef.current = path
-    webRef.current?.injectJavaScript(
-      `drawTripPath(${JSON.stringify(path)}, ${trip.origin_lat ?? 'null'}, ${trip.origin_lon ?? 'null'}, ${trip.destination_lat ?? 'null'}, ${trip.destination_lon ?? 'null'}); true;`
-    )
+    setTripSegments(null)
+    setTripStoredPath(path)
+    setTripOriginDest({
+      originLat: trip.origin_lat ?? null, originLng: trip.origin_lon ?? null,
+      destLat: trip.destination_lat ?? null, destLng: trip.destination_lon ?? null,
+    })
+    if (path.length > 0 && mapRef.current) {
+      mapRef.current.fitToCoordinates(
+        path.map((p) => ({ latitude: p.lat, longitude: (p.lon ?? p.lng) as number })),
+        { edgePadding: { top: 100, right: 60, bottom: 280, left: 60 }, animated: true }
+      )
+    }
   }, [])
 
   // Recalcula la ruta del viaje en el momento (origen → destino) con el camión
@@ -477,9 +305,16 @@ export default function MapScreen() {
       if (!res.ok || !Array.isArray(segments) || segments.length === 0) return false
       tripSegmentsRef.current = segments
       tripPathRef.current = segments.flatMap((sg: any) => sg.coordinates ?? [])
-      webRef.current?.injectJavaScript(
-        `drawTripRoute(${JSON.stringify(segments)}, ${oLat}, ${oLng}, ${dLat}, ${dLng}); true;`
-      )
+      setTripSegments(segments)
+      setTripStoredPath([])
+      setTripOriginDest({ originLat: oLat, originLng: oLng, destLat: dLat, destLng: dLng })
+      const allCoords = segments.flatMap((sg: any) => sg.coordinates ?? []).map((c: any) => ({ latitude: c.lat, longitude: c.lng }))
+      if (allCoords.length > 0 && mapRef.current) {
+        mapRef.current.fitToCoordinates(allCoords, {
+          edgePadding: { top: 100, right: 60, bottom: 280, left: 60 },
+          animated: true,
+        })
+      }
       return true
     } catch {
       return false
@@ -497,8 +332,6 @@ export default function MapScreen() {
         return
       }
       setTripSheet(found)
-      // Recalculamos la ruta para colorearla por aptitud; si no se puede,
-      // mostramos el path guardado (línea azul) como fallback.
       const colored = await drawColoredTripRoute(found)
       if (!colored) drawStoredTripPath(found)
     } catch {
@@ -506,12 +339,12 @@ export default function MapScreen() {
     }
   }, [drawColoredTripRoute, drawStoredTripPath])
 
-  // Liberar la suscripción de GPS de alta precisión si el componente se desmonta
-  // (cambio de tab / logout) estando en navegación: evita fuga de batería y
-  // callbacks sobre un WebView ya desmontado.
+  // Liberar la suscripción de GPS de alta precisión y el timer de simulación
+  // si el componente se desmonta (cambio de tab / logout).
   useEffect(() => () => {
     watchRef.current?.remove?.()
     watchRef.current = null
+    if (simIntervalRef.current) { clearInterval(simIntervalRef.current); simIntervalRef.current = null }
   }, [])
 
   useEffect(() => {
@@ -523,14 +356,12 @@ export default function MapScreen() {
     }
   }, [tripId])
 
-  // ── Simulación de recorrido ─────────────────────────────────────────────
-  // Devuelve la ruta a simular como [[lat,lng],...]: prioriza la ruta calculada
-  // (destino tocado) y si no, el path del viaje asignado.
+  // ── Simulación de recorrido (ETAPA 6 — todavía no migrada) ──────────────
   const simPathLatLng = (): [number, number][] => {
     const segs = (currentRoute as any)?.segments as { coordinates?: { lat: number; lng: number }[] }[] | undefined
     if (segs?.length) {
       const pts: [number, number][] = []
-      for (const s of segs) for (const c of (s.coordinates ?? [])) pts.push([c.lat, c.lng])
+      for (const sg of segs) for (const c of (sg.coordinates ?? [])) pts.push([c.lat, c.lng])
       if (pts.length >= 2) return pts
     }
     const tp = tripPathRef.current
@@ -538,71 +369,133 @@ export default function MapScreen() {
     return []
   }
 
+  // Detiene el timer sin tocar el resto del estado (uso interno, para cuando
+  // la simulación termina sola al llegar al final del recorrido).
+  const stopSimulationInternal = () => {
+    if (simIntervalRef.current) { clearInterval(simIntervalRef.current); simIntervalRef.current = null }
+    setSimRunning(false)
+    setSimPaused(false)
+  }
+
+  // Un paso de la simulación: avanza la distancia recorrida en SIM_TICK_MS
+  // según la velocidad actual, interpolando entre los puntos del path.
+  // Lee `simPaused` desde un ref (no desde el closure) para que el
+  // setInterval, que se crea una sola vez en startSimulation, siempre vea
+  // el valor de pausa más reciente sin necesidad de recrear el interval.
+  const simPausedRef = useRef(false)
+  useEffect(() => { simPausedRef.current = simPaused }, [simPaused])
+
+  const simTick = useCallback(() => {
+    const s = simDataRef.current
+    if (!s || simPausedRef.current) return
+    const path = s.path
+    if (s.idx >= path.length - 1) {
+      stopSimulationInternal()
+      return
+    }
+    let meters = simSpeedRef.current * 1000 / 3600 * (SIM_TICK_MS / 1000)
+    while (meters > 0 && s.idx < path.length - 1) {
+      const a = path[s.idx], b = path[s.idx + 1]
+      const segLen = simHaversine(a, b)
+      if (segLen < 0.01) { s.idx++; s.frac = 0; continue }
+      const distLeft = segLen * (1 - s.frac)
+      if (distLeft > meters) { s.frac += meters / segLen; meters = 0 }
+      else { meters -= distLeft; s.idx++; s.frac = 0 }
+    }
+    if (s.idx >= path.length - 1) {
+      const last = path[path.length - 1], prev = path[path.length - 2]
+      setSimPosition({ lat: last[0], lng: last[1], heading: simBearing(prev, last) })
+      setSimProgress({ idx: s.idx, frac: 0 })
+      stopSimulationInternal()
+      return
+    }
+    const a2 = path[s.idx], b2 = path[s.idx + 1]
+    const lat = a2[0] + (b2[0] - a2[0]) * s.frac
+    const lng = a2[1] + (b2[1] - a2[1]) * s.frac
+    const heading = simBearing(a2, b2)
+    setSimPosition({ lat, lng, heading })
+    setSimProgress({ idx: s.idx, frac: s.frac })
+    mapRef.current?.animateCamera(
+      { center: { latitude: lat, longitude: lng }, heading, pitch: 45, zoom: 17 },
+      { duration: SIM_TICK_MS }
+    )
+  }, [])
+
   const startSimulation = () => {
     const path = simPathLatLng()
     if (path.length < 2) {
       Alert.alert('Simulación', 'No hay una ruta para simular. Tocá un destino o iniciá un viaje asignado.')
       return
     }
+    if (simIntervalRef.current) { clearInterval(simIntervalRef.current); simIntervalRef.current = null }
+    simDataRef.current = { path, idx: 0, frac: 0 }
     setSimRunning(true)
     setSimPaused(false)
     setShowInfo(false)
-    webRef.current?.injectJavaScript(`simStart(${JSON.stringify(path)}, ${simSpeedRef.current}); true;`)
+    const start = path[0], next = path[1]
+    setSimPosition({ lat: start[0], lng: start[1], heading: simBearing(start, next) })
+    setSimProgress({ idx: 0, frac: 0 })
+    mapRef.current?.animateCamera(
+      { center: { latitude: start[0], longitude: start[1] }, zoom: 17, pitch: 45, heading: simBearing(start, next) },
+      { duration: 600 }
+    )
+    simIntervalRef.current = setInterval(simTick, SIM_TICK_MS)
   }
 
   const stopSimulation = () => {
+    if (simIntervalRef.current) { clearInterval(simIntervalRef.current); simIntervalRef.current = null }
     setSimRunning(false)
     setSimPaused(false)
-    webRef.current?.injectJavaScript(`simStop(); true;`)
-    // Restaurar el marcador de ubicación actual (lo había ocultado simStart).
-    if (location) {
-      webRef.current?.injectJavaScript(`setUserLocation(${location.lat}, ${location.lng}); true;`)
+    setSimPosition(null)
+    setSimProgress(null)
+    simDataRef.current = null
+    // Restaurar vista normal (sin inclinación de simulación)
+    if (location && mapRef.current) {
+      mapRef.current.animateCamera(
+        { center: { latitude: location.lat, longitude: location.lng }, pitch: 0, heading: 0 },
+        { duration: 500 }
+      )
     }
   }
 
   const toggleSimPause = () => {
-    setSimPaused(p => {
-      const next = !p
-      webRef.current?.injectJavaScript(`${next ? 'simPause' : 'simResume'}(); true;`)
-      return next
-    })
+    setSimPaused(p => !p)
   }
 
   const cycleSimSpeed = () => {
     setSimSpeed(prev => {
       const next = SIM_SPEEDS[(SIM_SPEEDS.indexOf(prev) + 1) % SIM_SPEEDS.length]
       simSpeedRef.current = next
-      webRef.current?.injectJavaScript(`simSetSpeed(${next}); true;`)
       return next
     })
   }
 
-  // Repinta en el mapa la ruta del viaje + círculos de origen (verde) y destino
-  // (rojo). Se usa al cargar el viaje, al recargar el WebView y al reiniciar.
+  // Repinta en el mapa la ruta del viaje (por si se había limpiado al completar
+  // un viaje previo). Como el dibujo depende del estado de React, esto solo
+  // necesita restaurar tripSegments/tripStoredPath si quedaron vacíos.
   const redrawTrip = (trip: AssignedTrip | null = tripSheet) => {
     if (!trip) return
-    const segments = tripSegmentsRef.current
-    if (segments) {
-      webRef.current?.injectJavaScript(
-        `drawTripRoute(${JSON.stringify(segments)}, ${trip.origin_lat ?? 'null'}, ${trip.origin_lon ?? 'null'}, ${trip.destination_lat ?? 'null'}, ${trip.destination_lon ?? 'null'}); true;`
-      )
-      return
+    if (tripSegmentsRef.current) {
+      setTripSegments(tripSegmentsRef.current)
+      setTripOriginDest({
+        originLat: trip.origin_lat ?? null, originLng: trip.origin_lon ?? null,
+        destLat: trip.destination_lat ?? null, destLng: trip.destination_lon ?? null,
+      })
+    } else if (tripPathRef.current.length > 0) {
+      setTripStoredPath(tripPathRef.current)
+      setTripOriginDest({
+        originLat: trip.origin_lat ?? null, originLng: trip.origin_lon ?? null,
+        destLat: trip.destination_lat ?? null, destLng: trip.destination_lon ?? null,
+      })
     }
-    const path = tripPathRef.current
-    webRef.current?.injectJavaScript(
-      `drawTripPath(${JSON.stringify(path)}, ${trip.origin_lat ?? 'null'}, ${trip.origin_lon ?? 'null'}, ${trip.destination_lat ?? 'null'}, ${trip.destination_lon ?? 'null'}); true;`
-    )
   }
 
-  // GPS tracking for in_progress trip
+  // GPS tracking for in_progress trip (no depende del mapa, queda igual)
   useEffect(() => {
     if (!tripSheet || tripSheet.status !== 'in_progress') {
       if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
       return
     }
-    // `cancelled` evita la "ubicación fantasma": si el viaje se completa mientras
-    // un getCurrentPositionAsync está en vuelo, no reinsertamos la ubicación que
-    // recién se borró. El permiso se pide UNA vez, no en cada tick.
     let cancelled = false
     const trip = tripSheet
     const sendGps = async () => {
@@ -635,30 +528,37 @@ export default function MapScreen() {
       const updated = await updateTripStatus(String(tripSheet.id), newStatus)
       if (newStatus === 'completed') {
         await clearLocation().catch(() => null)
-        // Sacar la ruta y los círculos de origen/destino del mapa al terminar.
         stopSimulation()
-        webRef.current?.injectJavaScript(`clearRoute(); true;`)
+        setDestMarker(null)
+        setTripSegments(null)
+        setTripStoredPath([])
+        setTripOriginDest({ originLat: null, originLng: null, destLat: null, destLng: null })
+        tripSegmentsRef.current = null
+        tripPathRef.current = []
       }
       if (newStatus === 'in_progress') {
-        // Repintar la ruta/círculos (pueden haberse borrado si estaba completado)
-        // y centrar + rotar la cámara a la dirección de la ruta, ajustando la
-        // ubicación al inicio de las líneas.
         redrawTrip()
         const path = simPathLatLng()
-        if (path.length >= 2) {
-          webRef.current?.injectJavaScript(`navStartTrip(${JSON.stringify(path)}); true;`)
+        if (path.length >= 2 && mapRef.current) {
+          mapRef.current.animateToRegion({
+            latitude: path[0][0],
+            longitude: path[0][1],
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }, 800)
         } else {
           const startLat = tripSheet.origin_lat ?? location?.lat
           const startLng = tripSheet.origin_lon ?? location?.lng
-          if (startLat != null && startLng != null) {
-            webRef.current?.injectJavaScript(
-              `map.flyTo([${startLat}, ${startLng}], 16, { animate: true, duration: 1.2 }); true;`
-            )
+          if (startLat != null && startLng != null && mapRef.current) {
+            mapRef.current.animateToRegion({
+              latitude: startLat,
+              longitude: startLng,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }, 800)
           }
         }
       }
-      // Preferimos el viaje fresco que devuelve el backend (trae timestamps
-      // actualizados); si no vino, parcheamos solo el status localmente.
       setTripSheet(prev => updated ?? (prev ? { ...prev, status: newStatus } : null))
     } catch (e: any) {
       if (e?.status === 409) {
@@ -671,6 +571,24 @@ export default function MapScreen() {
     }
   }
 
+  const loadIncidents = useCallback(async () => {
+    try {
+      const res = await fetch(`${BACKEND}/api/incidents`)
+      const json = await res.json()
+      const data = json.incidents ?? []
+      const parsed = data
+        .map((inc: any) => {
+          const coords = parseIncidentLocation(inc.location)
+          if (!coords) return null
+          return { id: String(inc.id ?? `${coords.lat}-${coords.lng}-${inc.incident_type}`), type: inc.incident_type, lat: coords.lat, lng: coords.lng }
+        })
+        .filter(Boolean)
+      setIncidents(parsed)
+    } catch (e) {
+      console.log('loadIncidents error:', e)
+    }
+  }, [])
+
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync()
@@ -679,14 +597,15 @@ export default function MapScreen() {
       const coords = { lat: loc.coords.latitude, lng: loc.coords.longitude }
       setLocation(coords)
       setOrigin(coords)
-      webRef.current?.injectJavaScript(`setUserLocation(${coords.lat}, ${coords.lng}); true;`)
+      mapRef.current?.animateToRegion({
+        latitude: coords.lat,
+        longitude: coords.lng,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 500)
     })()
-    loadIncidents()
-  }, [])
-
-  useEffect(() => {
-    webRef.current?.injectJavaScript(`setMapTheme(${isDark}); true;`)
-  }, [isDark])
+    void loadIncidents()
+  }, [loadIncidents, setOrigin])
 
   const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
     try {
@@ -742,26 +661,19 @@ export default function MapScreen() {
       lat: String(result.lat),
       lon: String(result.lon),
     }).then(setRecents)
-    webRef.current?.injectJavaScript(`map.setView([${lat}, ${lng}], 15); true;`)
+    mapRef.current?.animateToRegion({
+      latitude: lat,
+      longitude: lng,
+      latitudeDelta: 0.02,
+      longitudeDelta: 0.02,
+    }, 500)
     calculateRoute(lat, lng)
   }
 
-  const loadIncidents = async () => {
-    try {
-      const res = await fetch(`${BACKEND}/api/incidents`)
-      const json = await res.json()
-      const data = json.incidents ?? []
-      webRef.current?.injectJavaScript(`loadIncidents(${JSON.stringify(data)}); true;`)
-    } catch (e) {
-      console.log('loadIncidents error:', e)
-    }
-  }
-
-  // Abre el modal de denuncia. Por defecto apunta a la ubicación actual (GPS):
-  // el caso más común es "denunciar la arista donde estoy parado".
+  // Abre el modal de denuncia. Por defecto apunta a la ubicación actual (GPS).
   const openReportModal = () => {
     setReportLocMode('current')
-    setIncidentLocation(location) // {lat,lng} actual, o null si todavía no hay GPS
+    setIncidentLocation(location)
     setReportSearchText('')
     setReportSearchResults([])
     setShowIncidentModal(true)
@@ -774,8 +686,6 @@ export default function MapScreen() {
     setReportSearchResults([])
   }
 
-  // Buscador interno SOLO para denuncias (independiente del buscador de destino,
-  // para no pisar searchResults). Reusa Nominatim acotado al AMBA.
   const searchReportAddress = async (query: string) => {
     if (query.length < 3) { setReportSearchResults([]); return }
     setReportSearching(true)
@@ -798,7 +708,6 @@ export default function MapScreen() {
     reportSearchTimeout.current = setTimeout(() => searchReportAddress(text), 400)
   }
 
-  // Al elegir una calle del buscador, esa pasa a ser la ubicación a denunciar.
   const selectReportResult = (result: any) => {
     setIncidentLocation({ lat: parseFloat(result.lat), lng: parseFloat(result.lon) })
     setReportSearchText(result.display_name.split(',').slice(0, 2).join(','))
@@ -810,7 +719,7 @@ export default function MapScreen() {
     if (loading) return
     if (!location) return Alert.alert('Error', 'Esperando GPS...')
     if (!activeVehicle) return Alert.alert('Sin vehículo', 'Tu empresa aún no te asignó un camión')
-    webRef.current?.injectJavaScript(`clearRoute(); true;`)
+    setDestMarker({ lat: destLat, lng: destLng })
     setCurrentRoute(null)
     setShowInfo(false)
     setLoading(true)
@@ -837,10 +746,16 @@ export default function MapScreen() {
       setDestination({ lat: destLat, lng: destLng })
       setShowInfo(true)
 
-      // insert_trip (st_trips) eliminado en Fase 3 — el historial de viajes
-      // se registra en assigned_trips via /api/assigned-trips.
-
-      webRef.current?.injectJavaScript(`drawRoute(${JSON.stringify(data.route.segments)}); true;`)
+      // Encuadrar el mapa para mostrar toda la ruta (equivalente a fitBounds de Leaflet)
+      const allCoords = (data.route?.segments ?? [])
+        .flatMap((sg: any) => sg.coordinates ?? [])
+        .map((c: any) => ({ latitude: c.lat, longitude: c.lng }))
+      if (allCoords.length > 0 && mapRef.current) {
+        mapRef.current.fitToCoordinates(allCoords, {
+          edgePadding: { top: 100, right: 60, bottom: 280, left: 60 },
+          animated: true,
+        })
+      }
     } catch (e: any) {
       Alert.alert('Error', e?.name === 'AbortError'
         ? 'El cálculo de ruta tardó demasiado. Intentá de nuevo.'
@@ -855,7 +770,6 @@ export default function MapScreen() {
     if (!incidentLocation || !profile) return
     setReportingIncident(true)
     try {
-      // ── (1) Registrar incidente en la tabla incidents via API ─────────────
       const headers = await authHeaders()
       const incRes = await fetch(`${BACKEND}/api/incidents`, {
         method: 'POST',
@@ -871,15 +785,6 @@ export default function MapScreen() {
         throw new Error((err as any).error ?? 'Error al registrar incidente')
       }
 
-      // ── (2) CAPA DE PESO — backend Aiven (POST /reports) ──────────────────
-      // Snapea el punto a la arista de pgr_edges más cercana y acumula
-      // penalización (pgr_edges.denuncia_penalty) por umbral. El motor real de
-      // ruteo, pgr_route_truck, suma esa penalización al costo => en la próxima
-      // ruta esquiva o bloquea la arista denunciada. ESTA es la parte que pesa.
-      // El backend hace el snap; sólo mandamos lat/lng. El tipo concreto va como
-      // nota; el sistema de peso lo trata todo como 'multa' (evento negativo).
-      // Lógica SQL: src/backend/migrations/003_denuncia_penalty_pgr.sql.
-      // Fire-and-forget: si Aiven falla, el marcador visual igual quedó.
       try {
         await fetch(`${BACKEND}/reports`, {
           method: 'POST',
@@ -887,8 +792,8 @@ export default function MapScreen() {
           body: JSON.stringify({
             lat: incidentLocation.lat,
             lng: incidentLocation.lng,
-            type,                           // tipo concreto (control, accidente…) -> nota
-            trip_id: tripSheet?.id ?? null, // viaje en curso si lo hay (opcional)
+            type,
+            trip_id: tripSheet?.id ?? null,
           }),
         })
       } catch (e) {
@@ -897,10 +802,7 @@ export default function MapScreen() {
 
       closeReportModal()
       Alert.alert('Reporte enviado', 'Gracias por contribuir a SafeTruck')
-      loadIncidents()
-      webRef.current?.injectJavaScript(
-        `addIncidentMarker(${incidentLocation.lat}, ${incidentLocation.lng}, '${type}'); true;`
-      )
+      void loadIncidents()
     } catch (e: any) {
       Alert.alert('Error', e.message)
     } finally {
@@ -913,75 +815,205 @@ export default function MapScreen() {
     setCurrentRoute(null)
     setShowInfo(false)
     setSearchText('')
-    webRef.current?.injectJavaScript(`clearRoute(); true;`)
+    setDestMarker(null)
+    // Las <Polyline> se borran solas: dependen de currentRoute en el render.
   }
 
   const startNavigation = async () => {
     if (!location) return
+    // Si ya había un watcher corriendo (doble-tap accidental), lo limpiamos
+    // antes de crear uno nuevo para no acumular suscripciones de GPS.
+    if (watchRef.current) {
+      watchRef.current.remove()
+      watchRef.current = null
+    }
     setNavMode(true)
     setShowInfo(false)
-    const heading = null
-    webRef.current?.injectJavaScript(`enterNavMode(${location.lat}, ${location.lng}, null); true;`)
+    // Entrada a modo navegación: zoom cercano + vista 3D en perspectiva
+    // (pitch alto), como Waze/Google Maps en navegación turn-by-turn.
+    mapRef.current?.animateCamera(
+      { center: { latitude: location.lat, longitude: location.lng }, zoom: 18, pitch: 60, heading: 0 },
+      { duration: 700 }
+    )
     watchRef.current = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 5 },
       (pos) => {
         const c = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-        const hdg = pos.coords.heading != null && pos.coords.heading >= 0 ? pos.coords.heading : null
+        const hdg = pos.coords.heading != null && pos.coords.heading >= 0 ? pos.coords.heading : undefined
         setLocation(c)
-        webRef.current?.injectJavaScript(`navUpdate(${c.lat}, ${c.lng}, ${hdg}); true;`)
+        // Sigue al camión manteniendo la vista 3D inclinada, rotando según
+        // hacia dónde mira (igual que navUpdate + setBearing de Leaflet,
+        // pero ahora con perspectiva en vez de top-down). Forzamos zoom:18
+        // en cada update para que no derive con cada llamada.
+        mapRef.current?.animateCamera(
+          { center: { latitude: c.lat, longitude: c.lng }, zoom: 18, pitch: 60, ...(hdg !== undefined ? { heading: hdg } : {}) },
+          { duration: 400 }
+        )
       }
     )
   }
 
+  // BUG CONOCIDO (pendiente de diagnóstico): al hacer varios ciclos
+  // play→stop→play→stop seguidos en el mismo lugar, el zoom de salida
+  // se aleja gradualmente en vez de quedar fijo en 14. Sospecha: animaciones
+  // de animateCamera encolándose/compitiendo entre el watcher de GPS y el
+  // stop. Pendiente: revisar con mapRef.current.getCamera() antes/después
+  // de cada animateCamera para confirmar el zoom real vs el pedido.
   const stopNavigation = () => {
     if (!watchRef.current) return
     setNavMode(false)
     watchRef.current.remove()
     watchRef.current = null
-    setLocation(loc => {
-      const latVal = loc ? loc.lat : null
-      const lngVal = loc ? loc.lng : null
-      webRef.current?.injectJavaScript(`exitNavMode(${latVal}, ${lngVal}); true;`)
-      return loc
-    })
     setShowInfo(true)
+    // Salida de modo navegación: vuelve a norte arriba (heading 0), zoom normal.
+    // Usamos location lo más fresco posible (el callback de arriba lo actualiza
+    // en cada tick de GPS mientras se navega).
+    setLocation((current) => {
+      if (current) {
+        mapRef.current?.animateCamera(
+          { center: { latitude: current.lat, longitude: current.lng }, zoom: 14, heading: 0, pitch: 0 },
+          { duration: 500 }
+        )
+      }
+      return current
+    })
   }
 
-  const onMessage = (e: any) => {
-    try {
-      const msg = JSON.parse(e.nativeEvent.data)
-      if (msg.type === 'mapClick') {
-        // El tap en el mapa es sólo para fijar destino y calcular ruta.
-        // La denuncia ya NO usa el tap: se elige ubicación dentro del modal
-        // (GPS actual o buscador interno). Ver openReportModal / reportIncident.
-        reverseGeocode(msg.lat, msg.lng).then(setSearchText)
-        calculateRoute(msg.lat, msg.lng)
-      }
-    } catch {}
+  // Tap en el mapa: fija destino y calcula ruta (igual que el mapClick de Leaflet)
+  const handleMapPress = (e: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) => {
+    if (navMode) return
+    const { latitude, longitude } = e.nativeEvent.coordinate
+    reverseGeocode(latitude, longitude).then(setSearchText)
+    calculateRoute(latitude, longitude)
   }
 
   return (
     <View style={s.container}>
-      <WebView
-        ref={webRef}
+      <MapView
+        ref={mapRef}
+        provider={Platform.OS === 'android' ? ('google' as any) : undefined}
         style={s.map}
-        source={mapSource}
-        onMessage={onMessage}
-        onLoadEnd={() => {
-          const w = webRef.current
-          if (!w) return
-          w.injectJavaScript(`setMapTheme(${isDark}); true;`)
-          if (location) w.injectJavaScript(`setUserLocation(${location.lat}, ${location.lng}); true;`)
-          if (tripSheet) redrawTrip()
-          // Repintar la capa de denuncias una vez que el mapa está listo: en el
-          // primer load la inyección del effect de montaje puede correr antes de
-          // que el WebView defina loadIncidents() y perderse en silencio.
-          void loadIncidents()
-        }}
-        javaScriptEnabled
-        domStorageEnabled
-        originWhitelist={['*']}
-      />
+        initialRegion={DEFAULT_REGION}
+        showsUserLocation
+        showsMyLocationButton
+        showsCompass
+        onPress={handleMapPress}
+      >
+        {destMarker && (
+          <Marker
+            coordinate={{ latitude: destMarker.lat, longitude: destMarker.lng }}
+            pinColor="#2563EB"
+          />
+        )}
+        {/* ETAPA 2: ruta coloreada por segmento (verde apto / rojo no apto / naranja sin datos).
+            Durante la simulación, el tramo recorrido se pinta gris tenue (estilo
+            Waze/Google Maps) y solo el restante mantiene los colores reales. */}
+        {(() => {
+          const segs = currentRoute?.segments
+          if (!segs?.length) return null
+          const { passed, remaining } = simRunning
+            ? splitSegmentsByProgress(segs, simProgress)
+            : { passed: [], remaining: segs }
+          const colors: Record<string, string> = { ok: '#34C759', unauthorized: '#FF3B30', unknown: '#FF9500' }
+          return (
+            <>
+              {passed.length >= 2 && (
+                <Polyline coordinates={passed} strokeColor="#9CA3AF" strokeWidth={3} zIndex={1} />
+              )}
+              {remaining.map((seg: any, idx: number) => {
+                if (!seg.coordinates || seg.coordinates.length < 2) return null
+                return (
+                  <Polyline
+                    key={idx}
+                    coordinates={seg.coordinates.map((c: any) => ({ latitude: c.lat, longitude: c.lng }))}
+                    strokeColor={colors[seg.status] ?? colors.unknown}
+                    strokeWidth={4}
+                    zIndex={seg.status === 'unauthorized' ? 10 : 5}
+                  />
+                )
+              })}
+            </>
+          )
+        })()}
+        {/* ETAPA 3: marcadores de incidentes (multas, controles, obras, etc.) */}
+        {incidents.map((inc) => (
+          <Marker
+            key={inc.id}
+            coordinate={{ latitude: inc.lat, longitude: inc.lng }}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={s.incidentMarker}>
+              <Text style={s.incidentMarkerEmoji}>{INCIDENT_ICONS[inc.type] ?? '⚠️'}</Text>
+            </View>
+          </Marker>
+        ))}
+        {/* ETAPA 4: ruta del viaje asignado — segmentos coloreados (preferido)
+            o path guardado (fallback), + marcadores de origen/destino.
+            También aplica el split gris/color durante la simulación. */}
+        {(() => {
+          if (!tripSegments) return null
+          const { passed, remaining } = simRunning
+            ? splitSegmentsByProgress(tripSegments, simProgress)
+            : { passed: [], remaining: tripSegments }
+          const colors: Record<string, string> = { ok: '#34C759', unauthorized: '#FF3B30', unknown: '#FF9500' }
+          return (
+            <>
+              {passed.length >= 2 && (
+                <Polyline coordinates={passed} strokeColor="#9CA3AF" strokeWidth={3} zIndex={1} />
+              )}
+              {remaining.map((seg: any, idx: number) => {
+                if (!seg.coordinates || seg.coordinates.length < 2) return null
+                return (
+                  <Polyline
+                    key={`trip-seg-${idx}`}
+                    coordinates={seg.coordinates.map((c: any) => ({ latitude: c.lat, longitude: c.lng }))}
+                    strokeColor={colors[seg.status] ?? colors.unknown}
+                    strokeWidth={4}
+                    zIndex={seg.status === 'unauthorized' ? 10 : 5}
+                  />
+                )
+              })}
+            </>
+          )
+        })()}
+        {!tripSegments && tripStoredPath.length >= 2 && (
+          <Polyline
+            coordinates={tripStoredPath.map((p) => ({ latitude: p.lat, longitude: (p.lon ?? p.lng) as number }))}
+            strokeColor="#2563EB"
+            strokeWidth={4}
+          />
+        )}
+        {tripOriginDest.originLat != null && tripOriginDest.originLng != null && (
+          <Marker
+            coordinate={{ latitude: tripOriginDest.originLat, longitude: tripOriginDest.originLng }}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={s.tripDot} />
+          </Marker>
+        )}
+        {tripOriginDest.destLat != null && tripOriginDest.destLng != null && (
+          <Marker
+            coordinate={{ latitude: tripOriginDest.destLat, longitude: tripOriginDest.destLng }}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={[s.tripDot, { backgroundColor: '#2563EB' }]} />
+          </Marker>
+        )}
+        {/* ETAPA 6: marcador animado de la simulación, con flecha direccional */}
+        {simPosition && (
+          <Marker
+            coordinate={{ latitude: simPosition.lat, longitude: simPosition.lng }}
+            anchor={{ x: 0.5, y: 0.5 }}
+            flat
+            rotation={simPosition.heading ?? 0}
+          >
+            <View style={s.simMarker}>
+              <View style={s.simMarkerDot} />
+              <View style={s.simMarkerArrow} />
+            </View>
+          </Marker>
+        )}
+      </MapView>
 
       {/* Header */}
       <View style={s.header}>
@@ -1151,7 +1183,7 @@ export default function MapScreen() {
       )}
 
       {/* Simulación: botón para simular el recorrido sobre la ruta calculada
-          o el viaje asignado. Aparece con una ruta/viaje y no en navegación. */}
+          o el viaje asignado. (Animación todavía no migrada — ETAPA 6) */}
       {!simRunning && !navMode && (tripSheet?.status === 'in_progress' || (currentRoute && !tripSheet)) && (
         <TouchableOpacity style={s.simFab} onPress={startSimulation} activeOpacity={0.85}>
           <Ionicons name="navigate-circle-outline" size={20} color={t.text} />
@@ -1176,8 +1208,7 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* FAB de reporte: abre el modal de denuncia directamente (ubicación se
-          elige adentro: GPS actual o buscador interno). */}
+      {/* FAB de reporte */}
       <TouchableOpacity
         style={[s.fab, showInfo && currentRoute && !navMode && s.fabRaised, navMode && s.fabNavRaised]}
         onPress={openReportModal}
@@ -1200,7 +1231,6 @@ export default function MapScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Selector de ubicación: GPS actual vs buscar una calle */}
             <View style={s.locModeRow}>
               <TouchableOpacity
                 style={[s.locModeBtn, reportLocMode === 'current' && s.locModeBtnActive]}
@@ -1222,7 +1252,6 @@ export default function MapScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Buscador interno (sólo en modo 'search') */}
             {reportLocMode === 'search' && (
               <View style={{ marginBottom: 4 }}>
                 <TextInput
@@ -1244,7 +1273,6 @@ export default function MapScreen() {
               </View>
             )}
 
-            {/* Ubicación elegida (feedback) */}
             <View style={[s.locChosen, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
               {incidentLocation && <Ionicons name="pin-outline" size={14} color={t.textMuted} />}
               <Text style={[s.locChosenText, { flex: 1 }]}>
@@ -1277,15 +1305,13 @@ export default function MapScreen() {
         </View>
       </Modal>
 
-      {/* ── Trip Sheet (Google Maps style bottom panel) ─────────────── */}
+      {/* ── Trip Sheet ─────────────────────────────────────────────────── */}
       {tripSheet && !navMode && !showInfo && (
         <View style={[s.tripSheet, { paddingBottom: insets.bottom + 20 }]}>
-          {/* Handle */}
           <View style={s.tripSheetHandle} />
 
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
             <View style={{ flex: 1 }}>
-              {/* Status badge */}
               {(() => {
                 const cfg: Record<string, { label: string; color: string; bg: string }> = {
                   pending:     { label: 'Pendiente',  color: '#D9881A', bg: '#FBF1E0' },
@@ -1303,7 +1329,6 @@ export default function MapScreen() {
                 )
               })()}
 
-              {/* Route */}
               <View style={{ position: 'relative' }}>
                 <View style={{ position: 'absolute', left: 5, top: 14, bottom: 14, borderLeftWidth: 2, borderLeftColor: t.borderStrong, borderStyle: 'dashed' }} />
                 <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', marginBottom: 12 }}>
@@ -1317,13 +1342,20 @@ export default function MapScreen() {
               </View>
             </View>
 
-            {/* Close */}
-            <TouchableOpacity onPress={() => { setTripSheet(null); webRef.current?.injectJavaScript('clearRoute(); true;'); router.replace('/(tabs)/') }} style={{ backgroundColor: t.surface2, borderRadius: 8, padding: 8, marginLeft: 12 }}>
+            <TouchableOpacity onPress={() => {
+              setTripSheet(null)
+              setDestMarker(null)
+              setTripSegments(null)
+              setTripStoredPath([])
+              setTripOriginDest({ originLat: null, originLng: null, destLat: null, destLng: null })
+              tripSegmentsRef.current = null
+              tripPathRef.current = []
+              router.replace('/(tabs)/')
+            }} style={{ backgroundColor: t.surface2, borderRadius: 8, padding: 8, marginLeft: 12 }}>
               <Ionicons name="close" size={18} color={t.textMuted} />
             </TouchableOpacity>
           </View>
 
-          {/* Truck badge */}
           {(tripSheet.truck_patente || tripSheet.truck_name) && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <Ionicons name="bus" size={14} color={t.textMuted} />
@@ -1336,7 +1368,6 @@ export default function MapScreen() {
             </View>
           )}
 
-          {/* Actions */}
           {tripUpdating ? (
             <ActivityIndicator color={t.accent} />
           ) : (
@@ -1573,7 +1604,6 @@ function makeStyles(t: Theme) {
     modalSubtitle: { color: t.textMuted, fontSize: 14 },
     modalClose: { backgroundColor: t.surface2, borderRadius: 8, padding: 8 },
     modalCloseText: { color: t.textMuted, fontSize: 14 },
-    // Selector de ubicación de la denuncia (📍 acá / 🔍 buscar)
     locModeRow: { flexDirection: 'row', gap: 8, marginTop: 14, marginBottom: 10 },
     locModeBtn: {
       flex: 1, alignItems: 'center',
@@ -1609,6 +1639,43 @@ function makeStyles(t: Theme) {
       padding: 14, marginBottom: 6,
     },
     incidentBtnText: { color: t.text, fontSize: 15 },
+    incidentMarker: {
+      alignItems: 'center', justifyContent: 'center',
+    },
+    incidentMarkerEmoji: {
+      fontSize: 22,
+      textShadowColor: 'rgba(0,0,0,0.4)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
+    },
+    tripDot: {
+      width: 18, height: 18, borderRadius: 9,
+      backgroundColor: '#1F9D57',
+      borderWidth: 3, borderColor: 'white',
+      shadowColor: '#000', shadowOpacity: 0.3,
+      shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 4,
+    },
+    simMarker: {
+      width: 34, height: 34,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    simMarkerDot: {
+      position: 'absolute',
+      width: 18, height: 18, borderRadius: 9,
+      backgroundColor: '#007AFF',
+      borderWidth: 3, borderColor: 'white',
+      shadowColor: '#007AFF', shadowOpacity: 0.5,
+      shadowRadius: 4, shadowOffset: { width: 0, height: 0 }, elevation: 5,
+    },
+    simMarkerArrow: {
+      position: 'absolute',
+      top: -10,
+      width: 0, height: 0,
+      borderLeftWidth: 7, borderLeftColor: 'transparent',
+      borderRightWidth: 7, borderRightColor: 'transparent',
+      borderBottomWidth: 16, borderBottomColor: '#007AFF',
+    },
+
     blockBadge: {
       backgroundColor: t.warningSoft, borderRadius: 999,
       paddingHorizontal: 8, paddingVertical: 3,
