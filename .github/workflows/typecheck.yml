@@ -1,0 +1,39 @@
+name: Typecheck
+
+# Red de seguridad mínima: corre tsc --noEmit en los tres proyectos
+# (raíz/app móvil, backend Express y frontend web) en cada PR y push a main.
+# No compila ni despliega, solo valida tipos para frenar regresiones.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── Raíz: app móvil (Expo) + backend comparten este node_modules ──
+      - name: Install (raíz)
+        run: npm ci || npm ci --legacy-peer-deps
+
+      - name: Typecheck raíz
+        run: npx tsc -p tsconfig.json --noEmit
+
+      - name: Typecheck backend
+        run: npx tsc -p src/backend/tsconfig.json --noEmit
+
+      # ── Frontend web (Vite) tiene su propio node_modules ──
+      - name: Install (frontend)
+        working-directory: frontend
+        run: npm ci || npm ci --legacy-peer-deps
+
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npx tsc --noEmit
