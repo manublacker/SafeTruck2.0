@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { authMiddleware } from '../middleware/authMiddleware'
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription'
 import pool from '../db'
+import { broadcastToCompany, resolveCompany } from '../realtime/hub'
 
 const router = Router()
 router.use(authMiddleware)
@@ -44,6 +45,25 @@ router.post('/', async (req: Request, res: Response) => {
       [driverUserId, trip_id ?? null, driver_name ?? null, truck_plate ?? null, lat, lng]
     )
     res.json({ success: true })
+
+    // Tiempo real: empujamos la ubicación a los admins de la empresa conectados
+    // por WebSocket, para que el mapa web se mueva sin esperar al polling.
+    // Best-effort y DESPUÉS de responder: si el broadcast falla, el guardado y
+    // la respuesta ya quedaron OK (el polling sigue como respaldo).
+    try {
+      const { companyId } = await resolveCompany(driverUserId)
+      broadcastToCompany(companyId, {
+        type: 'driver_location',
+        location: {
+          driver_app_user_id: driverUserId,
+          driver_name: driver_name ?? null,
+          truck_plate: truck_plate ?? null,
+          lat,
+          lng,
+          updated_at: new Date().toISOString(),
+        },
+      }, { role: 'admin' })
+    } catch { /* broadcast best-effort */ }
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -58,6 +78,17 @@ router.delete('/', async (req: Request, res: Response) => {
       [driverUserId]
     )
     res.json({ success: true })
+
+    // Avisamos a los admins que este chofer se desconectó, para que la web
+    // saque su marcador del mapa al instante (sin esperar a que expire por el
+    // filtro de 5 minutos del GET).
+    try {
+      const { companyId } = await resolveCompany(driverUserId)
+      broadcastToCompany(companyId, {
+        type: 'driver_location_removed',
+        driver_app_user_id: driverUserId,
+      }, { role: 'admin' })
+    } catch { /* broadcast best-effort */ }
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

@@ -50,6 +50,7 @@ function leaveRoom(client: Client): void {
 export interface BroadcastOptions {
   role?: Role       // enviar solo a las conexiones de este rol dentro de la empresa
   exclude?: string  // excluir a este userId (ej: el que originó el evento)
+  only?: string     // enviar SOLO a las conexiones de este userId (ej: el chofer asignado)
 }
 
 /**
@@ -68,6 +69,7 @@ export function broadcastToCompany(
   for (const client of set) {
     if (opts.role && client.role !== opts.role) continue
     if (opts.exclude && client.userId === opts.exclude) continue
+    if (opts.only && client.userId !== opts.only) continue
     if (client.ws.readyState === WebSocket.OPEN) client.ws.send(payload)
   }
 }
@@ -77,7 +79,7 @@ export function broadcastToCompany(
  * tabla drivers: un chofer está vinculado a un admin (drivers.user_id); si
  * el usuario no aparece como chofer activo, asumimos que ES el admin.
  */
-async function resolveCompany(userId: string): Promise<{ companyId: string; role: Role }> {
+export async function resolveCompany(userId: string): Promise<{ companyId: string; role: Role }> {
   const r = await pool.query<{ user_id: string }>(
     'SELECT user_id FROM drivers WHERE app_user_id = $1 AND is_active = true LIMIT 1',
     [userId],
