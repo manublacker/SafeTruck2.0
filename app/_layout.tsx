@@ -110,6 +110,14 @@ export default function RootLayout() {
       }
       setReady(true)
     })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setProfile(null)
+        setNeedsCompletion(false)
+      }
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
   if (!ready) return null
@@ -134,7 +142,11 @@ export default function RootLayout() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="auth" />
+        <Stack.Screen name="auth/login" />
+        <Stack.Screen name="auth/register" />
+        <Stack.Screen name="auth/forgot-password" />
+        <Stack.Screen name="auth/reset-password" />
+        <Stack.Screen name="landing" />
       </Stack>
     </>
   )

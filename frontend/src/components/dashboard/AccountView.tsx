@@ -4,13 +4,6 @@ import { supabase } from "@/lib/supabase";
 import { confirmCheckout } from "@/services/api";
 import type { AdminPage } from "./AdminSidebar";
 
-interface Subscription {
-  plan: string;
-  status: string;
-  current_period_end: string | null;
-  mp_payer_id?: string | null;
-}
-
 interface Props {
   onNavigate: (page: AdminPage) => void;
   billingSuccess?: boolean;
@@ -67,14 +60,8 @@ export default function AccountView({ onNavigate, billingSuccess }: Props) {
 
   return (
     <div style={{ padding: 24, height: "100%", background: "var(--c-bg)", overflowY: "auto" }}>
-      <div style={{ marginBottom: 24 }}>
-        <p className="st-section-eyebrow">Configuración</p>
-        <h2 className="st-section-title">
-          Mi cuenta
-        </h2>
-      </div>
-
-      <div style={{ maxWidth: 640, display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ maxWidth: 800, margin: "0 auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
         {/* Perfil */}
         <section>
@@ -157,6 +144,7 @@ export default function AccountView({ onNavigate, billingSuccess }: Props) {
           )}
         </section>
 
+      </div>
       </div>
     </div>
   );

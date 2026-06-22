@@ -2,12 +2,30 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useAuth } from "@/contexts/AuthContext";
-import { calculateRoute } from "@/services/api";
 import { searchLocations, geocodeLocation, type GeoSuggestion } from "@/services/geocoding";
-import type { RouteResponse, RouteNode } from "@/types/route";
+
+const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
 const DEFAULT_CENTER: L.LatLngTuple = [-34.6037, -58.3816];
 const DEFAULT_ZOOM = 11;
+
+const SEG_COLORS = { ok: "#34C759", unauthorized: "#FF3B30", unknown: "#FF9500" };
+
+interface AivenSegment {
+  id: string;
+  street_name: string;
+  municipality: string;
+  coordinates: { lat: number; lng: number }[];
+  status: "ok" | "unauthorized" | "unknown";
+}
+
+interface AivenRoute {
+  segments: AivenSegment[];
+  total_distance_km: number;
+  total_duration_min: number;
+  has_unauthorized: boolean;
+  has_unknown: boolean;
+}
 
 function createMarkerIcon(color: string) {
   return L.divIcon({
@@ -18,24 +36,27 @@ function createMarkerIcon(color: string) {
   });
 }
 
-function haversineM(a: RouteNode, b: RouteNode) {
+function haversineM(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
   const R = 6_371_000;
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
-  const dLon = toRad(b.lon - a.lon);
+  const dLon = toRad(b.lng - a.lng);
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.asin(Math.sqrt(h));
 }
 
-function buildStreets(path: RouteNode[]): { calle: string; distM: number }[] {
+function buildStreets(segments: AivenSegment[]): { calle: string; distM: number }[] {
   const out: { calle: string; distM: number }[] = [];
   let cur: string | null = null;
   let acc = 0;
-  for (let i = 0; i < path.length - 1; i++) {
-    const calle = path[i].label || "Calle sin nombre";
-    const d = haversineM(path[i], path[i + 1]);
-    if (calle === cur) { acc += d; }
-    else { if (cur) out.push({ calle: cur, distM: acc }); cur = calle; acc = d; }
+  for (const seg of segments) {
+    const calle = seg.street_name || "Calle sin nombre";
+    let segDist = 0;
+    for (let i = 0; i < seg.coordinates.length - 1; i++) {
+      segDist += haversineM(seg.coordinates[i], seg.coordinates[i + 1]);
+    }
+    if (calle === cur) { acc += segDist; }
+    else { if (cur) out.push({ calle: cur, distM: acc }); cur = calle; acc = segDist; }
   }
   if (cur) out.push({ calle: cur, distM: acc });
   return out.filter((s) => s.distM >= 10);
@@ -62,28 +83,26 @@ export default function LiveMapView() {
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef          = useRef<L.Map | null>(null);
-  const polylineRef     = useRef<L.Polyline | null>(null);
+  const polylinesRef    = useRef<L.Polyline[]>([]);
   const markerRef       = useRef<L.Marker | null>(null);
 
   const [origin, setOrigin]           = useState<Field>(emptyField());
   const [destination, setDestination] = useState<Field>(emptyField());
 
-  // Camión seleccionado (id) o "custom"
   const [truckId, setTruckId] = useState<number | "custom">(trucks[0]?.id ?? "custom");
   const truck = trucks.find((t) => t.id === truckId);
 
-  // Dimensiones manuales (usadas cuando no hay camión seleccionado)
   const [weight, setWeight] = useState(trucks[0]?.max_weight_kg ?? 12000);
-  const [height, setHeight] = useState(trucks[0]?.max_height_m  ?? 4.1);
+  const [height, setHeight] = useState(trucks[0]?.max_height_m  ?? 4.0);
   const [width,  setWidth]  = useState(trucks[0]?.max_width_m   ?? 2.5);
   const [length, setLength] = useState(trucks[0]?.max_length_m  ?? 12);
 
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
 
-  const [loading, setLoading] = useState(false);
-  const [result,  setResult]  = useState<RouteResponse | null>(null);
-  const [error,   setError]   = useState("");
+  const [loading,    setLoading]    = useState(false);
+  const [aivenRoute, setAivenRoute] = useState<AivenRoute | null>(null);
+  const [error,      setError]      = useState("");
 
   const originTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const destTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -102,25 +121,39 @@ export default function LiveMapView() {
     return () => { window.removeEventListener("resize", onResize); map.remove(); mapRef.current = null; };
   }, []);
 
-  // Dibujar ruta
+  // Dibujar ruta con colores por segmento
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    polylineRef.current?.remove();
+
+    polylinesRef.current.forEach((p) => p.remove());
+    polylinesRef.current = [];
     markerRef.current?.remove();
-    polylineRef.current = null;
-    markerRef.current   = null;
-    if (!result?.found || !result.path.length) return;
-    const latLngs = result.path.map((p): L.LatLngTuple => [p.lat, p.lon]);
-    const dest    = result.path[result.path.length - 1];
-    polylineRef.current = L.polyline(latLngs, {
-      color: "#e53935", weight: 5, opacity: 0.9, lineCap: "round", lineJoin: "round",
-    }).addTo(map);
-    markerRef.current = L.marker([dest.lat, dest.lon], {
-      icon: createMarkerIcon("#e53935"), title: dest.label,
-    }).addTo(map).bindPopup(`<strong>Destino</strong><br/>${dest.label}`);
-    map.fitBounds(polylineRef.current.getBounds(), { padding: [48, 48], maxZoom: 15 });
-  }, [result]);
+    markerRef.current = null;
+
+    if (!aivenRoute?.segments.length) return;
+
+    const allLatLngs: L.LatLngTuple[] = [];
+
+    for (const seg of aivenRoute.segments) {
+      const latLngs: L.LatLngTuple[] = seg.coordinates.map((c) => [c.lat, c.lng]);
+      if (latLngs.length < 2) continue;
+      allLatLngs.push(...latLngs);
+      const poly = L.polyline(latLngs, {
+        color: SEG_COLORS[seg.status] ?? SEG_COLORS.unknown,
+        weight: 5, opacity: 0.9, lineCap: "round", lineJoin: "round",
+      }).addTo(map);
+      polylinesRef.current.push(poly);
+    }
+
+    if (allLatLngs.length) {
+      const dest = allLatLngs[allLatLngs.length - 1];
+      markerRef.current = L.marker(dest, {
+        icon: createMarkerIcon("#0d47a1"),
+      }).addTo(map);
+      map.fitBounds(L.latLngBounds(allLatLngs), { padding: [48, 48], maxZoom: 15 });
+    }
+  }, [aivenRoute]);
 
   // Autocomplete
   function handleInput(
@@ -161,31 +194,31 @@ export default function LiveMapView() {
     setWidth(t.max_width_m);   setLength(t.max_length_m);
   }
 
-  const vehicle = {
-    maxWeightKg: truck?.max_weight_kg ?? weight,
-    maxHeightM:  truck?.max_height_m  ?? height,
-    maxWidthM:   truck?.max_width_m   ?? width,
-    maxLengthM:  truck?.max_length_m  ?? length,
-  };
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(""); setResult(null);
+    setError(""); setAivenRoute(null);
     setLoading(true);
     try {
       const [o, d] = await Promise.all([
         resolveField(origin, setOrigin),
         resolveField(destination, setDestination),
       ]);
-      const res = await calculateRoute({
-        originLabel: o.label, destinationLabel: d.label,
-        origin: { lat: o.lat, lon: o.lon },
-        destination: { lat: d.lat, lon: d.lon },
-        vehicle,
-        routingOptions: { avoidTolls: true, preferHighways: true },
+      const res = await fetch(`${BASE_URL}/route`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          origin:      { lat: o.lat, lng: o.lon },
+          destination: { lat: d.lat, lng: d.lon },
+          vehicle: {
+            weight_kg: truck?.max_weight_kg ?? weight,
+            height_m:  truck?.max_height_m  ?? height,
+            width_m:   truck?.max_width_m   ?? width,
+          },
+        }),
       });
-      setResult(res);
-      if (!res.found) setError(res.routeSummary || "No se encontró una ruta compatible.");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error ?? "No se encontró una ruta compatible.");
+      setAivenRoute(data.route);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al calcular la ruta.");
     } finally {
@@ -193,7 +226,13 @@ export default function LiveMapView() {
     }
   }
 
-  const streets = result?.found && result.path.length ? buildStreets(result.path) : [];
+  const streets = aivenRoute ? buildStreets(aivenRoute.segments) : [];
+  const warnings: string[] = aivenRoute
+    ? [
+        ...(aivenRoute.has_unauthorized ? ["La ruta incluye tramos no habilitados para vehículos pesados."] : []),
+        ...(aivenRoute.has_unknown      ? ["Algunos tramos no tienen datos de habilitación."] : []),
+      ]
+    : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -308,7 +347,7 @@ export default function LiveMapView() {
         <div style={{ flex: 1, padding: "20px 24px 20px 20px", overflowY: "auto" }}>
           <h2 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0d0d0d", margin: "0 0 16px" }}>Resultado</h2>
 
-          {!result && !error && !loading && (
+          {!aivenRoute && !error && !loading && (
             <p style={{ color: "#9ca3af", fontSize: "0.88rem" }}>
               Completá origen y destino para ver la ruta.
             </p>
@@ -324,22 +363,28 @@ export default function LiveMapView() {
             </div>
           )}
 
-          {result?.found && (
+          {aivenRoute && (
             <>
               <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
                 <div style={statBox}>
                   <span style={statLabel}>Distancia</span>
-                  <span style={statValue}>{fmtDist(result.distanceM)}</span>
+                  <span style={statValue}>{fmtDist(aivenRoute.total_distance_km * 1000)}</span>
                 </div>
                 <div style={statBox}>
                   <span style={statLabel}>Duración</span>
-                  <span style={statValue}>{result.estimatedDurationMin} min</span>
+                  <span style={statValue}>{aivenRoute.total_duration_min} min</span>
                 </div>
               </div>
 
-              <p style={{ fontSize: "0.82rem", color: "#6b7280", marginBottom: 12 }}>
-                {result.routeSummary}
-              </p>
+              {/* Leyenda */}
+              <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+                {(["ok", "unauthorized", "unknown"] as const).map((s) => (
+                  <div key={s} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.75rem", color: "#6b7280" }}>
+                    <div style={{ width: 12, height: 12, borderRadius: 2, background: SEG_COLORS[s], flexShrink: 0 }} />
+                    {s === "ok" ? "Habilitada" : s === "unauthorized" ? "No habilitada" : "Sin datos"}
+                  </div>
+                ))}
+              </div>
 
               {streets.length > 0 && (
                 <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -357,9 +402,9 @@ export default function LiveMapView() {
                 </ul>
               )}
 
-              {result.warnings?.length > 0 && (
+              {warnings.length > 0 && (
                 <div style={{ marginTop: 12 }}>
-                  {result.warnings.map((w, i) => (
+                  {warnings.map((w, i) => (
                     <p key={i} style={{ fontSize: "0.78rem", color: "#f97316", margin: "4px 0" }}>⚠ {w}</p>
                   ))}
                 </div>

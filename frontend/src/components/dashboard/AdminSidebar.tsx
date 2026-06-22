@@ -3,7 +3,7 @@ import { Icons } from "./DashboardIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import safeTruckLogo from "@/assets/logo_safetruck.png";
 
-export type AdminPage = "map" | "fleet" | "trips" | "account" | "plans";
+export type AdminPage = "map" | "fleet" | "fleet-trucks" | "fleet-drivers" | "trips" | "account" | "plans";
 
 interface Props {
   page: AdminPage;
@@ -115,7 +115,7 @@ export default function AdminSidebar({ page, setPage, collapsed }: Props) {
                   {user.full_name}
                 </div>
                 <div className="st-sidebar-user-role" style={{ textTransform: "capitalize" }}>
-                  Plan {plan ?? "starter"}
+                  {plan ? `Plan ${plan}` : "Sin plan"}
                 </div>
               </div>
               <span

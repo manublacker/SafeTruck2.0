@@ -115,20 +115,6 @@ export default function TripHistoryView() {
 
   return (
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
-          <div className="st-section-eyebrow">Operaciones</div>
-          <h2 className="st-section-title">Historial de viajes</h2>
-        </div>
-        <button
-          className="st-btn-secondary"
-          onClick={() => void loadTrips()}
-          disabled={loading}
-        >
-          {loading ? "Actualizando…" : "Actualizar"}
-        </button>
-      </div>
-
       {/* Filtros */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
         <div style={{ minWidth: 200 }}>
@@ -168,6 +154,15 @@ export default function TripHistoryView() {
             Restablecer
           </button>
         )}
+        <div style={{ marginLeft: "auto" }}>
+          <button
+            className="st-btn-secondary"
+            onClick={() => void loadTrips()}
+            disabled={loading}
+          >
+            {loading ? "Actualizando…" : "Actualizar"}
+          </button>
+        </div>
       </div>
 
       {error && (

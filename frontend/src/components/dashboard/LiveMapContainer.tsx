@@ -134,7 +134,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
           overflowY: "auto",
         }}
       >
-        {blocking ? (
+        {fleetLoading ? null : blocking ? (
           <EmptyStateManager
             hasTrucks={hasTrucks}
             hasAvailableDrivers={hasAvailableDrivers}
@@ -165,7 +165,6 @@ export default function LiveMapContainer({ onNavigate }: Props) {
 
             {/* Viajes activos (lectura) */}
             <section style={{ borderTop: "1px solid #f0f0f0", paddingTop: 20 }}>
-              <p className="st-section-eyebrow" style={{ marginBottom: 4 }}>Operaciones</p>
               <h2 className="st-section-title" style={{ marginBottom: 14 }}>Viajes activos</h2>
               <UpcomingTripsPanel trips={assignedTrips} loading={tripsLoading} />
             </section>

@@ -128,7 +128,11 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <Image source={require('../../camion_padding.png')} style={s.logo} resizeMode="contain" />
+        <Image
+          source={isDark ? require('../../camion_padding.png') : require('../../logo-DARK.png')}
+          style={s.logo}
+          resizeMode="contain"
+        />
 
         {/* Progress */}
         <View style={s.progressRow}>
@@ -259,16 +263,9 @@ function OtpStep({
         autoFocus
       />
 
-      {/* Indicador de progreso */}
       <View style={s.otpDotsRow}>
         {Array.from({ length: OTP_LENGTH }).map((_, i) => (
-          <View
-            key={i}
-            style={[
-              s.otpDot,
-              i < code.length && s.otpDotFilled,
-            ]}
-          />
+          <View key={i} style={[s.otpDot, i < code.length && s.otpDotFilled]} />
         ))}
       </View>
 

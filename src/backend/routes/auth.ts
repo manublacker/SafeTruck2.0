@@ -32,23 +32,22 @@ router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
 
   const full_name = (req.body?.full_name ?? meta["full_name"] ?? null) as string | null;
   const company = (req.body?.company ?? meta["company"] ?? null) as string | null;
+  const role = (meta["role"] as string | undefined) ?? "admin";
 
-  // Sincronizar usuario en Aiven (FK requerida por trucks y drivers).
-  // ON CONFLICT DO UPDATE para mantener email/nombre actualizados.
+  // Sincronizar usuario en Supabase public.users (FK requerida por trucks y drivers).
   try {
     await pool.query(
-      `INSERT INTO users (id, email, full_name, company)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO users (id, email, full_name, company, role)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (id) DO UPDATE
          SET email     = EXCLUDED.email,
              full_name = COALESCE(EXCLUDED.full_name, users.full_name),
-             company   = COALESCE(EXCLUDED.company,   users.company)`,
-      [user.id, user.email, full_name, company]
+             company   = COALESCE(EXCLUDED.company,   users.company),
+             role      = EXCLUDED.role`,
+      [user.id, user.email, full_name, company, role]
     );
   } catch (err) {
-    // No bloqueante: si falla, el usuario igual puede operar.
-    // El error más común aquí sería que la tabla no exista en Aiven.
-    console.error("[auth/profile] Error sincronizando usuario en Aiven:", err);
+    console.error("[auth/profile] Error sincronizando usuario:", err);
   }
 
   // Garantizar que existe una fila en profiles para este usuario.
@@ -95,7 +94,7 @@ router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
       full_name,
       company,
       plan,
-      role: (meta["role"] as string | undefined) ?? "admin",
+      role,
       trucks: [],
     },
   });

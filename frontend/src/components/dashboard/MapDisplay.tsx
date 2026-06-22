@@ -6,6 +6,13 @@ import type { RouteResponse } from "@/types/route";
 const DEFAULT_CENTER: L.LatLngTuple = [-34.6037, -58.3816];
 const DEFAULT_ZOOM = 11;
 const ROUTE_COLOR = "#e53935";
+// Coloreado por aptitud del tramo para el camión (mismo criterio que el motor
+// de Aiven y que la app mobile): apto / no apto / sin datos.
+const ROUTE_COLORS: Record<string, string> = {
+  ok:           "#16a34a", // verde — apto
+  unauthorized: "#e53935", // rojo  — no apto
+  unknown:      "#f59e0b", // naranja — sin datos
+};
 const ROUTE_WEIGHT = 5;
 const ROUTE_OPACITY = 0.9;
 const FIT_PADDING: L.PointTuple = [48, 48];
@@ -72,8 +79,9 @@ function buildOriginIcon(): L.DivIcon {
 export default function MapDisplay({ routeResponse, driverLocations = [], originPin, destinationPin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const polylineRef = useRef<L.Polyline | null>(null);
+  const routeLayersRef = useRef<L.Polyline[]>([]);
   const markerRef = useRef<L.Marker | null>(null);
+  const originMarkerRef = useRef<L.Marker | null>(null);
   const originPinRef = useRef<L.Marker | null>(null);
   const destPinRef = useRef<L.Marker | null>(null);
   const driverMarkersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -108,8 +116,9 @@ export default function MapDisplay({ routeResponse, driverLocations = [], origin
       window.clearTimeout(invalidateTimer);
       map.remove();
       mapRef.current = null;
-      polylineRef.current = null;
+      routeLayersRef.current = [];
       markerRef.current = null;
+      originMarkerRef.current = null;
       driverMarkersRef.current.clear();
     };
   }, []);
@@ -190,39 +199,58 @@ export default function MapDisplay({ routeResponse, driverLocations = [], origin
     const map = mapRef.current;
     if (!map) return;
 
-    clearRouteLayers(polylineRef, markerRef);
+    clearRouteLayers(routeLayersRef, markerRef, originMarkerRef);
     // Los pins de preview se reemplazan con la ruta real
     originPinRef.current?.remove(); originPinRef.current = null;
     destPinRef.current?.remove();   destPinRef.current = null;
 
     if (!routeResponse?.found || routeResponse.path.length === 0) return;
 
-    const latLngs = routeResponse.path.map(
-      (p): L.LatLngTuple => [p.lat, p.lon],
-    );
-    const destination = routeResponse.path[routeResponse.path.length - 1];
+    const path = routeResponse.path;
+    const origin = path[0];
+    const destination = path[path.length - 1];
+    const allPoints: L.LatLngTuple[] = [];
 
-    const polyline = L.polyline(latLngs, {
-      color: ROUTE_COLOR,
-      weight: ROUTE_WEIGHT,
-      opacity: ROUTE_OPACITY,
-      lineCap: "round",
-      lineJoin: "round",
-    }).addTo(map);
-    polylineRef.current = polyline;
+    // Un polyline por tramo (nodo[i] → nodo[i+1]), coloreado por la aptitud de
+    // ese tramo para el camión. Antes era una sola línea roja fija.
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i];
+      const b = path[i + 1];
+      const seg: L.LatLngTuple[] = [[a.lat, a.lon], [b.lat, b.lon]];
+      const status = a.status ?? "unknown";
+      const polyline = L.polyline(seg, {
+        color: ROUTE_COLORS[status] ?? ROUTE_COLORS.unknown,
+        weight: ROUTE_WEIGHT,
+        opacity: ROUTE_OPACITY,
+        lineCap: "round",
+        lineJoin: "round",
+        dashArray: status === "unauthorized" ? "10,8" : undefined,
+      }).addTo(map);
+      routeLayersRef.current.push(polyline);
+      allPoints.push([a.lat, a.lon], [b.lat, b.lon]);
+    }
 
-    const marker = L.marker([destination.lat, destination.lon], {
+    // Origen (verde) y destino (rojo).
+    originMarkerRef.current = L.marker([origin.lat, origin.lon], {
+      icon: buildOriginIcon(),
+      title: origin.label,
+    })
+      .addTo(map)
+      .bindPopup(`<strong>Origen</strong><br/>${origin.label}`);
+
+    markerRef.current = L.marker([destination.lat, destination.lon], {
       icon: buildDestinationIcon(),
       title: destination.label,
     })
       .addTo(map)
       .bindPopup(`<strong>Destino</strong><br/>${destination.label}`);
-    markerRef.current = marker;
 
-    map.fitBounds(polyline.getBounds(), {
-      padding: FIT_PADDING,
-      maxZoom: FIT_MAX_ZOOM,
-    });
+    if (allPoints.length > 0) {
+      map.fitBounds(L.latLngBounds(allPoints), {
+        padding: FIT_PADDING,
+        maxZoom: FIT_MAX_ZOOM,
+      });
+    }
   }, [routeResponse]);
 
   return (
@@ -235,11 +263,14 @@ export default function MapDisplay({ routeResponse, driverLocations = [], origin
 }
 
 function clearRouteLayers(
-  polylineRef: React.MutableRefObject<L.Polyline | null>,
+  routeLayersRef: React.MutableRefObject<L.Polyline[]>,
   markerRef: React.MutableRefObject<L.Marker | null>,
+  originMarkerRef: React.MutableRefObject<L.Marker | null>,
 ) {
-  polylineRef.current?.remove();
+  routeLayersRef.current.forEach((l) => l.remove());
+  routeLayersRef.current = [];
   markerRef.current?.remove();
-  polylineRef.current = null;
   markerRef.current = null;
+  originMarkerRef.current?.remove();
+  originMarkerRef.current = null;
 }

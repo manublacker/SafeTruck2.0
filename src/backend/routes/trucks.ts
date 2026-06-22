@@ -325,8 +325,8 @@ router.post('/bulk', async (req: Request, res: Response) => {
   const { template, quantity, name_prefix } = req.body ?? {};
 
   const TEMPLATES: Record<string, { max_weight_kg: number; max_height_m: number; max_width_m: number; max_length_m: number }> = {
-    standard: { max_weight_kg: 20000, max_height_m: 4.2, max_width_m: 2.55, max_length_m: 12 },
-    heavy:    { max_weight_kg: 40000, max_height_m: 4.2, max_width_m: 2.6,  max_length_m: 18 },
+    standard: { max_weight_kg: 20000, max_height_m: 4.0, max_width_m: 2.55, max_length_m: 12 },
+    heavy:    { max_weight_kg: 40000, max_height_m: 4.0, max_width_m: 2.6,  max_length_m: 18 },
     trailer:  { max_weight_kg: 32000, max_height_m: 4.0, max_width_m: 2.55, max_length_m: 20 },
   };
 

@@ -8,7 +8,12 @@
  * para cubrir toda Argentina.
  *******************************************************/
 import { Router, Request, Response } from "express";
-import pool from "../db";
+import { Pool } from "pg";
+
+const aivenPool = new Pool({
+  connectionString: process.env.AIVEN_DATABASE_URL || process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
 
 const router = Router();
 const SIMILARITY_THRESHOLD = 0.2;
@@ -56,33 +61,34 @@ router.get("/", async (req: Request, res: Response) => {
     return;
   }
 
+  let localResults: Array<{ nombre: string; nombreOriginal: string; lat: number; lon: number; score: string; source: string }> = [];
+
   try {
-    // busco primero en red_vial (calles de CABA/AMBA)
-    const result = await pool.query(
+    const result = await aivenPool.query(
       `
       SELECT
-        MIN(nombre) AS nombre,
-        nombre_buscable,
+        street_name AS nombre,
+        street_name AS nombre_buscable,
         ST_Y(ST_Centroid(ST_Union(geom))) AS lat,
         ST_X(ST_Centroid(ST_Union(geom))) AS lon,
         GREATEST(
-          MAX(similarity(unaccent_immutable(lower(nombre_buscable)), unaccent_immutable(lower($1)))),
-          CASE WHEN unaccent_immutable(lower(MIN(nombre_buscable))) ILIKE '%' || unaccent_immutable(lower($1)) || '%' THEN 0.5 ELSE 0 END
+          MAX(similarity(unaccent_immutable(lower(street_name)), unaccent_immutable(lower($1)))),
+          CASE WHEN unaccent_immutable(lower(street_name)) ILIKE '%' || unaccent_immutable(lower($1)) || '%' THEN 0.5 ELSE 0 END
         ) AS score
-      FROM red_vial
-      WHERE nombre_buscable IS NOT NULL
+      FROM pgr_edges
+      WHERE street_name IS NOT NULL
         AND (
-          unaccent_immutable(lower(nombre_buscable)) ILIKE '%' || unaccent_immutable(lower($1)) || '%'
-          OR similarity(unaccent_immutable(lower(nombre_buscable)), unaccent_immutable(lower($1))) > $2
+          unaccent_immutable(lower(street_name)) ILIKE '%' || unaccent_immutable(lower($1)) || '%'
+          OR similarity(unaccent_immutable(lower(street_name)), unaccent_immutable(lower($1))) > $2
         )
-      GROUP BY nombre_buscable
+      GROUP BY street_name
       ORDER BY score DESC
       LIMIT $3
       `,
       [q, SIMILARITY_THRESHOLD, MAX_RESULTS]
     );
 
-    const localResults = result.rows.map((row) => ({
+    localResults = result.rows.map((row) => ({
       nombre: row.nombre_buscable,
       nombreOriginal: row.nombre,
       lat: parseFloat(row.lat),
@@ -90,17 +96,18 @@ router.get("/", async (req: Request, res: Response) => {
       score: parseFloat(row.score).toFixed(2),
       source: "local",
     }));
+  } catch (err) {
+    console.error("Error en búsqueda local (Aiven):", err);
+  }
 
-    // si hay resultados locales suficientes, los devuelvo sin consultar Nominatim
+  try {
     if (localResults.length >= 10) {
       res.json({ results: localResults });
       return;
     }
 
-    // si hay pocos resultados locales, consulto Nominatim para toda Argentina
     const nominatimResults = await searchNominatim(q);
 
-    // combino: primero los locales, después los de Nominatim sin duplicar
     const combined = [...localResults];
     for (const nr of nominatimResults) {
       const yaTiene = combined.some(

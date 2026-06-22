@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import type { Truck } from "@/types/auth";
-import { createTruck, updateTruck, deleteTruck } from "@/services/api";
+import { createTruck, updateTruck, deleteTruck, SubscriptionRequiredError } from "@/services/api";
 import { Icons } from "./DashboardIcons";
 
 interface Props {
   truck: Truck | null;
   onSave: () => void;
   onClose: () => void;
+  onSubscriptionRequired?: () => void;
 }
 
 interface DraftTruck {
@@ -109,6 +110,7 @@ function buildPayload(draft: DraftTruck): BuildResult {
     return { ok: false, error: "Las dimensiones (peso, alto, ancho, largo) son requeridas." };
   }
 
+
   return {
     ok: true,
     data: {
@@ -127,11 +129,12 @@ function buildPayload(draft: DraftTruck): BuildResult {
   };
 }
 
-export default function TruckEditModal({ truck, onSave, onClose }: Props) {
+export default function TruckEditModal({ truck, onSave, onClose, onSubscriptionRequired }: Props) {
   const [draft, setDraft] = useState<DraftTruck>(() =>
     truck ? fromTruck(truck) : EMPTY_DRAFT,
   );
   const [error, setError] = useState("");
+  const [subscriptionError, setSubscriptionError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -185,6 +188,7 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
     }
 
     setError("");
+    setSubscriptionError(false);
     setSaving(true);
     try {
       if (isEdit && truck) {
@@ -194,7 +198,11 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
       }
       onSave();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar el camión.");
+      if (err instanceof SubscriptionRequiredError) {
+        setSubscriptionError(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Error al guardar el camión.");
+      }
     } finally {
       setSaving(false);
     }
@@ -266,14 +274,14 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
                 placeholder="15000"
               />
             </Field>
-            <Field label="Alto máx (m)" required>
+            <Field label="Alto máx (m)" required hint="Máx. 4.0 m">
               <input
                 className="st-field"
                 type="text"
                 inputMode="decimal"
                 value={draft.max_height_m}
                 onChange={updateMasked("max_height_m", onlyDecimal)}
-                placeholder="3.5"
+                placeholder="4.0"
               />
             </Field>
             <Field label="Ancho máx (m)" required>
@@ -318,6 +326,36 @@ export default function TruckEditModal({ truck, onSave, onClose }: Props) {
             </div>
           </div>
         </div>
+
+        {subscriptionError && (
+          <div style={{
+            background: "rgba(229,57,53,0.06)", border: "1px solid rgba(229,57,53,0.2)",
+            borderRadius: 10, padding: "14px 16px", marginTop: 14,
+            display: "flex", flexDirection: "column", gap: 10,
+          }}>
+            <div>
+              <p style={{ color: "#c62828", fontWeight: 700, fontSize: "0.88rem", margin: "0 0 4px" }}>
+                Necesitás una suscripción activa
+              </p>
+              <p style={{ color: "#6b7280", fontSize: "0.82rem", margin: 0, lineHeight: 1.45 }}>
+                Para agregar camiones debés tener un plan activo.
+              </p>
+            </div>
+            {onSubscriptionRequired && (
+              <button
+                type="button"
+                onClick={onSubscriptionRequired}
+                style={{
+                  alignSelf: "flex-start", background: "#e53935", color: "#fff",
+                  border: "none", borderRadius: 8, padding: "8px 16px",
+                  fontSize: "0.82rem", fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                Ver planes y precios
+              </button>
+            )}
+          </div>
+        )}
 
         {error && (
           <div
@@ -453,17 +491,19 @@ function ModalHeader({ title, onClose }: { title: string; onClose: () => void })
 function Field({
   label,
   required,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <label className="st-label">
-        {label}
-        {required && <span style={{ color: "var(--c-accent)" }}>*</span>}
+      <label className="st-label" style={{ display: "flex", justifyContent: "space-between" }}>
+        <span>{label}{required && <span style={{ color: "var(--c-accent)" }}>*</span>}</span>
+        {hint && <span style={{ color: "#9ca3af", fontWeight: 400, fontSize: "0.75rem" }}>{hint}</span>}
       </label>
       {children}
     </div>

@@ -22,10 +22,10 @@ const PLAN_TRUCK_LIMITS: Record<string, number> = {
 
 type FleetTab = "trucks" | "drivers";
 
-export default function FleetView({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
+export default function FleetView({ onNavigate, initialTab = "trucks" }: { onNavigate: (page: AdminPage) => void; initialTab?: FleetTab }) {
   const { refreshDrivers } = useAuth();
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [tab, setTab] = useState<FleetTab>("drivers");
+  const [tab, setTab] = useState<FleetTab>(initialTab);
 
   const loadDrivers = useCallback(async () => {
     try {
@@ -43,11 +43,6 @@ export default function FleetView({ onNavigate }: { onNavigate: (page: AdminPage
 
   return (
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
-      <div style={{ marginBottom: 16 }}>
-        <div className="st-section-eyebrow">Operaciones</div>
-        <h2 className="st-section-title">Flota</h2>
-      </div>
-
       <Tabs current={tab} onChange={setTab} />
 
       <div style={{ marginTop: 20 }}>
@@ -160,12 +155,14 @@ function TruckDetailPanel({
   onClose,
   onSaved,
   onDeleted,
+  onNavigate,
 }: {
   truck: Truck;
   drivers: Driver[];
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
+  onNavigate: (page: AdminPage) => void;
 }) {
   const [deleting, setDeleting]       = useState(false);
   const [editing, setEditing]         = useState(false);
@@ -259,7 +256,7 @@ function TruckDetailPanel({
         </div>
       </div>
 
-      {editing && <TruckEditModal truck={truck} onSave={() => { setEditing(false); onSaved(); }} onClose={() => setEditing(false)} />}
+      {editing && <TruckEditModal truck={truck} onSave={() => { setEditing(false); onSaved(); }} onClose={() => setEditing(false)} onSubscriptionRequired={() => { setEditing(false); onClose(); onNavigate("plans"); }} />}
       {assigning && <AssignDriverModal truck={truck} drivers={drivers} onDone={() => { setAssigning(false); onSaved(); }} onClose={() => setAssigning(false)} />}
     </div>
   );
@@ -307,7 +304,7 @@ function TrucksTab({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--c-ink)" }}>
           Camiones
-          <span style={{ marginLeft: 8, fontSize: "0.82rem", fontWeight: 600, color: "#9AA3AD" }}>{trucks.length}</span>
+          {hasSubscription && <span style={{ marginLeft: 8, fontSize: "0.82rem", fontWeight: 600, color: "#9AA3AD" }}>{trucks.length}</span>}
         </h3>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -331,12 +328,12 @@ function TrucksTab({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
         </div>
       </div>
 
-      {Number.isFinite(truckLimit) && <FleetUsageBar current={trucks.length} limit={truckLimit} plan={plan} />}
+      {hasSubscription && Number.isFinite(truckLimit) && <FleetUsageBar current={trucks.length} limit={truckLimit} plan={plan} />}
       {loading && <Hint>Cargando camiones…</Hint>}
       {subscriptionError && <SubscriptionBanner onGoToPlans={() => onNavigate("plans")} />}
       {error && <Hint tone="error">{error}</Hint>}
       {!loading && !error && trucks.length === 0 && (
-        <EmptyState title="No tenés camiones registrados" actionLabel="Agregar camión" onAction={() => setCreating(true)} disabled={atLimit} />
+        <EmptyState title="No tenés camiones registrados" />
       )}
 
       {!loading && !error && trucks.length > 0 && (
@@ -352,9 +349,10 @@ function TrucksTab({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
           onClose={() => setSelected(null)}
           onSaved={() => { setSelected(null); handleSaved(); }}
           onDeleted={() => { setSelected(null); void loadTrucks(); void refreshTrucks(); }}
+          onNavigate={onNavigate}
         />
       )}
-      {creating && <TruckEditModal truck={null} onSave={handleSaved} onClose={() => setCreating(false)} />}
+      {creating && <TruckEditModal truck={null} onSave={handleSaved} onClose={() => setCreating(false)} onSubscriptionRequired={() => { setCreating(false); onNavigate("plans"); }} />}
       {fromTemplate && <TruckTemplateModal onSaved={handleSaved} onClose={() => setFromTemplate(false)} />}
     </div>
   );
@@ -753,7 +751,7 @@ function DriversTab({ drivers, refreshDrivers, onNavigate }: DriversTabProps) {
           </span>
         </h3>
         <button
-          className="st-btn-navy"
+          className="st-btn-primary"
           style={{ padding: "10px 16px", opacity: hasSubscription ? 1 : 0.45, cursor: hasSubscription ? "pointer" : "not-allowed" }}
           onClick={hasSubscription ? () => setInviting(true) : undefined}
           disabled={!hasSubscription}
@@ -764,7 +762,7 @@ function DriversTab({ drivers, refreshDrivers, onNavigate }: DriversTabProps) {
       </div>
 
       {drivers.length === 0 && pendingInvitations.length === 0 ? (
-        <EmptyState title="No tenés conductores registrados" actionLabel="Invitar conductor" onAction={() => setInviting(true)} />
+        <EmptyState title="No tenés conductores registrados" />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14, paddingBottom: 48 }}>
           {pendingInvitations.map(inv => <InvitationCard key={`inv-${inv.id}`} inv={inv} onDeleteClick={() => setConfirmDeleteInv(inv)} />)}
@@ -905,39 +903,20 @@ function FleetUsageBar({
   );
 }
 
-function EmptyState({
-  title,
-  actionLabel,
-  onAction,
-  disabled = false,
-}: {
-  title: string;
-  actionLabel: string;
-  onAction: () => void;
-  disabled?: boolean;
-}) {
+function EmptyState({ title }: { title: string }) {
   return (
     <div
       style={{
         border: "1px dashed #e0e0e0",
         borderRadius: 14,
-        padding: 36,
+        padding: 48,
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
-        gap: 14,
+        justifyContent: "center",
         background: "#fafafa",
       }}
     >
-      <p style={{ margin: 0, color: "#6b7280", fontSize: "0.95rem" }}>{title}</p>
-      <button
-        className="st-btn-primary"
-        style={{ padding: "10px 18px", opacity: disabled ? 0.45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
-        onClick={disabled ? undefined : onAction}
-        disabled={disabled}
-      >
-        <Icons.Plus size={14} /> {actionLabel}
-      </button>
+      <p style={{ margin: 0, color: "#9ca3af", fontSize: "1.05rem", fontWeight: 500 }}>{title}</p>
     </div>
   );
 }

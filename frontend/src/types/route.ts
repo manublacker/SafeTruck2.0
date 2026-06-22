@@ -27,12 +27,14 @@ export interface RouteRequest {
   routingOptions:   RoutingOptions;
 }
 
-/** Cada nodo del path devuelto */
+/** Cada nodo del path devuelto. `status` describe la aptitud del tramo que
+ *  empieza en este nodo (apto / no apto / sin datos), para colorear la ruta. */
 export interface RouteNode {
   nodeId: string;
   lat:    number;
   lon:    number;
   label:  string;
+  status?: 'ok' | 'unauthorized' | 'unknown';
 }
 
 /** Respuesta del POST /api/routes */

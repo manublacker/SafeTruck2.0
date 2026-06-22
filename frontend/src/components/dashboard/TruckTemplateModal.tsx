@@ -14,14 +14,14 @@ const TEMPLATES: Template[] = [
     key: "standard",
     name: "Estándar",
     emoji: "🚛",
-    specs: "20 tn · 4.2 m alt · 2.55 m ancho · 12 m largo",
+    specs: "20 tn · 4.0 m alt · 2.55 m ancho · 12 m largo",
     sub: "Camión rígido urbano",
   },
   {
     key: "heavy",
     name: "Pesado",
     emoji: "🚚",
-    specs: "40 tn · 4.2 m alt · 2.6 m ancho · 18 m largo",
+    specs: "40 tn · 4.0 m alt · 2.6 m ancho · 18 m largo",
     sub: "Camión de larga distancia",
   },
   {
