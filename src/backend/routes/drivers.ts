@@ -42,6 +42,7 @@ type UpdatableField = (typeof UPDATABLE_FIELDS)[number];
 interface DriverRow {
   id: number;
   user_id: string;
+  app_user_id: string | null;
   nombre: string;
   telefono: string | null;
   estado: string;
@@ -50,7 +51,7 @@ interface DriverRow {
 }
 
 const DRIVER_COLUMNS = `
-  id, user_id, nombre, telefono, estado, is_active, created_at
+  id, user_id, app_user_id, nombre, telefono, estado, is_active, created_at
 `;
 
 function pickUpdates(body: Record<string, unknown>): Partial<Record<UpdatableField, unknown>> {

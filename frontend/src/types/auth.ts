@@ -25,6 +25,7 @@ export interface Driver {
   estado: string;
   is_active: boolean;
   created_at: string;
+  app_user_id: string | null;
 }
 
 export interface AuthUser {

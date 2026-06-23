@@ -15,6 +15,12 @@ export default defineConfig({
         target: "http://localhost:3001",
         changeOrigin: true,
       },
+      // WebSocket del tiempo real: ws:true para que el proxy haga el upgrade.
+      "/ws": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
 });
