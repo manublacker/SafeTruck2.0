@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/Toast";
 import type { Truck, Driver } from "@/types/auth";
 import { fetchTrucks, fetchDrivers, deleteDriver, startCheckout, fetchInvitations, deleteInvitation, fetchAssignedTrips, SubscriptionRequiredError, type DriverInvitation } from "@/services/api";
+import { useRealtime } from "@/hooks/useRealtime";
 import type { AdminPage } from "./AdminSidebar";
 import { Icons } from "./DashboardIcons";
 import TruckEditModal from "./TruckEditModal";
@@ -375,11 +376,13 @@ function driverInitials(name: string) {
 function DriverCard({
   driver,
   isOnTrip,
+  online,
   truck,
   onClick,
 }: {
   driver: Driver;
   isOnTrip: boolean;
+  online: boolean;
   truck: string | undefined;
   onClick: () => void;
 }) {
@@ -403,13 +406,25 @@ function DriverCard({
     >
       {/* Avatar + nombre + estado */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
-          background: "var(--c-navy)", color: "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontWeight: 600, fontSize: "0.88rem", letterSpacing: "0.04em",
-        }}>
-          {driverInitials(driver.nombre)}
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: "50%",
+            background: "var(--c-navy)", color: "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontWeight: 600, fontSize: "0.88rem", letterSpacing: "0.04em",
+          }}>
+            {driverInitials(driver.nombre)}
+          </div>
+          {/* Indicador de presencia: verde = conectado, gris = desconectado */}
+          <span
+            title={online ? "En línea" : "Desconectado"}
+            style={{
+              position: "absolute", bottom: -1, right: -1,
+              width: 13, height: 13, borderRadius: "50%",
+              background: online ? "#22c55e" : "#9ca3af",
+              border: "2px solid var(--c-bg)",
+            }}
+          />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--c-ink)", lineHeight: 1.25, marginBottom: 6 }}>
@@ -713,6 +728,13 @@ function DriversTab({ drivers, refreshDrivers, onNavigate }: DriversTabProps) {
   const [onTripDriverIds, setOnTripDriverIds]        = useState<Set<number>>(new Set());
   const [confirmDeleteInv, setConfirmDeleteInv]      = useState<DriverInvitation | null>(null);
   const [deletingInv, setDeletingInv]                = useState(false);
+  const [onlineIds, setOnlineIds]                    = useState<Set<string>>(new Set());
+
+  // Presencia en tiempo real: el backend manda la lista de choferes conectados
+  // (snapshot al conectar el admin + updates cuando entra/sale un chofer).
+  useRealtime((e) => {
+    if (e.type === "presence") setOnlineIds(new Set(e.online_driver_ids));
+  });
 
   const loadData = useCallback(async () => {
     try {
@@ -774,6 +796,7 @@ function DriversTab({ drivers, refreshDrivers, onNavigate }: DriversTabProps) {
               key={d.id}
               driver={d}
               isOnTrip={onTripDriverIds.has(d.id)}
+              online={!!d.app_user_id && onlineIds.has(d.app_user_id)}
               truck={driverIdToTruck.get(d.id)}
               onClick={() => setSelected(d)}
             />
