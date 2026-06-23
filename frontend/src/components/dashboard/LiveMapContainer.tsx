@@ -238,12 +238,14 @@ export default function LiveMapContainer({ onNavigate }: Props) {
             ) : (
               <>
                 {!canCreate && (
-                  <EmptyStateManager
-                    hasTrucks={hasTrucks}
-                    hasAvailableDrivers={hasAvailableDrivers}
-                    hasAvailableTrucks={hasAvailableTrucks}
-                    onNavigate={onNavigate}
-                  />
+                  <div style={{ marginBottom: 16 }}>
+                    <EmptyStateManager
+                      hasTrucks={hasTrucks}
+                      hasAvailableDrivers={hasAvailableDrivers}
+                      hasAvailableTrucks={hasAvailableTrucks}
+                      onNavigate={onNavigate}
+                    />
+                  </div>
                 )}
 
                 {/* Disparador: abre el formulario en un modal enfocado */}
