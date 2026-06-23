@@ -949,38 +949,39 @@ function EmptyState({
   return (
     <div
       style={{
-        border: "1px dashed var(--c-border)",
+        border: "1px solid var(--c-border)",
         borderRadius: 16,
-        padding: "56px 32px",
+        minHeight: 360,
+        padding: "48px 32px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         textAlign: "center",
         gap: 6,
-        background: "var(--c-surface)",
+        background: "#fff",
       }}
     >
       {icon && (
         <div
           style={{
-            width: 56,
-            height: 56,
-            borderRadius: 16,
+            width: 64,
+            height: 64,
+            borderRadius: 18,
             background: "var(--c-surface-2)",
             color: "var(--c-ink-3)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            marginBottom: 10,
+            marginBottom: 14,
           }}
         >
           {icon}
         </div>
       )}
-      <p style={{ margin: 0, color: "var(--c-ink)", fontSize: "1.05rem", fontWeight: 700 }}>{title}</p>
+      <p style={{ margin: 0, color: "var(--c-ink)", fontSize: "1.15rem", fontWeight: 700 }}>{title}</p>
       {subtitle && (
-        <p style={{ margin: 0, color: "var(--c-ink-3)", fontSize: "0.9rem", lineHeight: 1.5, maxWidth: 360 }}>
+        <p style={{ margin: 0, color: "var(--c-ink-3)", fontSize: "0.92rem", lineHeight: 1.55, maxWidth: 380 }}>
           {subtitle}
         </p>
       )}
