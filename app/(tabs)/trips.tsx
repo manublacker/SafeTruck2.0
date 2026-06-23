@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 import { fetchAllMyTrips, type AssignedTrip } from '../../src/services/assignedTrips'
+import { useRealtime } from '../../src/services/realtime'
 
 // ── Status config ──────────────────────────────────────────────────────────
 // Paleta única de estados (espeja admin.css en la web vía tokens del theme):
@@ -200,6 +201,14 @@ export default function TripsScreen() {
     const id = setInterval(() => void loadTrips('silent'), 30_000)
     return () => clearInterval(id)
   }, [loadTrips])
+
+  // Tiempo real: si la empresa asigna un viaje o cambia su estado, refrescamos
+  // la lista al instante (sin esperar al polling de 30s ni recargar la app).
+  useRealtime((e) => {
+    if (e.type === 'trip_assigned' || e.type === 'trip_update') {
+      void loadTrips('silent')
+    }
+  })
 
   const firstName    = profile?.full_name?.split(' ')[0] ?? 'conductor'
   const enCurso      = trips.filter(tr => tr.status === 'in_progress' || tr.status === 'accepted')
