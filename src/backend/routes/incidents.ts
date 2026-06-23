@@ -82,6 +82,34 @@ router.get("/", async (_req: Request, res: Response) => {
   }
 });
 
+// PATCH /api/incidents/:id/confirm
+// Otro conductor confirma que el incidente SIGUE activo (tipo Waze).
+// Suma una confirmación y renueva la expiración (mínimo +20 min) para que no
+// caduque mientras la calle siga afectada. No se puede confirmar el propio.
+router.patch("/:id/confirm", authMiddleware, async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `UPDATE incidents
+          SET confirmed_count = confirmed_count + 1,
+              expires_at = GREATEST(expires_at, NOW() + INTERVAL '20 minutes')
+        WHERE id = $1 AND active = TRUE AND expires_at > NOW() AND user_id <> $2
+        RETURNING id, confirmed_count, expires_at`,
+      [id, userId]
+    );
+    if (!result.rowCount) {
+      res.status(404).json({ error: "Incidente no disponible para confirmar." });
+      return;
+    }
+    res.json({ ok: true, ...result.rows[0] });
+  } catch (error) {
+    console.error("Error en PATCH /api/incidents/:id/confirm:", error);
+    res.status(500).json({ error: "Error interno del servidor." });
+  }
+});
+
 // PATCH /api/incidents/:id/deactivate
 // El conductor que creó el incidente lo marca como resuelto.
 router.patch("/:id/deactivate", authMiddleware, async (req: Request, res: Response) => {

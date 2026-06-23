@@ -63,6 +63,8 @@ export default function IncidentsScreen() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<string | null>(null)
+  // Incidentes que el usuario ya confirmó en esta sesión (evita doble voto en la UI).
+  const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadIncidents()
@@ -102,6 +104,33 @@ export default function IncidentsScreen() {
         }
       }},
     ])
+  }
+
+  // Confirma que un incidente ajeno sigue activo. Optimista: suma el voto en la
+  // UI al instante y revierte si el backend falla.
+  const confirm = async (incidentId: string | number) => {
+    const key = String(incidentId)
+    if (confirmedIds.has(key)) return
+    setConfirmedIds(prev => new Set(prev).add(key))
+    setIncidents(prev => prev.map(i =>
+      String(i.id) === key ? { ...i, confirmed_count: (i.confirmed_count || 0) + 1 } : i
+    ))
+    try {
+      const headers = await authHeaders()
+      const res = await fetch(`${BACKEND}/api/incidents/${incidentId}/confirm`, {
+        method: 'PATCH',
+        headers,
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    } catch (e) {
+      console.log('confirm error:', e)
+      // Revertir: quito el voto local y el id de confirmados.
+      setIncidents(prev => prev.map(i =>
+        String(i.id) === key ? { ...i, confirmed_count: Math.max(0, (i.confirmed_count || 1) - 1) } : i
+      ))
+      setConfirmedIds(prev => { const n = new Set(prev); n.delete(key); return n })
+      Alert.alert('Error', 'No se pudo confirmar la alerta. Intentá de nuevo.')
+    }
   }
 
   const timeAgo = (dateStr: string) => {
@@ -207,12 +236,22 @@ export default function IncidentsScreen() {
                   <View style={s.voteCount}>
                     <Text style={s.voteBtnText}>✅ {item.confirmed_count || 0}</Text>
                   </View>
-                  {item.user_id === profile?.id && (
+                  {item.user_id === profile?.id ? (
                     <TouchableOpacity
                       style={[s.voteBtn, { backgroundColor: 'rgba(255,59,48,0.15)' }]}
                       onPress={() => deactivate(item.id)}
                     >
                       <Text style={[s.voteBtnText, { color: t.danger }]}>✕</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[s.voteBtn, confirmedIds.has(String(item.id)) && { opacity: 0.5 }]}
+                      disabled={confirmedIds.has(String(item.id))}
+                      onPress={() => confirm(item.id)}
+                    >
+                      <Text style={[s.voteBtnText, { color: t.accent }]}>
+                        {confirmedIds.has(String(item.id)) ? '✓ Confirmado' : 'Sigue acá'}
+                      </Text>
                     </TouchableOpacity>
                   )}
                 </View>
