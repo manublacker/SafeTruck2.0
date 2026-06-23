@@ -8,6 +8,10 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "safetruck",
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/fa0da953-242f-451a-892b-b584083a4f62"
+    },
     "plugins": [
       "expo-router"
     ],
@@ -30,6 +34,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fa0da953-242f-451a-892b-b584083a4f62"
+      }
+    },
+    "owner": "manublacker"
   }
 }

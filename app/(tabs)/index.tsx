@@ -6,7 +6,7 @@ import {
 import MapView, { Marker, Polyline, Region } from 'react-native-maps'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme, isDarkTheme } from '../../src/theme'
@@ -324,6 +324,11 @@ export default function MapScreen() {
   }, [])
 
   const loadTripById = useCallback(async (id: string) => {
+    // Limpia cualquier búsqueda activa para que no quede solapada con el viaje.
+    setCurrentRoute(null)
+    setDestMarker(null)
+    setSearchText('')
+    setShowInfo(false)
     try {
       const all = await fetchAllMyTrips()
       const found = all.find(t => String(t.id) === id)
@@ -626,6 +631,16 @@ export default function MapScreen() {
 
   useEffect(() => { void getRecentDestinations().then(setRecents) }, [])
 
+  // Cada vez que se entra al mapa, el buscador arranca CERRADO. Los destinos
+  // recientes solo aparecen cuando el usuario toca "Buscar destino" (onFocus),
+  // no por estado que quedó abierto de una visita anterior.
+  useFocusEffect(
+    useCallback(() => {
+      setShowSearch(false)
+      Keyboard.dismiss()
+    }, [])
+  )
+
   const searchAddress = async (query: string) => {
     if (query.length < 3) { setSearchResults([]); return }
     setSearching(true)
@@ -722,6 +737,13 @@ export default function MapScreen() {
     setDestMarker({ lat: destLat, lng: destLng })
     setCurrentRoute(null)
     setShowInfo(false)
+    // Limpia un viaje previo para que no quede solapado con la nueva búsqueda.
+    setTripSheet(null)
+    setTripSegments(null)
+    setTripStoredPath([])
+    setTripOriginDest({ originLat: null, originLng: null, destLat: null, destLng: null })
+    tripSegmentsRef.current = null
+    tripPathRef.current = []
     setLoading(true)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 60000)
@@ -812,11 +834,26 @@ export default function MapScreen() {
 
   const clearRoute = () => {
     stopNavigation()
+    // Búsqueda
     setCurrentRoute(null)
     setShowInfo(false)
     setSearchText('')
     setDestMarker(null)
-    // Las <Polyline> se borran solas: dependen de currentRoute en el render.
+    // Viaje elegido: que NO quede vigente en el mapa al cancelar.
+    setTripSheet(null)
+    setTripSegments(null)
+    setTripStoredPath([])
+    setTripOriginDest({ originLat: null, originLng: null, destLat: null, destLng: null })
+    tripSegmentsRef.current = null
+    tripPathRef.current = []
+    // Vuelve la cámara a "donde estoy parado ahora": solo queda el marcador de
+    // ubicación. Las <Polyline> se borran solas (dependen de los estados de arriba).
+    if (location) {
+      mapRef.current?.animateToRegion(
+        { latitude: location.lat, longitude: location.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        500
+      )
+    }
   }
 
   const startNavigation = async () => {
@@ -1030,11 +1067,6 @@ export default function MapScreen() {
               returnKeyType="search"
               onSubmitEditing={() => searchAddress(searchText)}
             />
-            {searchText.length > 0 && (
-              <TouchableOpacity onPress={() => { setSearchText(''); setSearchResults([]); setShowSearch(false) }} style={{ paddingHorizontal: 4 }}>
-                <Ionicons name="close" size={18} color={t.textMuted} />
-              </TouchableOpacity>
-            )}
           </View>
 
           <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/(tabs)/incidents')} accessibilityLabel="Ver alertas activas">
@@ -1045,7 +1077,7 @@ export default function MapScreen() {
             <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={18} color={t.text} />
           </TouchableOpacity>
 
-          {currentRoute && (
+          {(currentRoute || tripSheet || searchText.length > 0) && (
             <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute}>
               <Ionicons name="close-outline" size={18} color={t.danger} />
             </TouchableOpacity>
@@ -1101,12 +1133,6 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Hint inicial */}
-      {!currentRoute && !tripSheet && !simRunning && !loading && activeVehicle && searchText.length === 0 && (
-        <View style={s.hintPill}>
-          <Text style={s.hintPillText}>Buscá un destino o tocá el mapa</Text>
-        </View>
-      )}
 
       {/* Loading */}
       {loading && (
@@ -1210,7 +1236,7 @@ export default function MapScreen() {
 
       {/* FAB de reporte */}
       <TouchableOpacity
-        style={[s.fab, showInfo && currentRoute && !navMode && s.fabRaised, navMode && s.fabNavRaised]}
+        style={[s.fab, showInfo && currentRoute && !navMode && s.fabRaised, tripSheet && !navMode && s.fabTripRaised, navMode && s.fabNavRaised]}
         onPress={openReportModal}
         activeOpacity={0.85}
       >
@@ -1343,13 +1369,7 @@ export default function MapScreen() {
             </View>
 
             <TouchableOpacity onPress={() => {
-              setTripSheet(null)
-              setDestMarker(null)
-              setTripSegments(null)
-              setTripStoredPath([])
-              setTripOriginDest({ originLat: null, originLng: null, destLat: null, destLng: null })
-              tripSegmentsRef.current = null
-              tripPathRef.current = []
+              clearRoute()
               router.replace('/(tabs)/')
             }} style={{ backgroundColor: t.surface2, borderRadius: 8, padding: 8, marginLeft: 12 }}>
               <Ionicons name="close" size={18} color={t.textMuted} />
@@ -1426,6 +1446,7 @@ function makeStyles(t: Theme) {
     },
     fabActive: { backgroundColor: t.danger, shadowColor: t.danger },
     fabRaised: { bottom: 210 },
+    fabTripRaised: { bottom: 300 },
     fabNavRaised: { bottom: 105 },
 
     playFab: {
