@@ -175,32 +175,33 @@ export default function LiveMapContainer({ onNavigate }: Props) {
           <div
             style={{
               position: "absolute", inset: 20, zIndex: 400,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              pointerEvents: "none",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              gap: 18, pointerEvents: "none",
             }}
           >
-            {/* Card con fondo sólido para que el texto no se mezcle con las calles */}
+            {/* Ícono flotante con pulso (el "globito que titila") */}
+            <div style={{ position: "relative", width: 96, height: 96, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(229,57,53,0.12)", animation: "st-mappulse 2.4s ease-out infinite" }} />
+              <span style={{ position: "absolute", inset: 16, borderRadius: "50%", background: "rgba(229,57,53,0.14)" }} />
+              <span style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: "#fff", border: "1px solid var(--c-border)", color: "#e53935", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 10px rgba(16,24,40,0.10)" }}>
+                <Icons.Truck size={26} />
+              </span>
+            </div>
+
+            {/* Card de texto con fondo sólido para no mezclarse con las calles */}
             <div
               style={{
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                gap: 4, textAlign: "center",
-                background: "#fff", border: "1px solid var(--c-border)", borderRadius: 18,
-                padding: "30px 34px", maxWidth: 360,
-                boxShadow: "0 12px 36px rgba(16,24,40,0.16)",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4, textAlign: "center",
+                background: "#fff", border: "1px solid var(--c-border)", borderRadius: 16,
+                padding: "22px 32px", maxWidth: 380,
+                boxShadow: "0 12px 36px rgba(16,24,40,0.14)",
               }}
             >
-              <div style={{ position: "relative", width: 96, height: 96, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
-                <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(229,57,53,0.12)", animation: "st-mappulse 2.4s ease-out infinite" }} />
-                <span style={{ position: "absolute", inset: 16, borderRadius: "50%", background: "rgba(229,57,53,0.14)" }} />
-                <span style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: "#fff", border: "1px solid var(--c-border)", color: "#e53935", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 10px rgba(16,24,40,0.10)" }}>
-                  <Icons.Truck size={26} />
-                </span>
-              </div>
               <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--c-ink)" }}>
                 Sin unidades en circulación
               </p>
               <p style={{ margin: 0, fontSize: "0.88rem", lineHeight: 1.5, color: "var(--c-ink-2)" }}>
-                Cuando tus choferes inicien un viaje desde la app, vas a verlos acá moviéndose en tiempo real.
+                Agregá camiones y conductores para verlos acá en tiempo real.
               </p>
             </div>
           </div>
