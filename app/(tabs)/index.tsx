@@ -12,7 +12,7 @@ import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme, isDarkTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
-import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, fetchMyAssignedTruck, type AssignedTrip } from '../../src/services/assignedTrips'
+import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, fetchMyAssignedTruck, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
 import { getRecentDestinations, addRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -563,6 +563,8 @@ export default function MapScreen() {
     } catch (e: any) {
       if (e?.status === 409) {
         Alert.alert('Ya tenés un viaje en curso', e.message ?? 'Finalizá el viaje actual antes de iniciar otro.')
+      } else if (isSubscriptionError(e)) {
+        Alert.alert('Suscripción inactiva', SUBSCRIPTION_INACTIVE_MESSAGE)
       } else {
         Alert.alert('No se pudo actualizar', e?.message ?? 'Revisá tu conexión e intentá de nuevo.')
       }

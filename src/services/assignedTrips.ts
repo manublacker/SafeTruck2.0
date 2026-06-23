@@ -46,6 +46,15 @@ export class ApiError extends Error {
   }
 }
 
+/** True si el error es un 402 del backend: la empresa no tiene un plan activo. */
+export function isSubscriptionError(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 402
+}
+
+/** Mensaje claro para el chofer cuando la empresa no tiene suscripción activa. */
+export const SUBSCRIPTION_INACTIVE_MESSAGE =
+  'Tu empresa todavía no tiene un plan activo. Pedile al administrador que regularice el pago para poder usar esta función.'
+
 async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = await authHeaders()
   const res = await fetch(`${API_URL}${path}`, { ...options, headers: { ...headers, ...options?.headers } })
