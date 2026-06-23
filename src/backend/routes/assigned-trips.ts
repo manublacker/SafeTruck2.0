@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { authMiddleware } from '../middleware/authMiddleware'
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription'
 import pool from '../db'
+import { broadcastToCompany } from '../realtime/hub'
 
 const router = Router()
 router.use(authMiddleware)
@@ -80,6 +81,16 @@ router.post('/', async (req: Request, res: Response) => {
 
     const trip = await getTripById(tripId)
     res.status(201).json({ success: true, trip })
+
+    // Tiempo real: si el conductor está usando la app (conectado por WS), le
+    // hacemos aparecer el viaje al instante, sin que tenga que refrescar. Va
+    // SOLO a su conexión (no a otros choferes de la empresa). El push sigue
+    // como respaldo para cuando la app está cerrada.
+    if (driver.app_user_id) {
+      try {
+        broadcastToCompany(adminId, { type: 'trip_assigned', trip }, { only: driver.app_user_id })
+      } catch { /* broadcast best-effort */ }
+    }
   } catch (err: any) {
     console.error('[POST /api/assigned-trips]', err.message)
     res.status(500).json({ error: err.message })
@@ -182,6 +193,18 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
 
     const updated = await getTripById(Number(req.params.id))
     res.json({ success: true, trip: updated })
+
+    // Tiempo real: avisamos al resto de la empresa (admin + chofer) que el viaje
+    // cambió de estado, para que la web/móvil se actualicen sin refrescar.
+    // Caso típico: el chofer toca "Iniciar viaje" -> el panel del admin lo ve
+    // pasar a "En curso" al instante. Excluimos a quien lo originó (ya lo sabe).
+    try {
+      broadcastToCompany(
+        trip.empresa_user_id,
+        { type: 'trip_update', trip: updated },
+        { exclude: userId },
+      )
+    } catch { /* broadcast best-effort */ }
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
