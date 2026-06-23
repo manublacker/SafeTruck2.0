@@ -9,6 +9,13 @@ interface Props {
   billingSuccess?: boolean;
 }
 
+// Descripción del plan activo (mismos límites que FleetView.PLAN_TRUCK_LIMITS).
+const PLAN_DESC: Record<string, string> = {
+  starter: "Tu suscripción está activa · hasta 5 camiones.",
+  pro: "Tu suscripción está activa · hasta 20 camiones.",
+  enterprise: "Tu suscripción está activa · camiones y conductores ilimitados.",
+};
+
 interface UserMeta {
   full_name?: string;
   company?: string;
@@ -88,55 +95,69 @@ export default function AccountView({ onNavigate, billingSuccess }: Props) {
         {/* Suscripción */}
         <section>
           <SectionLabel>Suscripción</SectionLabel>
-          <div
-            style={{
-              background: "var(--c-bg)",
-              border: "1px solid var(--c-border)",
-              borderRadius: "var(--r-lg)",
-              padding: "18px 20px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 16,
-            }}
-          >
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 4px" }}>
-                <p style={{ margin: 0, fontWeight: 700, color: "var(--c-ink)", fontSize: "0.95rem" }}>
-                  {user?.plan
-                    ? `Plan ${user.plan.charAt(0).toUpperCase() + user.plan.slice(1)}`
-                    : "Sin plan activo"}
-                </p>
-                <span className={`st-badge ${user?.plan ? "st-badge-activo" : "st-badge-inactivo"}`}>
-                  {user?.plan ? "Activo" : "Sin plan"}
-                </span>
-              </div>
-              <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--c-ink-2)" }}>
-                {user?.plan
-                  ? "Tu suscripción está activa."
-                  : "Elegí un plan para desbloquear todas las funciones."}
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {!user?.plan && (
-                <button
-                  className="st-btn-secondary"
-                  style={{ padding: "10px 20px", whiteSpace: "nowrap" }}
-                  onClick={handleVerifyPayment}
-                  disabled={verifying}
-                >
-                  {verifying ? "Verificando…" : "Ya pagué — verificar"}
-                </button>
-              )}
-              <button
-                className="st-btn-primary"
-                style={{ padding: "10px 20px", whiteSpace: "nowrap" }}
-                onClick={() => onNavigate("plans")}
+          {(() => {
+            const active = !!user?.plan;
+            const planName = active ? `Plan ${user!.plan!.charAt(0).toUpperCase() + user!.plan!.slice(1)}` : "Sin plan activo";
+            const planDesc = active ? (PLAN_DESC[user!.plan!] ?? "Tu suscripción está activa.") : "Elegí un plan para desbloquear todas las funciones.";
+            return (
+              <div
+                style={{
+                  background: active ? "var(--c-navy)" : "var(--c-bg)",
+                  border: active ? "1px solid var(--c-navy)" : "1px solid var(--c-border)",
+                  borderRadius: "var(--r-lg)",
+                  padding: "20px 22px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  flexWrap: "wrap",
+                }}
               >
-                {user?.plan ? "Cambiar plan" : "Ver planes"}
-              </button>
-            </div>
-          </div>
+                <div style={{ minWidth: 200 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 6px" }}>
+                    <p style={{ margin: 0, fontWeight: 700, color: active ? "#fff" : "var(--c-ink)", fontSize: "1.05rem" }}>
+                      {planName}
+                    </p>
+                    {active ? (
+                      <span
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                          fontSize: "0.75rem", fontWeight: 700, color: "#4ade80",
+                        }}
+                      >
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 8px #22c55e" }} />
+                        Activo
+                      </span>
+                    ) : (
+                      <span className="st-badge st-badge-inactivo">Sin plan</span>
+                    )}
+                  </div>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: active ? "rgba(255,255,255,0.72)" : "var(--c-ink-2)" }}>
+                    {planDesc}
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {!active && (
+                    <button
+                      className="st-btn-secondary"
+                      style={{ padding: "10px 20px", whiteSpace: "nowrap" }}
+                      onClick={handleVerifyPayment}
+                      disabled={verifying}
+                    >
+                      {verifying ? "Verificando…" : "Ya pagué — verificar"}
+                    </button>
+                  )}
+                  <button
+                    className="st-btn-primary"
+                    style={{ padding: "10px 20px", whiteSpace: "nowrap" }}
+                    onClick={() => onNavigate("plans")}
+                  >
+                    {active ? "Cambiar plan" : "Ver planes"}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
           {verifyMsg && (
             <p style={{ margin: "10px 2px 0", fontSize: "0.82rem", color: "var(--c-danger)", fontWeight: 600 }}>
               {verifyMsg}

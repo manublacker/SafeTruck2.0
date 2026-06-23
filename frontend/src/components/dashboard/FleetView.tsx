@@ -336,7 +336,11 @@ function TrucksTab({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
       {subscriptionError && <SubscriptionBanner onGoToPlans={() => onNavigate("plans")} />}
       {error && <Hint tone="error">{error}</Hint>}
       {!loading && !error && trucks.length === 0 && (
-        <EmptyState title="No tenés camiones registrados" />
+        <EmptyState
+          icon={<Icons.Truck size={26} />}
+          title="No tenés camiones registrados"
+          subtitle="Cargá tu primer camión con el botón “Agregar camión”, o usá una plantilla para sumar varios de una."
+        />
       )}
 
       {!loading && !error && trucks.length > 0 && (
@@ -787,7 +791,11 @@ function DriversTab({ drivers, refreshDrivers, onNavigate }: DriversTabProps) {
       </div>
 
       {drivers.length === 0 && pendingInvitations.length === 0 ? (
-        <EmptyState title="No tenés conductores registrados" />
+        <EmptyState
+          icon={<Icons.People size={26} />}
+          title="No tenés conductores registrados"
+          subtitle="Invitá a tu primer conductor con el botón “Invitar conductor”. Le llega un enlace para registrarse y descargar la app."
+        />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14, paddingBottom: 48 }}>
           {pendingInvitations.map(inv => <InvitationCard key={`inv-${inv.id}`} inv={inv} onDeleteClick={() => setConfirmDeleteInv(inv)} />)}
@@ -929,20 +937,54 @@ function FleetUsageBar({
   );
 }
 
-function EmptyState({ title }: { title: string }) {
+function EmptyState({
+  title,
+  subtitle,
+  icon,
+}: {
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+}) {
   return (
     <div
       style={{
-        border: "1px dashed #e0e0e0",
-        borderRadius: 14,
-        padding: 48,
+        border: "1px solid var(--c-border)",
+        borderRadius: 16,
+        minHeight: 360,
+        padding: "48px 32px",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        background: "#fafafa",
+        textAlign: "center",
+        gap: 6,
+        background: "#fff",
       }}
     >
-      <p style={{ margin: 0, color: "#9ca3af", fontSize: "1.05rem", fontWeight: 500 }}>{title}</p>
+      {icon && (
+        <div
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: 18,
+            background: "var(--c-surface-2)",
+            color: "var(--c-ink-3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 14,
+          }}
+        >
+          {icon}
+        </div>
+      )}
+      <p style={{ margin: 0, color: "var(--c-ink)", fontSize: "1.15rem", fontWeight: 700 }}>{title}</p>
+      {subtitle && (
+        <p style={{ margin: 0, color: "var(--c-ink-3)", fontSize: "0.92rem", lineHeight: 1.55, maxWidth: 380 }}>
+          {subtitle}
+        </p>
+      )}
     </div>
   );
 }

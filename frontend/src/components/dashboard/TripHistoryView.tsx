@@ -148,7 +148,7 @@ export default function TripHistoryView() {
   return (
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
       {/* Filtros */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap", marginBottom: 16, background: "#fff", border: "1px solid var(--c-border)", borderRadius: "var(--r-lg)", padding: 18 }}>
         <div style={{ minWidth: 200 }}>
           <label className="st-label">Conductor</label>
           <select
@@ -253,10 +253,42 @@ export default function TripHistoryView() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ textAlign: "center", color: "#9ca3af", padding: 32 }}>
-                  {trips.length === 0
-                    ? "Todavía no hay viajes asignados. Crealos desde el Live Map."
-                    : "No hay viajes que coincidan con los filtros."}
+                <td colSpan={6} style={{ padding: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textAlign: "center",
+                      gap: 6,
+                      padding: "56px 24px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 16,
+                        background: "var(--c-surface-2)",
+                        color: "var(--c-ink-3)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginBottom: 10,
+                      }}
+                    >
+                      <Icons.Clock size={26} />
+                    </div>
+                    <p style={{ margin: 0, color: "var(--c-ink)", fontSize: "1.05rem", fontWeight: 700 }}>
+                      {trips.length === 0 ? "Todavía no hay viajes asignados" : "Sin resultados"}
+                    </p>
+                    <p style={{ margin: 0, color: "var(--c-ink-3)", fontSize: "0.9rem", lineHeight: 1.5, maxWidth: 360 }}>
+                      {trips.length === 0
+                        ? "Creá tu primer viaje desde el Live Map y vas a verlo acá con su estado y duración."
+                        : "No hay viajes que coincidan con los filtros aplicados."}
+                    </p>
+                  </div>
                 </td>
               </tr>
             )}

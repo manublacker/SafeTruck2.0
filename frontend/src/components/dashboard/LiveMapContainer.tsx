@@ -10,6 +10,7 @@ import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
 import { fetchDriverLocations, fetchAssignedTrips, fetchTrucks, fetchDrivers, type AssignedTrip } from "@/services/api";
 import { useRealtime } from "@/hooks/useRealtime";
+import { Icons } from "./DashboardIcons";
 
 const PANEL_PADDING = 12;
 const PANEL_GAP = 16;
@@ -149,6 +150,65 @@ export default function LiveMapContainer({ onNavigate }: Props) {
           originPin={originPin}
           destinationPin={destinationPin}
         />
+
+        {/* Badge "En vivo": el mapa refleja las posiciones GPS en tiempo real */}
+        <div
+          style={{
+            position: "absolute", top: 32, right: 32, zIndex: 500,
+            display: "inline-flex", alignItems: "center", gap: 7,
+            background: "rgba(255,255,255,0.96)", border: "1px solid var(--c-border)",
+            borderRadius: 999, padding: "6px 12px",
+            fontSize: "0.78rem", fontWeight: 700, color: "var(--c-ink)",
+            boxShadow: "0 1px 4px rgba(16,24,40,0.10)", pointerEvents: "none",
+          }}
+        >
+          <span style={{ position: "relative", display: "inline-flex", width: 8, height: 8 }}>
+            <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#22c55e", opacity: 0.5, animation: "st-mappulse 1.8s ease-out infinite" }} />
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
+          </span>
+          En vivo
+        </div>
+
+        {/* Overlay "sin unidades": aparece cuando ningún chofer manda GPS.
+            pointer-events:none → no bloquea el arrastre del mapa de fondo. */}
+        {driverLocations.length === 0 && (
+          <div
+            style={{
+              position: "absolute", inset: 20, zIndex: 400,
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              gap: 18, pointerEvents: "none",
+            }}
+          >
+            {/* Ícono flotante: círculo blanco limpio con un pulso muy suave */}
+            <div style={{ position: "relative", width: 100, height: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ position: "absolute", inset: 6, borderRadius: "50%", background: "rgba(229,57,53,0.12)", animation: "st-mappulse 2.6s ease-out infinite" }} />
+              <span style={{ position: "relative", width: 84, height: 84, borderRadius: "50%", background: "#fff", color: "#e53935", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(16,24,40,0.12)" }}>
+                <Icons.Truck size={30} />
+              </span>
+            </div>
+
+            {/* Card de texto translúcida (frosted): se ve el mapa a través, poco invasiva */}
+            <div
+              style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4, textAlign: "center",
+                background: "rgba(255,255,255,0.74)",
+                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                border: "1px solid rgba(255,255,255,0.6)", borderRadius: 16,
+                padding: "18px 44px", maxWidth: 560,
+                boxShadow: "0 10px 30px rgba(16,24,40,0.08)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--c-ink)" }}>
+                Sin unidades en circulación
+              </p>
+              <p style={{ margin: 0, fontSize: "0.9rem", lineHeight: 1.5, color: "var(--c-ink-2)" }}>
+                Agregá camiones y conductores para verlos acá en tiempo real.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <style>{`@keyframes st-mappulse { 0% { transform: scale(0.85); opacity: 0.7; } 70% { transform: scale(1.25); opacity: 0; } 100% { transform: scale(0.85); opacity: 0; } }`}</style>
       </div>
 
       {/* Panel derecho: solo lectura (operaciones) + disparador del modal */}
@@ -165,37 +225,45 @@ export default function LiveMapContainer({ onNavigate }: Props) {
           overflowY: "auto",
         }}
       >
-        {fleetLoading ? null : blocking ? (
-          <EmptyStateManager
-            hasTrucks={hasTrucks}
-            hasAvailableDrivers={hasAvailableDrivers}
-            hasAvailableTrucks={hasAvailableTrucks}
-            onNavigate={onNavigate}
-          />
-        ) : (
+        {fleetLoading ? null : (
           <>
-            {!canCreate && (
+            {/* Bloque superior: onboarding (sin flota) o disparador de viaje */}
+            {blocking ? (
               <EmptyStateManager
                 hasTrucks={hasTrucks}
                 hasAvailableDrivers={hasAvailableDrivers}
                 hasAvailableTrucks={hasAvailableTrucks}
                 onNavigate={onNavigate}
               />
+            ) : (
+              <>
+                {!canCreate && (
+                  <div style={{ marginBottom: 16 }}>
+                    <EmptyStateManager
+                      hasTrucks={hasTrucks}
+                      hasAvailableDrivers={hasAvailableDrivers}
+                      hasAvailableTrucks={hasAvailableTrucks}
+                      onNavigate={onNavigate}
+                    />
+                  </div>
+                )}
+
+                {/* Disparador: abre el formulario en un modal enfocado */}
+                <button
+                  className="st-btn-cta"
+                  style={{ width: "100%", marginBottom: 20 }}
+                  onClick={() => setCreatorOpen(true)}
+                  disabled={!canCreate}
+                  title={!canCreate ? "Activá un conductor con camión para asignar viajes" : undefined}
+                >
+                  + Nuevo viaje
+                </button>
+              </>
             )}
 
-            {/* Disparador: abre el formulario en un modal enfocado */}
-            <button
-              className="st-btn-cta"
-              style={{ width: "100%", marginBottom: 20 }}
-              onClick={() => setCreatorOpen(true)}
-              disabled={!canCreate}
-              title={!canCreate ? "Activá un conductor con camión para asignar viajes" : undefined}
-            >
-              + Nuevo viaje
-            </button>
-
-            {/* Viajes activos (lectura) */}
-            <section style={{ borderTop: "1px solid #f0f0f0", paddingTop: 20 }}>
+            {/* Viajes activos (lectura): siempre visible debajo, también durante
+                el onboarding, para que el seguimiento en vivo tenga un lugar fijo. */}
+            <section style={{ borderTop: "1px solid #f0f0f0", paddingTop: 20, marginTop: blocking ? 20 : 0 }}>
               <h2 className="st-section-title" style={{ marginBottom: 14 }}>Viajes activos</h2>
               <UpcomingTripsPanel trips={assignedTrips} loading={tripsLoading} />
             </section>

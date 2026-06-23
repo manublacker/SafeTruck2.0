@@ -117,6 +117,7 @@ export default function InviteDriverModal({ onClose, onSubscriptionRequired }: P
         {!link && !subscriptionError ? (
           <button
             className="st-btn-cta"
+            style={{ width: "100%", marginBottom: 10 }}
             onClick={handleGenerate}
             disabled={loading}
           >
