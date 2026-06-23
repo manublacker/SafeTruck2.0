@@ -76,6 +76,33 @@ function buildOriginIcon(): L.DivIcon {
   });
 }
 
+// Duración del deslizamiento del marcador del chofer entre dos posiciones (ms).
+const DRIVER_ANIM_MS = 800;
+
+/**
+ * Desliza un marcador desde su posición actual hasta `to` interpolando con
+ * requestAnimationFrame, en vez de saltar. `setFrameId` guarda el id del frame
+ * en curso, para poder cancelarlo si llega una posición nueva antes de terminar.
+ */
+function animateMarker(
+  marker: L.Marker,
+  to: L.LatLngTuple,
+  durationMs: number,
+  setFrameId: (id: number | null) => void,
+): void {
+  const from = marker.getLatLng();
+  const dLat = to[0] - from.lat;
+  const dLng = to[1] - from.lng;
+  const start = performance.now();
+  const tick = (now: number) => {
+    const t = Math.min(1, (now - start) / durationMs);
+    marker.setLatLng([from.lat + dLat * t, from.lng + dLng * t]);
+    if (t < 1) setFrameId(requestAnimationFrame(tick));
+    else setFrameId(null);
+  };
+  setFrameId(requestAnimationFrame(tick));
+}
+
 export default function MapDisplay({ routeResponse, driverLocations = [], originPin, destinationPin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -85,6 +112,7 @@ export default function MapDisplay({ routeResponse, driverLocations = [], origin
   const originPinRef = useRef<L.Marker | null>(null);
   const destPinRef = useRef<L.Marker | null>(null);
   const driverMarkersRef = useRef<Map<string, L.Marker>>(new Map());
+  const driverAnimRef = useRef<Map<string, number>>(new Map());
 
   // Inicialización + cleanup del mapa
   useEffect(() => {
@@ -120,6 +148,8 @@ export default function MapDisplay({ routeResponse, driverLocations = [], origin
       markerRef.current = null;
       originMarkerRef.current = null;
       driverMarkersRef.current.clear();
+      driverAnimRef.current.forEach((id) => cancelAnimationFrame(id));
+      driverAnimRef.current.clear();
     };
   }, []);
 
@@ -133,6 +163,8 @@ export default function MapDisplay({ routeResponse, driverLocations = [], origin
     // Eliminar marcadores de conductores que ya no están activos
     driverMarkersRef.current.forEach((marker, id) => {
       if (!incoming.has(id)) {
+        const anim = driverAnimRef.current.get(id);
+        if (anim != null) { cancelAnimationFrame(anim); driverAnimRef.current.delete(id); }
         marker.remove();
         driverMarkersRef.current.delete(id);
       }
@@ -143,7 +175,15 @@ export default function MapDisplay({ routeResponse, driverLocations = [], origin
       const label = loc.truck_plate ?? loc.driver_name ?? "Driver";
       const existing = driverMarkersRef.current.get(loc.driver_app_user_id);
       if (existing) {
-        existing.setLatLng([loc.lat, loc.lng]);
+        // Deslizamos el marcador hasta la nueva posición (en vez de saltar).
+        // Si había una animación en curso, la cancelamos y arrancamos de nuevo.
+        const id = loc.driver_app_user_id;
+        const prev = driverAnimRef.current.get(id);
+        if (prev != null) cancelAnimationFrame(prev);
+        animateMarker(existing, [loc.lat, loc.lng], DRIVER_ANIM_MS, (fid) => {
+          if (fid == null) driverAnimRef.current.delete(id);
+          else driverAnimRef.current.set(id, fid);
+        });
         existing.setIcon(buildDriverIcon(label));
       } else {
         const marker = L.marker([loc.lat, loc.lng], {
