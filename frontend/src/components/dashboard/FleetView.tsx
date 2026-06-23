@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/components/Toast";
 import type { Truck, Driver } from "@/types/auth";
 import { fetchTrucks, fetchDrivers, deleteDriver, startCheckout, fetchInvitations, deleteInvitation, fetchAssignedTrips, SubscriptionRequiredError, type DriverInvitation } from "@/services/api";
 import type { AdminPage } from "./AdminSidebar";
@@ -168,6 +169,7 @@ function TruckDetailPanel({
   const [editing, setEditing]         = useState(false);
   const [assigning, setAssigning]     = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const { showToast } = useToast();
   const serviceStyle = nextServiceStyle(truck.proximo_service);
 
   async function handleDelete() {
@@ -177,7 +179,7 @@ function TruckDetailPanel({
       await deleteTruck(truck.id);
       onDeleted();
     } catch (e: any) {
-      alert(e.message ?? "Error al eliminar");
+      showToast(e.message ?? "Error al eliminar el camión", "error");
     } finally {
       setDeleting(false);
       setShowConfirm(false);
@@ -570,6 +572,7 @@ function DriverDetailPanel({
 }) {
   const [deleting, setDeleting]       = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const { showToast } = useToast();
 
   async function handleDelete() {
     setDeleting(true);
@@ -577,7 +580,7 @@ function DriverDetailPanel({
       await deleteDriver(driver.id);
       onDeleted();
     } catch (e: any) {
-      alert(e.message ?? "Error al eliminar");
+      showToast(e.message ?? "Error al eliminar el conductor", "error");
     } finally {
       setDeleting(false);
       setShowConfirm(false);

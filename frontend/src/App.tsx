@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ToastProvider } from "@/components/Toast";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
@@ -16,6 +17,7 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 
 export default function App() {
   return (
+    <ToastProvider>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -38,5 +40,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </ToastProvider>
   );
 }
