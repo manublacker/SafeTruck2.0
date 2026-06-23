@@ -58,6 +58,11 @@ function formatDuration(t: AssignedTrip): string {
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
+/** Escapa un valor para CSV (separador ';', compatible con Excel en español). */
+function csvEscape(value: string): string {
+  return /[";\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
 // ── Vista ──────────────────────────────────────────────────────────────────
 
 export default function TripHistoryView() {
@@ -86,6 +91,33 @@ export default function TripHistoryView() {
   useEffect(() => { void loadTrips(); }, [loadTrips]);
 
   const reset = () => { setFilterDriver(""); setFilterStatus(""); setFrom(""); setTo(""); };
+
+  // Exporta a CSV exactamente lo que está filtrado en pantalla.
+  const exportCSV = () => {
+    const headers = ["Origen", "Destino", "Conductor", "Camión", "Fecha", "Duración", "Estado"];
+    const rows = filtered.map((t) => [
+      t.origin_label ?? "",
+      t.destination_label ?? "",
+      t.driver_nombre ?? (t.driver_id ? `Conductor #${t.driver_id}` : ""),
+      t.truck_patente ?? "",
+      formatTripDate(t),
+      formatDuration(t),
+      STATUS_LABELS[t.status] ?? t.status,
+    ]);
+    const csv = [headers, ...rows]
+      .map((r) => r.map((c) => csvEscape(String(c))).join(";"))
+      .join("\r\n");
+    // BOM (﻿) para que Excel respete los acentos.
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `viajes_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Conductores que aparecen en los viajes (para el select de filtro)
   const driverNames = useMemo(() => {
@@ -154,7 +186,15 @@ export default function TripHistoryView() {
             Restablecer
           </button>
         )}
-        <div style={{ marginLeft: "auto" }}>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <button
+            className="st-btn-secondary"
+            onClick={exportCSV}
+            disabled={loading || filtered.length === 0}
+            title={filtered.length === 0 ? "No hay viajes para exportar" : "Descargar CSV con los filtros aplicados"}
+          >
+            Exportar CSV
+          </button>
           <button
             className="st-btn-secondary"
             onClick={() => void loadTrips()}
