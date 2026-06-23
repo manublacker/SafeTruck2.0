@@ -75,6 +75,25 @@ export function broadcastToCompany(
 }
 
 /**
+ * Presencia: userIds de los choferes conectados de una empresa (deduplicados,
+ * por si un chofer tiene varias conexiones/tabs abiertas).
+ */
+function onlineDriverIds(companyId: string): string[] {
+  const set = rooms.get(companyId)
+  if (!set) return []
+  return [...new Set([...set].filter(c => c.role === 'driver').map(c => c.userId))]
+}
+
+/** Avisa a los admins de la empresa la lista actual de choferes conectados. */
+function broadcastPresence(companyId: string): void {
+  broadcastToCompany(
+    companyId,
+    { type: 'presence', online_driver_ids: onlineDriverIds(companyId) },
+    { role: 'admin' },
+  )
+}
+
+/**
  * Determina a qué empresa pertenece el usuario y con qué rol, mirando la
  * tabla drivers: un chofer está vinculado a un admin (drivers.user_id); si
  * el usuario no aparece como chofer activo, asumimos que ES el admin.
@@ -128,10 +147,17 @@ export function attachRealtime(server: Server): void {
       // su rol/empresa (útil para debug y para que el front sepa qué esperar).
       ws.send(JSON.stringify({ type: 'connected', role, companyId }))
 
+      // Presencia: si entró un chofer, avisamos a los admins su nueva lista de
+      // conectados. Si entró un admin, le mandamos el snapshot actual.
+      if (role === 'driver') broadcastPresence(companyId)
+      else ws.send(JSON.stringify({ type: 'presence', online_driver_ids: onlineDriverIds(companyId) }))
+
       ws.on('pong', () => { client.isAlive = true })
       ws.on('close', () => {
         leaveRoom(client)
         console.log(`[realtime] desconectado role=${role} empresa=${companyId}`)
+        // Si se fue un chofer, actualizamos la presencia para los admins.
+        if (role === 'driver') broadcastPresence(companyId)
       })
       ws.on('error', () => leaveRoom(client))
     } catch (err: any) {
