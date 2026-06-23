@@ -55,7 +55,9 @@ export default function LiveMapContainer({ onNavigate }: Props) {
     setSelectedDriverId(availableDrivers[0]?.id ?? null);
   }, [availableDrivers, selectedDriverId]);
 
-  // Polling posiciones GPS cada 5s
+  // Polling de respaldo de posiciones GPS (cada 30s). El WebSocket empuja los
+  // cambios en tiempo real; este polling solo reconcilia (ej: sacar choferes
+  // que dejaron de mandar GPS) por si el socket se cae.
   useEffect(() => {
     async function pollLocations() {
       try {
@@ -64,11 +66,12 @@ export default function LiveMapContainer({ onNavigate }: Props) {
       } catch { /* silencioso */ }
     }
     void pollLocations();
-    locationPollRef.current = setInterval(() => void pollLocations(), 5_000);
+    locationPollRef.current = setInterval(() => void pollLocations(), 30_000);
     return () => { if (locationPollRef.current) clearInterval(locationPollRef.current); };
   }, []);
 
-  // Fetch de viajes asignados + polling cada 10s
+  // Fetch de viajes asignados + polling de respaldo (cada 30s). El WebSocket
+  // (trip_update/trip_assigned) maneja el tiempo real; el polling es fallback.
   const refreshTrips = useCallback(async () => {
     try {
       const data = await fetchAssignedTrips();
@@ -80,7 +83,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
 
   useEffect(() => {
     void refreshTrips();
-    tripsPollRef.current = setInterval(() => void refreshTrips(), 10_000);
+    tripsPollRef.current = setInterval(() => void refreshTrips(), 30_000);
     return () => { if (tripsPollRef.current) clearInterval(tripsPollRef.current); };
   }, [refreshTrips]);
 
