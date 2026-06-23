@@ -9,6 +9,7 @@ import type { AdminPage } from "./AdminSidebar";
 import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
 import { fetchDriverLocations, fetchAssignedTrips, fetchTrucks, fetchDrivers, type AssignedTrip } from "@/services/api";
+import { useRealtime } from "@/hooks/useRealtime";
 
 const PANEL_PADDING = 12;
 const PANEL_GAP = 16;
@@ -82,6 +83,33 @@ export default function LiveMapContainer({ onNavigate }: Props) {
     tripsPollRef.current = setInterval(() => void refreshTrips(), 10_000);
     return () => { if (tripsPollRef.current) clearInterval(tripsPollRef.current); };
   }, [refreshTrips]);
+
+  // Tiempo real (WebSocket): hace que el mapa y los viajes se actualicen al
+  // instante, sin esperar al polling. El polling de arriba queda como respaldo
+  // (reconciliación) por si el socket se cae. Todos los eventos llegan ya
+  // filtrados por empresa desde el backend.
+  useRealtime((e) => {
+    if (e.type === "driver_location") {
+      const loc = e.location;
+      // Reemplazamos la posición previa de ese chofer por la nueva (upsert).
+      setDriverLocations((prev) => [
+        ...prev.filter((d) => d.driver_app_user_id !== loc.driver_app_user_id),
+        {
+          driver_app_user_id: loc.driver_app_user_id,
+          driver_name: loc.driver_name,
+          truck_plate: loc.truck_plate,
+          lat: loc.lat,
+          lng: loc.lng,
+        },
+      ]);
+    } else if (e.type === "driver_location_removed") {
+      setDriverLocations((prev) => prev.filter((d) => d.driver_app_user_id !== e.driver_app_user_id));
+    } else if (e.type === "trip_update" || e.type === "trip_assigned") {
+      // Un viaje cambió (lo arrancó/completó un chofer, o se asignó): refrescamos
+      // la lista para reflejarlo. Es poco frecuente, así que un refetch alcanza.
+      void refreshTrips();
+    }
+  });
 
   // Cerrar el modal de "Nuevo viaje" con Escape
   useEffect(() => {
