@@ -179,28 +179,29 @@ export default function LiveMapContainer({ onNavigate }: Props) {
               gap: 18, pointerEvents: "none",
             }}
           >
-            {/* Ícono flotante con pulso (el "globito que titila") */}
-            <div style={{ position: "relative", width: 96, height: 96, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(229,57,53,0.12)", animation: "st-mappulse 2.4s ease-out infinite" }} />
-              <span style={{ position: "absolute", inset: 16, borderRadius: "50%", background: "rgba(229,57,53,0.14)" }} />
-              <span style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: "#fff", border: "1px solid var(--c-border)", color: "#e53935", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 10px rgba(16,24,40,0.10)" }}>
-                <Icons.Truck size={26} />
+            {/* Ícono flotante: círculo blanco limpio con un pulso muy suave */}
+            <div style={{ position: "relative", width: 100, height: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ position: "absolute", inset: 6, borderRadius: "50%", background: "rgba(229,57,53,0.12)", animation: "st-mappulse 2.6s ease-out infinite" }} />
+              <span style={{ position: "relative", width: 84, height: 84, borderRadius: "50%", background: "#fff", color: "#e53935", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(16,24,40,0.12)" }}>
+                <Icons.Truck size={30} />
               </span>
             </div>
 
-            {/* Card de texto con fondo sólido para no mezclarse con las calles */}
+            {/* Card de texto translúcida (frosted): se ve el mapa a través, poco invasiva */}
             <div
               style={{
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 4, textAlign: "center",
-                background: "#fff", border: "1px solid var(--c-border)", borderRadius: 16,
-                padding: "22px 32px", maxWidth: 380,
-                boxShadow: "0 12px 36px rgba(16,24,40,0.14)",
+                background: "rgba(255,255,255,0.74)",
+                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                border: "1px solid rgba(255,255,255,0.6)", borderRadius: 16,
+                padding: "18px 44px", maxWidth: 560,
+                boxShadow: "0 10px 30px rgba(16,24,40,0.08)",
               }}
             >
               <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--c-ink)" }}>
                 Sin unidades en circulación
               </p>
-              <p style={{ margin: 0, fontSize: "0.88rem", lineHeight: 1.5, color: "var(--c-ink-2)" }}>
+              <p style={{ margin: 0, fontSize: "0.9rem", lineHeight: 1.5, color: "var(--c-ink-2)" }}>
                 Agregá camiones y conductores para verlos acá en tiempo real.
               </p>
             </div>
