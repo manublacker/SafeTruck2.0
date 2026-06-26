@@ -1290,7 +1290,7 @@ export default function MapScreen() {
 
       {/* Tarjeta de ruta */}
       {showInfo && currentRoute && !navMode && (
-        <View style={[s.routeCard, { paddingBottom: insets.bottom + 16 }]}>
+        <View style={[s.routeCard, { paddingBottom: 18 }]}>
           <View style={s.routeCardHeader}>
             <View>
               <Text style={s.routeCardTitle}>Ruta calculada</Text>
@@ -1679,13 +1679,12 @@ function makeStyles(t: Theme) {
       shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
     },
     simFabText: { color: t.text, fontSize: 13, fontWeight: '700' },
-    // Botón "Simular recorrido" dentro de la card de ruta (llena el espacio inferior).
+    // Botón "Simular recorrido" dentro de la card de ruta.
     simRouteBtn: {
-      marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-      backgroundColor: t.surface2, borderWidth: 1, borderColor: t.cardBorder,
-      borderRadius: 12, paddingVertical: 13,
+      marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+      backgroundColor: t.surface2, borderRadius: 12, paddingVertical: 12,
     },
-    simRouteBtnText: { color: t.text, fontSize: 15, fontWeight: '700' },
+    simRouteBtnText: { color: t.text, fontSize: 14, fontWeight: '700' },
     simBar: {
       position: 'absolute', top: 110, left: 16, right: 16,
       flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -1737,21 +1736,19 @@ function makeStyles(t: Theme) {
       width: 40, height: 40, alignItems: 'center', justifyContent: 'center',
       marginRight: 7,
     },
-    divider: { height: 1, backgroundColor: t.border, marginVertical: 14 },
-    stats: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+    divider: { height: 1, backgroundColor: t.border, marginVertical: 12 },
+    stats: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
     stat: { flex: 1, alignItems: 'center' },
-    statVal: { color: t.accent, fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
-    statLbl: { color: t.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.8, marginTop: 3 },
-    statDiv: { width: 1, height: 36, backgroundColor: t.border },
+    statVal: { color: t.accent, fontSize: 22, fontWeight: '700', letterSpacing: -0.5 },
+    statLbl: { color: t.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.8, marginTop: 2 },
+    statDiv: { width: 1, height: 28, backgroundColor: t.border },
     legend: { flexDirection: 'row', justifyContent: 'space-around' },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     legendDot: { width: 8, height: 8, borderRadius: 4 },
     legendText: { color: t.textMuted, fontSize: 11 },
 
     warnBadge: {
-      marginTop: 4, alignSelf: 'flex-start',
-      backgroundColor: t.warningSoft, borderRadius: 999,
-      paddingHorizontal: 10, paddingVertical: 3,
+      marginTop: 8, alignSelf: 'flex-start',
     },
     warnBadgeText: { color: t.warning, fontSize: 11, fontWeight: '600' },
 
