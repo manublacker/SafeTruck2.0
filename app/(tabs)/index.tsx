@@ -1129,35 +1129,81 @@ export default function MapScreen() {
 
       {/* Header */}
       <View style={s.header}>
-        <View style={s.searchRow}>
-          <View style={s.searchBox}>
-            <Ionicons name="search-outline" size={16} color={t.text} />
-            <TextInput
-              style={s.searchInput}
-              placeholder="Buscar destino..."
-              placeholderTextColor={t.textMuted}
-              value={searchText}
-              onChangeText={onSearchChange}
-              onFocus={() => { setShowSearch(true); setShowOriginSearch(false) }}
-              returnKeyType="search"
-              onSubmitEditing={() => searchAddress(searchText)}
-            />
-          </View>
-
-          <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/(tabs)/incidents')} accessibilityLabel="Ver alertas activas">
-            <Ionicons name="warning-outline" size={18} color={t.text} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={s.iconBtn} onPress={toggleTheme}>
-            <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={18} color={t.text} />
-          </TouchableOpacity>
-
-          {(currentRoute || tripSheet || searchText.length > 0) && (
-            <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute}>
+        {destMarker && !navMode && !simRunning ? (
+          /* ── Modo ruta: origen (arriba, editable) + destino (abajo), estilo Google Maps ── */
+          <View style={s.searchRow}>
+            <View style={s.routeFields}>
+              {/* Origen: por defecto "Tu ubicación" (GPS); se puede cambiar */}
+              <View style={s.searchBox}>
+                <Ionicons name="ellipse" size={11} color="#16A34A" />
+                <TextInput
+                  style={s.searchInput}
+                  placeholder="Tu ubicación"
+                  placeholderTextColor={t.textMuted}
+                  value={originText}
+                  onChangeText={onOriginChange}
+                  onFocus={() => { setShowSearch(false); setShowOriginSearch(true) }}
+                  returnKeyType="search"
+                  onSubmitEditing={() => searchOriginAddress(originText)}
+                />
+                {originOverride && (
+                  <TouchableOpacity onPress={resetOrigin} accessibilityLabel="Usar mi ubicación">
+                    <Ionicons name="close-circle" size={16} color={t.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <View style={s.fieldDivider} />
+              {/* Destino */}
+              <View style={s.searchBox}>
+                <Ionicons name="location" size={15} color="#2563EB" />
+                <TextInput
+                  style={s.searchInput}
+                  placeholder="Buscar destino..."
+                  placeholderTextColor={t.textMuted}
+                  value={searchText}
+                  onChangeText={onSearchChange}
+                  onFocus={() => { setShowSearch(true); setShowOriginSearch(false) }}
+                  returnKeyType="search"
+                  onSubmitEditing={() => searchAddress(searchText)}
+                />
+              </View>
+            </View>
+            <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute} accessibilityLabel="Cancelar ruta">
               <Ionicons name="close-outline" size={18} color={t.danger} />
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        ) : (
+          /* ── Modo inicial: solo buscador de destino + accesos ── */
+          <View style={s.searchRow}>
+            <View style={s.searchBox}>
+              <Ionicons name="search-outline" size={16} color={t.text} />
+              <TextInput
+                style={s.searchInput}
+                placeholder="Buscar destino..."
+                placeholderTextColor={t.textMuted}
+                value={searchText}
+                onChangeText={onSearchChange}
+                onFocus={() => { setShowSearch(true); setShowOriginSearch(false) }}
+                returnKeyType="search"
+                onSubmitEditing={() => searchAddress(searchText)}
+              />
+            </View>
+
+            <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/(tabs)/incidents')} accessibilityLabel="Ver alertas activas">
+              <Ionicons name="warning-outline" size={18} color={t.text} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={s.iconBtn} onPress={toggleTheme}>
+              <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={18} color={t.text} />
+            </TouchableOpacity>
+
+            {(currentRoute || tripSheet || searchText.length > 0) && (
+              <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute}>
+                <Ionicons name="close-outline" size={18} color={t.danger} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {showSearch && (searchResults.length > 0 || searching) && (
           <View style={s.searchResults}>
@@ -1198,28 +1244,7 @@ export default function MapScreen() {
             ))}
           </View>
         )}
-        {/* Selector de origen ("Salir desde…"): por defecto usa el GPS del chofer */}
-        <View style={[s.searchRow, s.originRow]}>
-          <View style={s.searchBox}>
-            <Ionicons name="navigate-circle-outline" size={16} color={t.accent} />
-            <TextInput
-              style={s.searchInput}
-              placeholder="Salir desde: mi ubicación"
-              placeholderTextColor={t.textMuted}
-              value={originText}
-              onChangeText={onOriginChange}
-              onFocus={() => { setShowSearch(false); setShowOriginSearch(true) }}
-              returnKeyType="search"
-              onSubmitEditing={() => searchOriginAddress(originText)}
-            />
-            {originOverride && (
-              <TouchableOpacity onPress={resetOrigin} accessibilityLabel="Usar mi ubicación">
-                <Ionicons name="close-circle" size={18} color={t.textMuted} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
+        {/* Resultados de búsqueda del origen */}
         {showOriginSearch && (originResults.length > 0 || originSearching) && (
           <View style={s.searchResults}>
             {originSearching && (
@@ -1330,7 +1355,7 @@ export default function MapScreen() {
       {/* Simulación: botón para simular el recorrido sobre la ruta calculada
           o el viaje asignado. (Animación todavía no migrada — ETAPA 6) */}
       {!simRunning && !navMode && (tripSheet?.status === 'in_progress' || (currentRoute && !tripSheet)) && (
-        <TouchableOpacity style={s.simFab} onPress={startSimulation} activeOpacity={0.85}>
+        <TouchableOpacity style={[s.simFab, destMarker && s.simFabLow]} onPress={startSimulation} activeOpacity={0.85}>
           <Ionicons name="navigate-circle-outline" size={20} color={t.text} />
           <Text style={s.simFabText}>Simular</Text>
         </TouchableOpacity>
@@ -1547,7 +1572,8 @@ function makeStyles(t: Theme) {
     },
     searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
     searchInput: { flex: 1, color: t.text, fontSize: 15, height: 36 },
-    originRow: { marginTop: 8 },
+    routeFields: { flex: 1 },
+    fieldDivider: { height: 1, backgroundColor: t.cardBorder, marginVertical: 5, marginLeft: 24 },
     searchClear: { color: t.textMuted, fontSize: 14, paddingHorizontal: 4 },
 
     iconBtn: {
@@ -1643,6 +1669,9 @@ function makeStyles(t: Theme) {
       shadowColor: '#000', shadowOpacity: 0.2,
       shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
     },
+    // Cuando se muestra el panel de origen+destino (2 campos), el botón Simular
+    // baja para no quedar tapado por el panel.
+    simFabLow: { top: 162 },
     simFabText: { color: t.text, fontSize: 13, fontWeight: '700' },
     simBar: {
       position: 'absolute', top: 110, left: 16, right: 16,
