@@ -105,6 +105,7 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null)
   const searchTimeout = useRef<any>(null)
   const reportSearchTimeout = useRef<any>(null)
+  const originSearchTimeout = useRef<any>(null)
 
   const isDark = useStore(st => st.isDark)
   const toggleTheme = useStore(st => st.toggleTheme)
@@ -164,6 +165,14 @@ export default function MapScreen() {
   const [searching, setSearching] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [recents, setRecents] = useState<RecentDest[]>([])
+
+  // Origen del ruteo. Por defecto (null) se usa la ubicación GPS del chofer.
+  // Si elige una dirección en "Salir desde…", queda como override del origen.
+  const [originOverride, setOriginOverride] = useState<{ lat: number; lng: number; label: string } | null>(null)
+  const [originText, setOriginText] = useState('')
+  const [originResults, setOriginResults] = useState<any[]>([])
+  const [originSearching, setOriginSearching] = useState(false)
+  const [showOriginSearch, setShowOriginSearch] = useState(false)
   const [navMode, setNavMode] = useState(false)
   const watchRef = useRef<any>(null)
 
@@ -639,6 +648,7 @@ export default function MapScreen() {
   useFocusEffect(
     useCallback(() => {
       setShowSearch(false)
+      setShowOriginSearch(false)
       Keyboard.dismiss()
     }, [])
   )
@@ -685,6 +695,54 @@ export default function MapScreen() {
       longitudeDelta: 0.02,
     }, 500)
     calculateRoute(lat, lng)
+  }
+
+  // ── Origen ("Salir desde…") ──────────────────────────────────────────────
+  // Mismo buscador (Nominatim) que el destino, pero setea el origen del ruteo.
+  const searchOriginAddress = async (query: string) => {
+    if (query.length < 3) { setOriginResults([]); return }
+    setOriginSearching(true)
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}&format=json&limit=5&countrycodes=ar&bounded=1&viewbox=-59.2,-35.1,-57.8,-34.2`,
+        { headers: { 'User-Agent': 'SafeTruck/1.0' } }
+      )
+      setOriginResults(await res.json())
+    } catch (e) {
+      console.log('Origin search error:', e)
+    } finally {
+      setOriginSearching(false)
+    }
+  }
+
+  const onOriginChange = (text: string) => {
+    setOriginText(text)
+    if (originSearchTimeout.current) clearTimeout(originSearchTimeout.current)
+    originSearchTimeout.current = setTimeout(() => searchOriginAddress(text), 400)
+  }
+
+  const selectOrigin = (result: any) => {
+    const lat = parseFloat(result.lat)
+    const lng = parseFloat(result.lon)
+    const label = result.display_name.split(',').slice(0, 2).join(',')
+    setOriginOverride({ lat, lng, label })
+    setOriginText(label)
+    setOriginResults([])
+    setShowOriginSearch(false)
+    Keyboard.dismiss()
+    mapRef.current?.animateToRegion({ latitude: lat, longitude: lng, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 500)
+    // Si ya hay un destino elegido, recalculamos la ruta desde el nuevo origen.
+    if (destMarker) calculateRoute(destMarker.lat, destMarker.lng)
+  }
+
+  // Vuelve a usar la ubicación GPS como origen.
+  const resetOrigin = () => {
+    setOriginOverride(null)
+    setOriginText('')
+    setOriginResults([])
+    setShowOriginSearch(false)
+    Keyboard.dismiss()
+    if (destMarker) calculateRoute(destMarker.lat, destMarker.lng)
   }
 
   // Abre el modal de denuncia. Por defecto apunta a la ubicación actual (GPS).
@@ -734,7 +792,11 @@ export default function MapScreen() {
 
   const calculateRoute = async (destLat: number, destLng: number) => {
     if (loading) return
-    if (!location) return Alert.alert('Error', 'Esperando GPS...')
+    // Origen: la dirección elegida en "Salir desde…" o, por defecto, el GPS del chofer.
+    const originPoint = originOverride
+      ? { lat: originOverride.lat, lng: originOverride.lng }
+      : location
+    if (!originPoint) return Alert.alert('Error', 'Esperando GPS...')
     if (!activeVehicle) return Alert.alert('Sin vehículo', 'Tu empresa aún no te asignó un camión')
     setDestMarker({ lat: destLat, lng: destLng })
     setCurrentRoute(null)
@@ -755,7 +817,7 @@ export default function MapScreen() {
         signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          origin: location,
+          origin: originPoint,
           destination: { lat: destLat, lng: destLng },
           vehicle: {
             weight_kg: activeVehicle.weight_kg,
@@ -841,6 +903,11 @@ export default function MapScreen() {
     setShowInfo(false)
     setSearchText('')
     setDestMarker(null)
+    // Origen: volver al default (GPS)
+    setOriginOverride(null)
+    setOriginText('')
+    setOriginResults([])
+    setShowOriginSearch(false)
     // Viaje elegido: que NO quede vigente en el mapa al cancelar.
     setTripSheet(null)
     setTripSegments(null)
@@ -942,6 +1009,12 @@ export default function MapScreen() {
           <Marker
             coordinate={{ latitude: destMarker.lat, longitude: destMarker.lng }}
             pinColor="#2563EB"
+          />
+        )}
+        {originOverride && (
+          <Marker
+            coordinate={{ latitude: originOverride.lat, longitude: originOverride.lng }}
+            pinColor="#16A34A"
           />
         )}
         {/* ETAPA 2: ruta coloreada por segmento (verde apto / rojo no apto / naranja sin datos).
@@ -1056,35 +1129,81 @@ export default function MapScreen() {
 
       {/* Header */}
       <View style={s.header}>
-        <View style={s.searchRow}>
-          <View style={s.searchBox}>
-            <Ionicons name="search-outline" size={16} color={t.text} />
-            <TextInput
-              style={s.searchInput}
-              placeholder="Buscar destino..."
-              placeholderTextColor={t.textMuted}
-              value={searchText}
-              onChangeText={onSearchChange}
-              onFocus={() => setShowSearch(true)}
-              returnKeyType="search"
-              onSubmitEditing={() => searchAddress(searchText)}
-            />
-          </View>
-
-          <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/(tabs)/incidents')} accessibilityLabel="Ver alertas activas">
-            <Ionicons name="warning-outline" size={18} color={t.text} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={s.iconBtn} onPress={toggleTheme}>
-            <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={18} color={t.text} />
-          </TouchableOpacity>
-
-          {(currentRoute || tripSheet || searchText.length > 0) && (
-            <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute}>
+        {destMarker && !navMode && !simRunning ? (
+          /* ── Modo ruta: origen (arriba, editable) + destino (abajo), estilo Google Maps ── */
+          <View style={s.searchRow}>
+            <View style={s.routeFields}>
+              {/* Origen: por defecto "Tu ubicación" (GPS); se puede cambiar */}
+              <View style={s.searchBox}>
+                <Ionicons name="ellipse" size={11} color="#16A34A" />
+                <TextInput
+                  style={s.searchInput}
+                  placeholder="Tu ubicación"
+                  placeholderTextColor={t.textMuted}
+                  value={originText}
+                  onChangeText={onOriginChange}
+                  onFocus={() => { setShowSearch(false); setShowOriginSearch(true) }}
+                  returnKeyType="search"
+                  onSubmitEditing={() => searchOriginAddress(originText)}
+                />
+                {originOverride && (
+                  <TouchableOpacity onPress={resetOrigin} accessibilityLabel="Usar mi ubicación">
+                    <Ionicons name="close-circle" size={16} color={t.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <View style={s.fieldDivider} />
+              {/* Destino */}
+              <View style={s.searchBox}>
+                <Ionicons name="location" size={15} color="#2563EB" />
+                <TextInput
+                  style={s.searchInput}
+                  placeholder="Buscar destino..."
+                  placeholderTextColor={t.textMuted}
+                  value={searchText}
+                  onChangeText={onSearchChange}
+                  onFocus={() => { setShowSearch(true); setShowOriginSearch(false) }}
+                  returnKeyType="search"
+                  onSubmitEditing={() => searchAddress(searchText)}
+                />
+              </View>
+            </View>
+            <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute} accessibilityLabel="Cancelar ruta">
               <Ionicons name="close-outline" size={18} color={t.danger} />
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        ) : (
+          /* ── Modo inicial: solo buscador de destino + accesos ── */
+          <View style={s.searchRow}>
+            <View style={s.searchBox}>
+              <Ionicons name="search-outline" size={16} color={t.text} />
+              <TextInput
+                style={s.searchInput}
+                placeholder="Buscar destino..."
+                placeholderTextColor={t.textMuted}
+                value={searchText}
+                onChangeText={onSearchChange}
+                onFocus={() => { setShowSearch(true); setShowOriginSearch(false) }}
+                returnKeyType="search"
+                onSubmitEditing={() => searchAddress(searchText)}
+              />
+            </View>
+
+            <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/(tabs)/incidents')} accessibilityLabel="Ver alertas activas">
+              <Ionicons name="warning-outline" size={18} color={t.text} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={s.iconBtn} onPress={toggleTheme}>
+              <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={18} color={t.text} />
+            </TouchableOpacity>
+
+            {(currentRoute || tripSheet || searchText.length > 0) && (
+              <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute}>
+                <Ionicons name="close-outline" size={18} color={t.danger} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {showSearch && (searchResults.length > 0 || searching) && (
           <View style={s.searchResults}>
@@ -1125,6 +1244,29 @@ export default function MapScreen() {
             ))}
           </View>
         )}
+        {/* Resultados de búsqueda del origen */}
+        {showOriginSearch && (originResults.length > 0 || originSearching) && (
+          <View style={s.searchResults}>
+            {originSearching && (
+              <View style={s.searchResultItem}>
+                <ActivityIndicator size="small" color={t.accent} />
+                <Text style={s.searchResultAddr}>Buscando...</Text>
+              </View>
+            )}
+            {originResults.map((result, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[s.searchResultItem, idx < originResults.length - 1 && s.searchResultBorder]}
+                onPress={() => selectOrigin(result)}
+              >
+                <Ionicons name="location-outline" size={16} color={t.textMuted} style={{ marginRight: 8 }} />
+                <Text style={s.searchResultName} numberOfLines={1}>
+                  {result.display_name.split(',')[0]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Banner sin vehículo */}
@@ -1148,7 +1290,7 @@ export default function MapScreen() {
 
       {/* Tarjeta de ruta */}
       {showInfo && currentRoute && !navMode && (
-        <View style={[s.routeCard, { paddingBottom: insets.bottom + 16 }]}>
+        <View style={[s.routeCard, { paddingBottom: 18 }]}>
           <View style={s.routeCardHeader}>
             <View>
               <Text style={s.routeCardTitle}>Ruta calculada</Text>
@@ -1190,6 +1332,11 @@ export default function MapScreen() {
               </View>
             ))}
           </View>
+
+          <TouchableOpacity style={s.simRouteBtn} onPress={startSimulation} activeOpacity={0.85}>
+            <Ionicons name="navigate-circle-outline" size={18} color={t.text} />
+            <Text style={s.simRouteBtnText}>Simular recorrido</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1210,9 +1357,10 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Simulación: botón para simular el recorrido sobre la ruta calculada
-          o el viaje asignado. (Animación todavía no migrada — ETAPA 6) */}
-      {!simRunning && !navMode && (tripSheet?.status === 'in_progress' || (currentRoute && !tripSheet)) && (
+      {/* Simulación: para viajes asignados queda como botón flotante (y se oculta
+          mientras se busca). En una ruta calculada por búsqueda, el botón
+          "Simular recorrido" vive dentro de la card de ruta. */}
+      {!simRunning && !navMode && tripSheet?.status === 'in_progress' && !showSearch && !showOriginSearch && (
         <TouchableOpacity style={s.simFab} onPress={startSimulation} activeOpacity={0.85}>
           <Ionicons name="navigate-circle-outline" size={20} color={t.text} />
           <Text style={s.simFabText}>Simular</Text>
@@ -1236,14 +1384,17 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* FAB de reporte */}
-      <TouchableOpacity
-        style={[s.fab, showInfo && currentRoute && !navMode && s.fabRaised, tripSheet && !navMode && s.fabTripRaised, navMode && s.fabNavRaised]}
-        onPress={openReportModal}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="alert-circle" size={28} color="#fff" />
-      </TouchableOpacity>
+      {/* FAB de reporte — oculto en la pantalla de "Ruta calculada" para no
+          superponerse con el botón de arrancar (play). */}
+      {!(showInfo && currentRoute && !navMode) && (
+        <TouchableOpacity
+          style={[s.fab, tripSheet && !navMode && s.fabTripRaised, navMode && s.fabNavRaised]}
+          onPress={openReportModal}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="alert-circle" size={28} color="#fff" />
+        </TouchableOpacity>
+      )}
 
       {/* Modal de incidente */}
       <Modal visible={showIncidentModal} transparent animationType="slide">
@@ -1430,6 +1581,8 @@ function makeStyles(t: Theme) {
     },
     searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
     searchInput: { flex: 1, color: t.text, fontSize: 15, height: 36 },
+    routeFields: { flex: 1 },
+    fieldDivider: { height: 1, backgroundColor: t.cardBorder, marginVertical: 5, marginLeft: 24 },
     searchClear: { color: t.textMuted, fontSize: 14, paddingHorizontal: 4 },
 
     iconBtn: {
@@ -1526,6 +1679,12 @@ function makeStyles(t: Theme) {
       shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
     },
     simFabText: { color: t.text, fontSize: 13, fontWeight: '700' },
+    // Botón "Simular recorrido" dentro de la card de ruta.
+    simRouteBtn: {
+      marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+      backgroundColor: t.surface2, borderRadius: 12, paddingVertical: 12,
+    },
+    simRouteBtnText: { color: t.text, fontSize: 14, fontWeight: '700' },
     simBar: {
       position: 'absolute', top: 110, left: 16, right: 16,
       flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -1577,21 +1736,19 @@ function makeStyles(t: Theme) {
       width: 40, height: 40, alignItems: 'center', justifyContent: 'center',
       marginRight: 7,
     },
-    divider: { height: 1, backgroundColor: t.border, marginVertical: 14 },
-    stats: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+    divider: { height: 1, backgroundColor: t.border, marginVertical: 12 },
+    stats: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
     stat: { flex: 1, alignItems: 'center' },
-    statVal: { color: t.accent, fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
-    statLbl: { color: t.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.8, marginTop: 3 },
-    statDiv: { width: 1, height: 36, backgroundColor: t.border },
+    statVal: { color: t.accent, fontSize: 22, fontWeight: '700', letterSpacing: -0.5 },
+    statLbl: { color: t.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.8, marginTop: 2 },
+    statDiv: { width: 1, height: 28, backgroundColor: t.border },
     legend: { flexDirection: 'row', justifyContent: 'space-around' },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     legendDot: { width: 8, height: 8, borderRadius: 4 },
     legendText: { color: t.textMuted, fontSize: 11 },
 
     warnBadge: {
-      marginTop: 4, alignSelf: 'flex-start',
-      backgroundColor: t.warningSoft, borderRadius: 999,
-      paddingHorizontal: 10, paddingVertical: 3,
+      marginTop: 8, alignSelf: 'flex-start',
     },
     warnBadgeText: { color: t.warning, fontSize: 11, fontWeight: '600' },
 
