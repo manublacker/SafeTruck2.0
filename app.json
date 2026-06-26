@@ -9,9 +9,6 @@
     "newArchEnabled": true,
     "scheme": "safetruck",
     "runtimeVersion": "1.0.0",
-    "updates": {
-      "url": "https://u.expo.dev/fa0da953-242f-451a-892b-b584083a4f62"
-    },
     "plugins": [
       "expo-router"
     ],
@@ -22,7 +19,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.SafeTruck2"
+      "bundleIdentifier": "com.anonymous.SafeTruck2",
+      "runtimeVersion": "1.0.0"
     },
     "android": {
       "adaptiveIcon": {
@@ -30,7 +28,16 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "runtimeVersion": {
+        "policy": "appVersion"
+      },
+      "package": "com.safetruck.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDxR1OE03GXSrdLtOuc1OvmoCPlAIFm1qw"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -41,6 +48,11 @@
         "projectId": "fa0da953-242f-451a-892b-b584083a4f62"
       }
     },
-    "owner": "manublacker"
+    "owner": "manublacker",
+    "updates": {
+      "url": "https://u.expo.dev/fa0da953-242f-451a-892b-b584083a4f62",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }
