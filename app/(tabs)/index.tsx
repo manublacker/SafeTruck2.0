@@ -1332,6 +1332,11 @@ export default function MapScreen() {
               </View>
             ))}
           </View>
+
+          <TouchableOpacity style={s.simRouteBtn} onPress={startSimulation} activeOpacity={0.85}>
+            <Ionicons name="navigate-circle-outline" size={18} color={t.text} />
+            <Text style={s.simRouteBtnText}>Simular recorrido</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1352,10 +1357,11 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Simulación: botón para simular el recorrido sobre la ruta calculada
-          o el viaje asignado. (Animación todavía no migrada — ETAPA 6) */}
-      {!simRunning && !navMode && (tripSheet?.status === 'in_progress' || (currentRoute && !tripSheet)) && (
-        <TouchableOpacity style={[s.simFab, destMarker && s.simFabLow]} onPress={startSimulation} activeOpacity={0.85}>
+      {/* Simulación: para viajes asignados queda como botón flotante (y se oculta
+          mientras se busca). En una ruta calculada por búsqueda, el botón
+          "Simular recorrido" vive dentro de la card de ruta. */}
+      {!simRunning && !navMode && tripSheet?.status === 'in_progress' && !showSearch && !showOriginSearch && (
+        <TouchableOpacity style={s.simFab} onPress={startSimulation} activeOpacity={0.85}>
           <Ionicons name="navigate-circle-outline" size={20} color={t.text} />
           <Text style={s.simFabText}>Simular</Text>
         </TouchableOpacity>
@@ -1378,14 +1384,17 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* FAB de reporte */}
-      <TouchableOpacity
-        style={[s.fab, showInfo && currentRoute && !navMode && s.fabRaised, tripSheet && !navMode && s.fabTripRaised, navMode && s.fabNavRaised]}
-        onPress={openReportModal}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="alert-circle" size={28} color="#fff" />
-      </TouchableOpacity>
+      {/* FAB de reporte — oculto en la pantalla de "Ruta calculada" para no
+          superponerse con el botón de arrancar (play). */}
+      {!(showInfo && currentRoute && !navMode) && (
+        <TouchableOpacity
+          style={[s.fab, tripSheet && !navMode && s.fabTripRaised, navMode && s.fabNavRaised]}
+          onPress={openReportModal}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="alert-circle" size={28} color="#fff" />
+        </TouchableOpacity>
+      )}
 
       {/* Modal de incidente */}
       <Modal visible={showIncidentModal} transparent animationType="slide">
@@ -1669,10 +1678,14 @@ function makeStyles(t: Theme) {
       shadowColor: '#000', shadowOpacity: 0.2,
       shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
     },
-    // Cuando se muestra el panel de origen+destino (2 campos), el botón Simular
-    // baja para no quedar tapado por el panel.
-    simFabLow: { top: 162 },
     simFabText: { color: t.text, fontSize: 13, fontWeight: '700' },
+    // Botón "Simular recorrido" dentro de la card de ruta (llena el espacio inferior).
+    simRouteBtn: {
+      marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+      backgroundColor: t.surface2, borderWidth: 1, borderColor: t.cardBorder,
+      borderRadius: 12, paddingVertical: 13,
+    },
+    simRouteBtnText: { color: t.text, fontSize: 15, fontWeight: '700' },
     simBar: {
       position: 'absolute', top: 110, left: 16, right: 16,
       flexDirection: 'row', alignItems: 'center', gap: 10,
