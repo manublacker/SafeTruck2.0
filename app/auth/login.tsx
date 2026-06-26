@@ -3,9 +3,10 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { Ionicons, AntDesign } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../src/services/supabase'
+import { signInWithGoogle } from '../../src/services/auth'
 import { registerForPushNotifications } from '../../src/services/push'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
@@ -15,6 +16,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading]   = useState(false)
+  const [loadingGoogle, setLoadingGoogle] = useState(false)
 
   const setProfile = useStore(s => s.setProfile)
   const isDark     = useStore(s => s.isDark)
@@ -33,7 +35,6 @@ export default function LoginScreen() {
         .from('profiles').select('*').eq('id', data.user.id).single()
 
       if (!profile) {
-        // No usar el email como nombre: cae al nombre del registro o un placeholder editable.
         const metaName = (data.user.user_metadata?.full_name as string)?.trim()
         const { data: newProfile } = await supabase
           .from('profiles')
@@ -51,6 +52,17 @@ export default function LoginScreen() {
       Alert.alert('Error al ingresar', e.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    setLoadingGoogle(true)
+    try {
+      await signInWithGoogle()
+    } catch (e: any) {
+      Alert.alert('Error con Google', e.message)
+    } finally {
+      setLoadingGoogle(false)
     }
   }
 
@@ -107,6 +119,28 @@ export default function LoginScreen() {
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Ingresar</Text>}
         </TouchableOpacity>
 
+        <View style={s.dividerRow}>
+          <View style={s.dividerLine} />
+          <Text style={s.dividerText}>o</Text>
+          <View style={s.dividerLine} />
+        </View>
+
+        <TouchableOpacity
+          style={[s.btnGhost, loadingGoogle && s.btnDisabled]}
+          onPress={handleGoogleLogin}
+          disabled={loadingGoogle}
+        >
+          {loadingGoogle
+            ? <ActivityIndicator color={t.text} />
+            : (
+              <View style={s.googleBtnInner}>
+                <AntDesign name="google" size={20} color="#DB4437" />
+                <Text style={s.btnGhostText}>Continuar con Google</Text>
+              </View>
+            )
+          }
+        </TouchableOpacity>
+
         <TouchableOpacity style={s.link} onPress={() => router.push('/auth/register')}>
           <Text style={s.linkText}>¿No tenés cuenta? Registrate</Text>
         </TouchableOpacity>
@@ -148,6 +182,9 @@ function makeStyles(t: Theme) {
     btnGhost: {
       backgroundColor: t.card, borderRadius: 12, padding: 16,
       alignItems: 'center', borderWidth: 1, borderColor: t.border,
+    },
+    googleBtnInner: {
+      flexDirection: 'row', alignItems: 'center', gap: 10,
     },
     btnGhostText: { color: t.text, fontSize: 16, fontWeight: '600' },
     link:     { marginTop: 20, alignItems: 'center' },
