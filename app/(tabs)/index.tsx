@@ -105,6 +105,7 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null)
   const searchTimeout = useRef<any>(null)
   const reportSearchTimeout = useRef<any>(null)
+  const originSearchTimeout = useRef<any>(null)
 
   const isDark = useStore(st => st.isDark)
   const toggleTheme = useStore(st => st.toggleTheme)
@@ -164,6 +165,14 @@ export default function MapScreen() {
   const [searching, setSearching] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [recents, setRecents] = useState<RecentDest[]>([])
+
+  // Origen del ruteo. Por defecto (null) se usa la ubicación GPS del chofer.
+  // Si elige una dirección en "Salir desde…", queda como override del origen.
+  const [originOverride, setOriginOverride] = useState<{ lat: number; lng: number; label: string } | null>(null)
+  const [originText, setOriginText] = useState('')
+  const [originResults, setOriginResults] = useState<any[]>([])
+  const [originSearching, setOriginSearching] = useState(false)
+  const [showOriginSearch, setShowOriginSearch] = useState(false)
   const [navMode, setNavMode] = useState(false)
   const watchRef = useRef<any>(null)
 
@@ -639,6 +648,7 @@ export default function MapScreen() {
   useFocusEffect(
     useCallback(() => {
       setShowSearch(false)
+      setShowOriginSearch(false)
       Keyboard.dismiss()
     }, [])
   )
@@ -685,6 +695,54 @@ export default function MapScreen() {
       longitudeDelta: 0.02,
     }, 500)
     calculateRoute(lat, lng)
+  }
+
+  // ── Origen ("Salir desde…") ──────────────────────────────────────────────
+  // Mismo buscador (Nominatim) que el destino, pero setea el origen del ruteo.
+  const searchOriginAddress = async (query: string) => {
+    if (query.length < 3) { setOriginResults([]); return }
+    setOriginSearching(true)
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}&format=json&limit=5&countrycodes=ar&bounded=1&viewbox=-59.2,-35.1,-57.8,-34.2`,
+        { headers: { 'User-Agent': 'SafeTruck/1.0' } }
+      )
+      setOriginResults(await res.json())
+    } catch (e) {
+      console.log('Origin search error:', e)
+    } finally {
+      setOriginSearching(false)
+    }
+  }
+
+  const onOriginChange = (text: string) => {
+    setOriginText(text)
+    if (originSearchTimeout.current) clearTimeout(originSearchTimeout.current)
+    originSearchTimeout.current = setTimeout(() => searchOriginAddress(text), 400)
+  }
+
+  const selectOrigin = (result: any) => {
+    const lat = parseFloat(result.lat)
+    const lng = parseFloat(result.lon)
+    const label = result.display_name.split(',').slice(0, 2).join(',')
+    setOriginOverride({ lat, lng, label })
+    setOriginText(label)
+    setOriginResults([])
+    setShowOriginSearch(false)
+    Keyboard.dismiss()
+    mapRef.current?.animateToRegion({ latitude: lat, longitude: lng, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 500)
+    // Si ya hay un destino elegido, recalculamos la ruta desde el nuevo origen.
+    if (destMarker) calculateRoute(destMarker.lat, destMarker.lng)
+  }
+
+  // Vuelve a usar la ubicación GPS como origen.
+  const resetOrigin = () => {
+    setOriginOverride(null)
+    setOriginText('')
+    setOriginResults([])
+    setShowOriginSearch(false)
+    Keyboard.dismiss()
+    if (destMarker) calculateRoute(destMarker.lat, destMarker.lng)
   }
 
   // Abre el modal de denuncia. Por defecto apunta a la ubicación actual (GPS).
@@ -734,7 +792,11 @@ export default function MapScreen() {
 
   const calculateRoute = async (destLat: number, destLng: number) => {
     if (loading) return
-    if (!location) return Alert.alert('Error', 'Esperando GPS...')
+    // Origen: la dirección elegida en "Salir desde…" o, por defecto, el GPS del chofer.
+    const originPoint = originOverride
+      ? { lat: originOverride.lat, lng: originOverride.lng }
+      : location
+    if (!originPoint) return Alert.alert('Error', 'Esperando GPS...')
     if (!activeVehicle) return Alert.alert('Sin vehículo', 'Tu empresa aún no te asignó un camión')
     setDestMarker({ lat: destLat, lng: destLng })
     setCurrentRoute(null)
@@ -755,7 +817,7 @@ export default function MapScreen() {
         signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          origin: location,
+          origin: originPoint,
           destination: { lat: destLat, lng: destLng },
           vehicle: {
             weight_kg: activeVehicle.weight_kg,
@@ -841,6 +903,11 @@ export default function MapScreen() {
     setShowInfo(false)
     setSearchText('')
     setDestMarker(null)
+    // Origen: volver al default (GPS)
+    setOriginOverride(null)
+    setOriginText('')
+    setOriginResults([])
+    setShowOriginSearch(false)
     // Viaje elegido: que NO quede vigente en el mapa al cancelar.
     setTripSheet(null)
     setTripSegments(null)
@@ -942,6 +1009,12 @@ export default function MapScreen() {
           <Marker
             coordinate={{ latitude: destMarker.lat, longitude: destMarker.lng }}
             pinColor="#2563EB"
+          />
+        )}
+        {originOverride && (
+          <Marker
+            coordinate={{ latitude: originOverride.lat, longitude: originOverride.lng }}
+            pinColor="#16A34A"
           />
         )}
         {/* ETAPA 2: ruta coloreada por segmento (verde apto / rojo no apto / naranja sin datos).
@@ -1065,7 +1138,7 @@ export default function MapScreen() {
               placeholderTextColor={t.textMuted}
               value={searchText}
               onChangeText={onSearchChange}
-              onFocus={() => setShowSearch(true)}
+              onFocus={() => { setShowSearch(true); setShowOriginSearch(false) }}
               returnKeyType="search"
               onSubmitEditing={() => searchAddress(searchText)}
             />
@@ -1120,6 +1193,50 @@ export default function MapScreen() {
                 <Ionicons name="time-outline" size={16} color={t.textMuted} style={{ marginRight: 8 }} />
                 <Text style={s.searchResultName} numberOfLines={1}>
                   {r.display_name.split(',')[0]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        {/* Selector de origen ("Salir desde…"): por defecto usa el GPS del chofer */}
+        <View style={[s.searchRow, s.originRow]}>
+          <View style={s.searchBox}>
+            <Ionicons name="navigate-circle-outline" size={16} color={t.accent} />
+            <TextInput
+              style={s.searchInput}
+              placeholder="Salir desde: mi ubicación"
+              placeholderTextColor={t.textMuted}
+              value={originText}
+              onChangeText={onOriginChange}
+              onFocus={() => { setShowSearch(false); setShowOriginSearch(true) }}
+              returnKeyType="search"
+              onSubmitEditing={() => searchOriginAddress(originText)}
+            />
+            {originOverride && (
+              <TouchableOpacity onPress={resetOrigin} accessibilityLabel="Usar mi ubicación">
+                <Ionicons name="close-circle" size={18} color={t.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {showOriginSearch && (originResults.length > 0 || originSearching) && (
+          <View style={s.searchResults}>
+            {originSearching && (
+              <View style={s.searchResultItem}>
+                <ActivityIndicator size="small" color={t.accent} />
+                <Text style={s.searchResultAddr}>Buscando...</Text>
+              </View>
+            )}
+            {originResults.map((result, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[s.searchResultItem, idx < originResults.length - 1 && s.searchResultBorder]}
+                onPress={() => selectOrigin(result)}
+              >
+                <Ionicons name="location-outline" size={16} color={t.textMuted} style={{ marginRight: 8 }} />
+                <Text style={s.searchResultName} numberOfLines={1}>
+                  {result.display_name.split(',')[0]}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1430,6 +1547,7 @@ function makeStyles(t: Theme) {
     },
     searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
     searchInput: { flex: 1, color: t.text, fontSize: 15, height: 36 },
+    originRow: { marginTop: 8 },
     searchClear: { color: t.textMuted, fontSize: 14, paddingHorizontal: 4 },
 
     iconBtn: {
