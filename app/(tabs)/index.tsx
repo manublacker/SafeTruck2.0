@@ -260,6 +260,7 @@ export default function MapScreen() {
   const [tripSheet, setTripSheet] = useState<AssignedTrip | null>(null)
   const [tripUpdating, setTripUpdating] = useState(false)
   const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const routeAbortRef = useRef<AbortController | null>(null)
 
   // Dibuja la ruta del viaje con el path GUARDADO (línea azul fija). Fallback
   // cuando no se puede recalcular (sin camión asignado, sin coords o sin red).
@@ -333,6 +334,10 @@ export default function MapScreen() {
   }, [])
 
   const loadTripById = useCallback(async (id: string) => {
+    // Cancela cualquier cálculo de ruta manual que esté en curso.
+    routeAbortRef.current?.abort()
+    routeAbortRef.current = null
+    setLoading(false)
     // Limpia cualquier búsqueda activa para que no quede solapada con el viaje.
     setCurrentRoute(null)
     setDestMarker(null)
@@ -810,6 +815,7 @@ export default function MapScreen() {
     tripPathRef.current = []
     setLoading(true)
     const controller = new AbortController()
+    routeAbortRef.current = controller
     const timeoutId = setTimeout(() => controller.abort(), 60000)
     try {
       const res = await fetch(`${BACKEND}/route`, {
@@ -828,6 +834,9 @@ export default function MapScreen() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? `No se pudo calcular la ruta (HTTP ${res.status})`)
+      // Si loadTripById (u otra operación) empezó mientras este fetch corría,
+      // descartamos el resultado para no pisar el estado que ya se limpió.
+      if (routeAbortRef.current !== controller) return
       setCurrentRoute(data.route)
       setDestination({ lat: destLat, lng: destLng })
       setShowInfo(true)
@@ -843,12 +852,12 @@ export default function MapScreen() {
         })
       }
     } catch (e: any) {
-      Alert.alert('Error', e?.name === 'AbortError'
-        ? 'El cálculo de ruta tardó demasiado. Intentá de nuevo.'
-        : (e?.message ?? 'No se pudo calcular la ruta.'))
+      if (e?.name !== 'AbortError') {
+        Alert.alert('Error', e?.message ?? 'No se pudo calcular la ruta.')
+      }
     } finally {
       clearTimeout(timeoutId)
-      setLoading(false)
+      if (routeAbortRef.current === controller) setLoading(false)
     }
   }
 
@@ -898,6 +907,9 @@ export default function MapScreen() {
 
   const clearRoute = () => {
     stopNavigation()
+    routeAbortRef.current?.abort()
+    routeAbortRef.current = null
+    setLoading(false)
     // Búsqueda
     setCurrentRoute(null)
     setShowInfo(false)
@@ -915,6 +927,9 @@ export default function MapScreen() {
     setTripOriginDest({ originLat: null, originLng: null, destLat: null, destLng: null })
     tripSegmentsRef.current = null
     tripPathRef.current = []
+    // Si hay un tripId en la URL, lo limpiamos para que el viaje no se recargue
+    // si el usuario abandona el tab y vuelve.
+    if (tripId) router.replace('/(tabs)/')
     // Vuelve la cámara a "donde estoy parado ahora": solo queda el marcador de
     // ubicación. Las <Polyline> se borran solas (dependen de los estados de arriba).
     if (location) {
@@ -1521,12 +1536,6 @@ export default function MapScreen() {
               </View>
             </View>
 
-            <TouchableOpacity onPress={() => {
-              clearRoute()
-              router.replace('/(tabs)/')
-            }} style={{ backgroundColor: t.surface2, borderRadius: 8, padding: 8, marginLeft: 12 }}>
-              <Ionicons name="close" size={18} color={t.textMuted} />
-            </TouchableOpacity>
           </View>
 
           {(tripSheet.truck_patente || tripSheet.truck_name) && (
