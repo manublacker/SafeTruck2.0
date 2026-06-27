@@ -339,10 +339,15 @@ export default function MapScreen() {
     routeAbortRef.current = null
     setLoading(false)
     // Limpia cualquier búsqueda activa para que no quede solapada con el viaje.
+    stopSimulation()
+    stopNavigation()
     setCurrentRoute(null)
     setDestMarker(null)
     setSearchText('')
     setShowInfo(false)
+    setTripSegments(null)
+    setTripStoredPath([])
+    setTripOriginDest({ originLat: null, originLng: null, destLat: null, destLng: null })
     try {
       const all = await fetchAllMyTrips()
       const found = all.find(t => String(t.id) === id)
@@ -371,6 +376,14 @@ export default function MapScreen() {
       void loadTripById(tripId)
     } else {
       setTripSheet(null)
+      // ── Limpiar la ruta del viaje asignado del mapa ──────────────────
+      // Sin esto, al cerrar el sheet las Polylines quedan renderizadas para siempre.
+      tripSegmentsRef.current = null
+      tripPathRef.current = []
+      setTripSegments(null)
+      setTripStoredPath([])
+      setTripOriginDest({ originLat: null, originLng: null, destLat: null, destLng: null })
+      // ─────────────────────────────────────────────────────────────────
       if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
     }
   }, [tripId])
