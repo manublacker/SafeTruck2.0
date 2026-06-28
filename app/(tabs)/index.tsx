@@ -1654,7 +1654,9 @@ function makeStyles(t: Theme) {
     fabActive: { backgroundColor: t.danger, shadowColor: t.danger },
     fabRaised: { bottom: 210 },
     fabTripRaised: { bottom: 300 },
-    fabNavRaised: { bottom: 105 },
+    // En navegación, el reporte va abajo a la IZQUIERDA para no pisar el botón
+    // de stop (que está abajo a la derecha en el HUD de navegación).
+    fabNavRaised: { bottom: 120, left: 16, right: undefined },
 
     playFab: {
       position: 'absolute', bottom: 284, right: 16,
