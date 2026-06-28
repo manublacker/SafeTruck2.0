@@ -9,7 +9,7 @@ import type { AdminPage } from "./AdminSidebar";
 import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
 import { fetchDriverLocations, fetchAssignedTrips, fetchTrucks, fetchDrivers, type AssignedTrip } from "@/services/api";
-import { useRealtime } from "@/hooks/useRealtime";
+import { useRealtime, type RoutePathSegment } from "@/hooks/useRealtime";
 import { Icons } from "./DashboardIcons";
 
 const PANEL_PADDING = 12;
@@ -36,6 +36,8 @@ export default function LiveMapContainer({ onNavigate }: Props) {
   const [originPin, setOriginPin]               = useState<MapPin | null>(null);
   const [destinationPin, setDestinationPin]     = useState<MapPin | null>(null);
   const [driverLocations, setDriverLocations]   = useState<DriverLocation[]>([]);
+  // Recorrido (ruta) por chofer, sólo de WS (no del polling) → no titila al pollear.
+  const [driverRoutes, setDriverRoutes]         = useState<Record<string, RoutePathSegment[]>>({});
   const [assignedTrips, setAssignedTrips]       = useState<AssignedTrip[]>([]);
   const [tripsLoading, setTripsLoading]         = useState(true);
   const [creatorOpen, setCreatorOpen]           = useState(false);
@@ -106,8 +108,15 @@ export default function LiveMapContainer({ onNavigate }: Props) {
           lng: loc.lng,
         },
       ]);
+      // Guardamos/actualizamos el recorrido del chofer si vino en el evento.
+      if (loc.route) setDriverRoutes((prev) => ({ ...prev, [loc.driver_app_user_id]: loc.route! }));
     } else if (e.type === "driver_location_removed") {
       setDriverLocations((prev) => prev.filter((d) => d.driver_app_user_id !== e.driver_app_user_id));
+      setDriverRoutes((prev) => {
+        const next = { ...prev };
+        delete next[e.driver_app_user_id];
+        return next;
+      });
     } else if (e.type === "trip_update" || e.type === "trip_assigned") {
       // Un viaje cambió (lo arrancó/completó un chofer, o se asignó): refrescamos
       // la lista para reflejarlo. Es poco frecuente, así que un refetch alcanza.
@@ -166,6 +175,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
         <MapDisplay
           routeResponse={routeResult}
           driverLocations={driverLocations}
+          driverRoutes={driverRoutes}
           originPin={originPin}
           destinationPin={destinationPin}
         />

@@ -25,7 +25,7 @@ router.get('/', async (req: Request, res: Response) => {
 // POST / — Conductor actualiza su posición GPS
 router.post('/', async (req: Request, res: Response) => {
   const driverUserId = req.user!.id
-  const { lat, lng, trip_id, driver_name, truck_plate } = req.body
+  const { lat, lng, trip_id, driver_name, truck_plate, route } = req.body
 
   if (lat == null || lng == null) {
     return res.status(400).json({ error: 'lat y lng requeridos' })
@@ -61,6 +61,9 @@ router.post('/', async (req: Request, res: Response) => {
           lat,
           lng,
           updated_at: new Date().toISOString(),
+          // Recorrido del chofer (sólo se reenvía por WS; la web lo dibuja en el
+          // mapa). No se persiste en driver_locations: es efímero del viaje en curso.
+          ...(route ? { route } : {}),
         },
       }, { role: 'admin' })
     } catch { /* broadcast best-effort */ }

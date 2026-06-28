@@ -12,6 +12,12 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
+/** Tramo del recorrido del chofer (para dibujarlo coloreado en el mapa). */
+export interface RoutePathSegment {
+  coordinates: { lat: number; lng: number }[];
+  status?: "ok" | "unauthorized" | "unknown" | string;
+}
+
 export interface DriverLocationPayload {
   driver_app_user_id: string;
   driver_name: string | null;
@@ -19,6 +25,7 @@ export interface DriverLocationPayload {
   lat: number;
   lng: number;
   updated_at?: string;
+  route?: RoutePathSegment[];
 }
 
 export type RealtimeEvent =

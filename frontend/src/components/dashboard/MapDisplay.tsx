@@ -37,9 +37,16 @@ export interface MapPin {
   label: string;
 }
 
+/** Tramo del recorrido de un chofer (para dibujarlo coloreado por aptitud). */
+export interface RoutePathSegment {
+  coordinates: { lat: number; lng: number }[];
+  status?: string;
+}
+
 interface Props {
   routeResponse: RouteResponse | null;
   driverLocations?: DriverLocation[];
+  driverRoutes?: Record<string, RoutePathSegment[]>;
   originPin?: MapPin | null;
   destinationPin?: MapPin | null;
 }
@@ -103,7 +110,7 @@ function animateMarker(
   setFrameId(requestAnimationFrame(tick));
 }
 
-export default function MapDisplay({ routeResponse, driverLocations = [], originPin, destinationPin }: Props) {
+export default function MapDisplay({ routeResponse, driverLocations = [], driverRoutes = {}, originPin, destinationPin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const routeLayersRef = useRef<L.Polyline[]>([]);
@@ -113,6 +120,8 @@ export default function MapDisplay({ routeResponse, driverLocations = [], origin
   const destPinRef = useRef<L.Marker | null>(null);
   const driverMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const driverAnimRef = useRef<Map<string, number>>(new Map());
+  // Capas (polilíneas) del recorrido de cada chofer, por driver_app_user_id.
+  const driverRouteLayersRef = useRef<Map<string, L.Polyline[]>>(new Map());
 
   // Inicialización + cleanup del mapa
   useEffect(() => {
@@ -150,6 +159,7 @@ export default function MapDisplay({ routeResponse, driverLocations = [], origin
       driverMarkersRef.current.clear();
       driverAnimRef.current.forEach((id) => cancelAnimationFrame(id));
       driverAnimRef.current.clear();
+      driverRouteLayersRef.current.clear();
     };
   }, []);
 
@@ -197,6 +207,46 @@ export default function MapDisplay({ routeResponse, driverLocations = [], origin
       }
     });
   }, [driverLocations]);
+
+  // Recorrido (ruta) de cada chofer en vivo, dibujado como polilíneas coloreadas
+  // por aptitud del tramo (verde apto / rojo no apto / naranja sin datos), igual
+  // que en la app del conductor. Llega por WebSocket en el evento driver_location.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const layers = driverRouteLayersRef.current;
+
+    // Sacar del mapa los recorridos de choferes que ya no tienen ruta activa.
+    layers.forEach((polys, id) => {
+      if (!driverRoutes[id]) {
+        polys.forEach((p) => p.remove());
+        layers.delete(id);
+      }
+    });
+
+    // Dibujar/redibujar el recorrido de cada chofer con ruta.
+    for (const [id, segments] of Object.entries(driverRoutes)) {
+      const prev = layers.get(id);
+      if (prev) prev.forEach((p) => p.remove());
+      const polys: L.Polyline[] = [];
+      for (const seg of segments) {
+        const coords = (seg.coordinates ?? [])
+          .map((c) => [c.lat, c.lng] as L.LatLngTuple);
+        if (coords.length < 2) continue;
+        const color = ROUTE_COLORS[seg.status ?? "unknown"] ?? ROUTE_COLORS.unknown;
+        const poly = L.polyline(coords, {
+          color,
+          weight: ROUTE_WEIGHT,
+          opacity: ROUTE_OPACITY,
+          lineCap: "round",
+          lineJoin: "round",
+          dashArray: seg.status === "unauthorized" ? "10,8" : undefined,
+        }).addTo(map);
+        polys.push(poly);
+      }
+      layers.set(id, polys);
+    }
+  }, [driverRoutes]);
 
   // Pin de origen (preview antes de calcular ruta)
   useEffect(() => {

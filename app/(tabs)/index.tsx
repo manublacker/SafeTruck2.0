@@ -179,6 +179,9 @@ export default function MapScreen() {
   // efectos. La usa el tracking de navegación libre (evita un getCurrentPositionAsync
   // que se cuelga si ya hay un watchPositionAsync activo).
   const locationRef = useRef<{ lat: number; lng: number } | null>(null)
+  // Espejo de la ruta calculada (currentRoute) para mandarla con la ubicación sin
+  // re-disparar el efecto de tracking. La web la usa para dibujar el recorrido.
+  const routeRef = useRef<typeof currentRoute>(null)
 
   // ── Simulación de recorrido ──────────────────────────────────────────────
   // Anima un marcador a lo largo de `path` interpolando por segmentos, igual
@@ -557,8 +560,9 @@ export default function MapScreen() {
     }
   }, [tripSheet?.id, tripSheet?.status, profile?.full_name])
 
-  // Mantiene locationRef con la última posición conocida (sin re-disparar efectos).
+  // Mantiene locationRef / routeRef con lo último (sin re-disparar efectos).
   useEffect(() => { locationRef.current = location }, [location])
+  useEffect(() => { routeRef.current = currentRoute }, [currentRoute])
 
   // GPS tracking en NAVEGACIÓN LIBRE: si el chofer navega una ruta que buscó él
   // (sin un viaje asignado en curso), igual mandamos su ubicación para que el
@@ -578,6 +582,7 @@ export default function MapScreen() {
         await sendLocation(
           loc.lat, loc.lng,
           null, profile?.full_name ?? 'Conductor', activeVehicle?.plate,
+          routeRef.current?.segments ?? null,
         )
       } catch { /* ignorar ticks fallidos de red */ }
     }
