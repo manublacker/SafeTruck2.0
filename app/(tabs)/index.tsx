@@ -175,6 +175,10 @@ export default function MapScreen() {
   const [showOriginSearch, setShowOriginSearch] = useState(false)
   const [navMode, setNavMode] = useState(false)
   const watchRef = useRef<any>(null)
+  // Espejo de `location` en un ref, para leer la última posición sin re-disparar
+  // efectos. La usa el tracking de navegación libre (evita un getCurrentPositionAsync
+  // que se cuelga si ya hay un watchPositionAsync activo).
+  const locationRef = useRef<{ lat: number; lng: number } | null>(null)
 
   // ── Simulación de recorrido ──────────────────────────────────────────────
   // Anima un marcador a lo largo de `path` interpolando por segmentos, igual
@@ -553,23 +557,28 @@ export default function MapScreen() {
     }
   }, [tripSheet?.id, tripSheet?.status, profile?.full_name])
 
+  // Mantiene locationRef con la última posición conocida (sin re-disparar efectos).
+  useEffect(() => { locationRef.current = location }, [location])
+
   // GPS tracking en NAVEGACIÓN LIBRE: si el chofer navega una ruta que buscó él
   // (sin un viaje asignado en curso), igual mandamos su ubicación para que el
   // empresario lo vea en vivo en el mapa de la web. Los viajes asignados ya
   // tienen su propio envío (arriba, con trip_id), así que acá los excluimos para
-  // no duplicar; en navegación libre el trip_id va null.
+  // no duplicar; en navegación libre el trip_id va null. Usamos locationRef (que
+  // el watcher de navegación mantiene fresco) en vez de getCurrentPositionAsync,
+  // que se cuelga cuando ya hay un watchPositionAsync activo.
   useEffect(() => {
     const freeNav = navMode && (!tripSheet || tripSheet.status !== 'in_progress')
     console.log('[freenav] effect: navMode=', navMode, 'tripStatus=', tripSheet?.status, 'freeNav=', freeNav)
     if (!freeNav) return
     let cancelled = false
     const sendGps = async () => {
+      const loc = locationRef.current
+      if (!loc || cancelled) return
       try {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-        if (cancelled) return
-        console.log('[freenav] POST /api/locations', loc.coords.latitude, loc.coords.longitude)
+        console.log('[freenav] POST /api/locations', loc.lat, loc.lng)
         await sendLocation(
-          loc.coords.latitude, loc.coords.longitude,
+          loc.lat, loc.lng,
           null, profile?.full_name ?? 'Conductor', activeVehicle?.plate,
         )
         console.log('[freenav] POST OK')
