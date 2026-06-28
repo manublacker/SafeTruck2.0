@@ -31,12 +31,21 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
 }
 
+// Chofer navegando "libre" (sin viaje asignado) que está mandando GPS ahora.
+// Se muestra como un viaje en curso más, además de los viajes asignados.
+export interface ActiveDriver {
+  driver_app_user_id: string;
+  driver_name: string | null;
+  truck_plate: string | null;
+}
+
 interface Props {
   trips: AssignedTrip[];
   loading: boolean;
+  activeDrivers?: ActiveDriver[];
 }
 
-export default function UpcomingTripsPanel({ trips, loading }: Props) {
+export default function UpcomingTripsPanel({ trips, loading, activeDrivers = [] }: Props) {
   const sorted = [...trips]
     .filter((t) => t.status !== "completed" && t.status !== "cancelled")
     .sort((a, b) => {
@@ -57,7 +66,7 @@ export default function UpcomingTripsPanel({ trips, loading }: Props) {
         </div>
       )}
 
-      {!loading && sorted.length === 0 && (
+      {!loading && sorted.length === 0 && activeDrivers.length === 0 && (
         <div
           style={{
             border: "1px dashed var(--c-border)",
@@ -73,8 +82,61 @@ export default function UpcomingTripsPanel({ trips, loading }: Props) {
         </div>
       )}
 
-      {!loading && sorted.length > 0 && (
+      {!loading && (sorted.length > 0 || activeDrivers.length > 0) && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {/* Choferes navegando ahora (sin viaje asignado): viaje en curso en vivo */}
+          {activeDrivers.map((d) => (
+            <div
+              key={`loc-${d.driver_app_user_id}`}
+              className="upcoming-card live"
+              style={{
+                display: "flex",
+                gap: 10,
+                alignItems: "stretch",
+                border: "1px solid var(--c-success)",
+                borderLeft: "4px solid var(--c-success)",
+                borderRadius: "var(--r-md)",
+                padding: "10px 12px",
+                background: "var(--c-success-soft)",
+                cursor: "default",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    marginBottom: 3,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                    <span className="live-dot" />
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        fontSize: "0.88rem",
+                        color: "var(--c-ink)",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {d.driver_name ?? "Conductor"}
+                    </span>
+                  </div>
+                  <span className="st-badge st-badge-encurso" style={{ flexShrink: 0 }}>
+                    En curso
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--c-ink-2)" }}>
+                  {d.truck_plate ? `${d.truck_plate} · ` : ""}Navegando ahora
+                </p>
+              </div>
+            </div>
+          ))}
+
           {sorted.map((trip) => {
             const isLive = trip.status === "in_progress";
             return (

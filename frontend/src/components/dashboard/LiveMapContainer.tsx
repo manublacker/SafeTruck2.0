@@ -131,6 +131,25 @@ export default function LiveMapContainer({ onNavigate }: Props) {
 
   const canCreate = !blocking && hasAvailableDrivers && hasAvailableTrucks;
 
+  // Choferes de la empresa que están navegando ahora (mandando GPS) y que NO
+  // tienen un viaje asignado en curso → se muestran como "viaje en curso" en el
+  // panel, además de los viajes asignados. Filtrar por `drivers` (los conductores
+  // de esta empresa) deja afuera ubicaciones de otras empresas.
+  const driverByAppUser = new Map(
+    drivers.filter((d) => d.app_user_id).map((d) => [d.app_user_id as string, d]),
+  );
+  const inProgressDriverIds = new Set(
+    assignedTrips.filter((t) => t.status === "in_progress").map((t) => t.driver_id),
+  );
+  const activeNavDrivers = driverLocations
+    .map((loc) => ({ loc, drv: driverByAppUser.get(loc.driver_app_user_id) }))
+    .filter((x) => x.drv && !inProgressDriverIds.has(x.drv.id))
+    .map((x) => ({
+      driver_app_user_id: x.loc.driver_app_user_id,
+      driver_name: x.loc.driver_name,
+      truck_plate: x.loc.truck_plate,
+    }));
+
   return (
     <div
       style={{
@@ -265,7 +284,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
                 el onboarding, para que el seguimiento en vivo tenga un lugar fijo. */}
             <section style={{ borderTop: "1px solid #f0f0f0", paddingTop: 20, marginTop: blocking ? 20 : 0 }}>
               <h2 className="st-section-title" style={{ marginBottom: 14 }}>Viajes activos</h2>
-              <UpcomingTripsPanel trips={assignedTrips} loading={tripsLoading} />
+              <UpcomingTripsPanel trips={assignedTrips} loading={tripsLoading} activeDrivers={activeNavDrivers} />
             </section>
           </>
         )}

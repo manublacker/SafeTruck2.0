@@ -569,20 +569,17 @@ export default function MapScreen() {
   // que se cuelga cuando ya hay un watchPositionAsync activo.
   useEffect(() => {
     const freeNav = navMode && (!tripSheet || tripSheet.status !== 'in_progress')
-    console.log('[freenav] effect: navMode=', navMode, 'tripStatus=', tripSheet?.status, 'freeNav=', freeNav)
     if (!freeNav) return
     let cancelled = false
     const sendGps = async () => {
       const loc = locationRef.current
       if (!loc || cancelled) return
       try {
-        console.log('[freenav] POST /api/locations', loc.lat, loc.lng)
         await sendLocation(
           loc.lat, loc.lng,
           null, profile?.full_name ?? 'Conductor', activeVehicle?.plate,
         )
-        console.log('[freenav] POST OK')
-      } catch (e: any) { console.log('[freenav] POST ERROR:', e?.status ?? '', e?.message ?? e) }
+      } catch { /* ignorar ticks fallidos de red */ }
     }
     void sendGps()
     const id = setInterval(() => void sendGps(), 10_000)
