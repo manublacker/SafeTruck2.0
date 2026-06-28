@@ -560,17 +560,20 @@ export default function MapScreen() {
   // no duplicar; en navegación libre el trip_id va null.
   useEffect(() => {
     const freeNav = navMode && (!tripSheet || tripSheet.status !== 'in_progress')
+    console.log('[freenav] effect: navMode=', navMode, 'tripStatus=', tripSheet?.status, 'freeNav=', freeNav)
     if (!freeNav) return
     let cancelled = false
     const sendGps = async () => {
       try {
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
         if (cancelled) return
+        console.log('[freenav] POST /api/locations', loc.coords.latitude, loc.coords.longitude)
         await sendLocation(
           loc.coords.latitude, loc.coords.longitude,
           null, profile?.full_name ?? 'Conductor', activeVehicle?.plate,
         )
-      } catch { /* ignorar ticks fallidos de GPS/red */ }
+        console.log('[freenav] POST OK')
+      } catch (e: any) { console.log('[freenav] POST ERROR:', e?.status ?? '', e?.message ?? e) }
     }
     void sendGps()
     const id = setInterval(() => void sendGps(), 10_000)
@@ -1400,7 +1403,7 @@ export default function MapScreen() {
 
       {/* HUD de navegación */}
       {navMode && currentRoute && (
-        <View style={[s.navHUD, { paddingBottom: insets.bottom + 16 }]}>
+        <View style={[s.navHUD, { paddingBottom: 18 }]}>
           <View style={{ flex: 1, marginRight: 16 }}>
             <Text style={s.navDest} numberOfLines={1}>{searchText || 'Destino'}</Text>
             <View style={s.navStats}>
@@ -1654,9 +1657,9 @@ function makeStyles(t: Theme) {
     fabActive: { backgroundColor: t.danger, shadowColor: t.danger },
     fabRaised: { bottom: 210 },
     fabTripRaised: { bottom: 300 },
-    // En navegación, el reporte va abajo a la IZQUIERDA para no pisar el botón
-    // de stop (que está abajo a la derecha en el HUD de navegación).
-    fabNavRaised: { bottom: 120, left: 16, right: undefined },
+    // En navegación, el reporte va JUSTO ARRIBA del botón de stop (mismo lado
+    // derecho), apenas por encima del HUD de navegación.
+    fabNavRaised: { bottom: 104, right: 24 },
 
     playFab: {
       position: 'absolute', bottom: 284, right: 16,
