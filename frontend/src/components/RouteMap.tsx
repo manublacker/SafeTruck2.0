@@ -10,6 +10,7 @@ import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { RouteResponse } from "@/types/route";
+import { ACTIVE_TILE } from "@/lib/mapTiles";
 
 const DEFAULT_CENTER: L.LatLngTuple = [-34.6037, -58.3816];
 const DEFAULT_ZOOM = 11;
@@ -86,9 +87,9 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       scrollWheelZoom: true,
     }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors",
+    L.tileLayer(ACTIVE_TILE.url, {
+      maxZoom: ACTIVE_TILE.maxZoom,
+      attribution: ACTIVE_TILE.attribution,
     }).addTo(map);
 
     mapRef.current = map;

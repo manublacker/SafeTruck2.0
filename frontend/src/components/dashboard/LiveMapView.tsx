@@ -3,6 +3,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useAuth } from "@/contexts/AuthContext";
 import { searchLocations, geocodeLocation, type GeoSuggestion } from "@/services/geocoding";
+import { ACTIVE_TILE } from "@/lib/mapTiles";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
@@ -111,8 +112,8 @@ export default function LiveMapView() {
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
     const map = L.map(mapContainerRef.current, { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors", maxZoom: 19,
+    L.tileLayer(ACTIVE_TILE.url, {
+      attribution: ACTIVE_TILE.attribution, maxZoom: ACTIVE_TILE.maxZoom,
     }).addTo(map);
     mapRef.current = map;
     const onResize = () => map.invalidateSize();

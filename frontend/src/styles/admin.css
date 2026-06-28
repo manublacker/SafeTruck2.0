@@ -776,3 +776,12 @@ select.st-field.placeholder { color: var(--c-ink-3); }
 .scroll-y { overflow-y: auto; }
 .scroll-y::-webkit-scrollbar { width: 8px; }
 .scroll-y::-webkit-scrollbar-thumb { background: rgba(13,13,13,0.18); border-radius: 4px; }
+
+/* ── Basemap tone ──────────────────────────────────────────────
+ * Baja el brillo del fondo (Voyager queda muy blanco) y sube un toque la
+ * saturación para colores menos diluidos. Sin cambiar de estilo de mapa.
+ * Aplica SOLO a los tiles del fondo: marcadores y rutas (SVG) no se afectan.
+ * Valores válidos: brightness ~0.6–1.0, saturate ~0.8–1.6 (decimales!). */
+.leaflet-tile {
+  filter: brightness(0.78) saturate(1.15) contrast(1.05);
+}
