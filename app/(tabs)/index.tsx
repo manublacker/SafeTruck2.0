@@ -553,6 +553,36 @@ export default function MapScreen() {
     }
   }, [tripSheet?.id, tripSheet?.status, profile?.full_name])
 
+  // GPS tracking en NAVEGACIÓN LIBRE: si el chofer navega una ruta que buscó él
+  // (sin un viaje asignado en curso), igual mandamos su ubicación para que el
+  // empresario lo vea en vivo en el mapa de la web. Los viajes asignados ya
+  // tienen su propio envío (arriba, con trip_id), así que acá los excluimos para
+  // no duplicar; en navegación libre el trip_id va null.
+  useEffect(() => {
+    const freeNav = navMode && (!tripSheet || tripSheet.status !== 'in_progress')
+    if (!freeNav) return
+    let cancelled = false
+    const sendGps = async () => {
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+        if (cancelled) return
+        await sendLocation(
+          loc.coords.latitude, loc.coords.longitude,
+          null, profile?.full_name ?? 'Conductor', activeVehicle?.plate,
+        )
+      } catch { /* ignorar ticks fallidos de GPS/red */ }
+    }
+    void sendGps()
+    const id = setInterval(() => void sendGps(), 10_000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+      // Al salir de navegación libre, limpiamos la ubicación para que el
+      // marcador desaparezca del mapa de la web.
+      void clearLocation().catch(() => null)
+    }
+  }, [navMode, tripSheet?.status, profile?.full_name, activeVehicle?.plate])
+
   const handleTripAction = async (newStatus: AssignedTrip['status']) => {
     if (!tripSheet) return
     setTripUpdating(true)

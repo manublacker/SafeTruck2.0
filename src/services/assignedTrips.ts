@@ -85,13 +85,13 @@ export async function updateTripStatus(
 export async function sendLocation(
   lat: number,
   lng: number,
-  tripId: string,
+  tripId: string | null,
   driverName: string,
   truckPlate?: string
 ): Promise<void> {
   await apiRequest('/api/locations', {
     method: 'POST',
-    body: JSON.stringify({ lat, lng, trip_id: tripId, driver_name: driverName, truck_plate: truckPlate }),
+    body: JSON.stringify({ lat, lng, trip_id: tripId ?? null, driver_name: driverName, truck_plate: truckPlate }),
   })
 }
 
