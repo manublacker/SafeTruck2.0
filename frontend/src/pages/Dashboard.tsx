@@ -11,13 +11,14 @@ import PlansView from "@/components/dashboard/PlansView";
 
 import "@/styles/admin.css";
 
-const VALID_PAGES: AdminPage[] = ["map", "fleet", "trips", "account"];
+const VALID_PAGES: AdminPage[] = ["map", "fleet", "active-trips", "trips", "account"];
 
 const TITLE: Record<AdminPage, string> = {
   map:            "Live Map",
   fleet:          "Flota",
   "fleet-trucks": "Flota",
   "fleet-drivers":"Flota",
+  "active-trips": "Viajes pendientes y en curso",
   trips:          "Historial de viajes",
   account:        "Mi cuenta",
   plans:          "Planes y suscripción",
@@ -69,7 +70,20 @@ export default function Dashboard() {
           {page === "fleet"          && <FleetView onNavigate={handleSetPage} />}
           {page === "fleet-trucks"   && <FleetView onNavigate={handleSetPage} initialTab="trucks" />}
           {page === "fleet-drivers"  && <FleetView onNavigate={handleSetPage} initialTab="drivers" />}
-          {page === "trips"   && <TripHistoryView />}
+          {page === "active-trips" && (
+            <TripHistoryView
+              statuses={["pending", "accepted", "in_progress"]}
+              emptyTitle="No hay viajes pendientes ni en curso"
+              emptySubtitle="Los viajes que asignes o que estén en camino van a aparecer acá."
+            />
+          )}
+          {page === "trips" && (
+            <TripHistoryView
+              statuses={["completed", "cancelled"]}
+              emptyTitle="Todavía no hay viajes finalizados"
+              emptySubtitle="Acá vas a ver los viajes completados y cancelados, con su duración."
+            />
+          )}
           {page === "account" && <AccountView onNavigate={setPage} billingSuccess={billingSuccess} />}
           {page === "plans"   && <PlansView />}
         </div>

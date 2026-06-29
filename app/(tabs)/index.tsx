@@ -175,6 +175,13 @@ export default function MapScreen() {
   const [showOriginSearch, setShowOriginSearch] = useState(false)
   const [navMode, setNavMode] = useState(false)
   const watchRef = useRef<any>(null)
+  // Espejo de `location` en un ref, para leer la última posición sin re-disparar
+  // efectos. La usa el tracking de navegación libre (evita un getCurrentPositionAsync
+  // que se cuelga si ya hay un watchPositionAsync activo).
+  const locationRef = useRef<{ lat: number; lng: number } | null>(null)
+  // Espejo de la ruta calculada (currentRoute) para mandarla con la ubicación sin
+  // re-disparar el efecto de tracking. La web la usa para dibujar el recorrido.
+  const routeRef = useRef<typeof currentRoute>(null)
 
   // ── Simulación de recorrido ──────────────────────────────────────────────
   // Anima un marcador a lo largo de `path` interpolando por segmentos, igual
@@ -552,6 +559,43 @@ export default function MapScreen() {
       if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
     }
   }, [tripSheet?.id, tripSheet?.status, profile?.full_name])
+
+  // Mantiene locationRef / routeRef con lo último (sin re-disparar efectos).
+  useEffect(() => { locationRef.current = location }, [location])
+  useEffect(() => { routeRef.current = currentRoute }, [currentRoute])
+
+  // GPS tracking en NAVEGACIÓN LIBRE: si el chofer navega una ruta que buscó él
+  // (sin un viaje asignado en curso), igual mandamos su ubicación para que el
+  // empresario lo vea en vivo en el mapa de la web. Los viajes asignados ya
+  // tienen su propio envío (arriba, con trip_id), así que acá los excluimos para
+  // no duplicar; en navegación libre el trip_id va null. Usamos locationRef (que
+  // el watcher de navegación mantiene fresco) en vez de getCurrentPositionAsync,
+  // que se cuelga cuando ya hay un watchPositionAsync activo.
+  useEffect(() => {
+    const freeNav = navMode && (!tripSheet || tripSheet.status !== 'in_progress')
+    if (!freeNav) return
+    let cancelled = false
+    const sendGps = async () => {
+      const loc = locationRef.current
+      if (!loc || cancelled) return
+      try {
+        await sendLocation(
+          loc.lat, loc.lng,
+          null, profile?.full_name ?? 'Conductor', activeVehicle?.plate,
+          routeRef.current?.segments ?? null,
+        )
+      } catch { /* ignorar ticks fallidos de red */ }
+    }
+    void sendGps()
+    const id = setInterval(() => void sendGps(), 10_000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+      // Al salir de navegación libre, limpiamos la ubicación para que el
+      // marcador desaparezca del mapa de la web.
+      void clearLocation().catch(() => null)
+    }
+  }, [navMode, tripSheet?.status, profile?.full_name, activeVehicle?.plate])
 
   const handleTripAction = async (newStatus: AssignedTrip['status']) => {
     if (!tripSheet) return
@@ -1370,7 +1414,7 @@ export default function MapScreen() {
 
       {/* HUD de navegación */}
       {navMode && currentRoute && (
-        <View style={[s.navHUD, { paddingBottom: insets.bottom + 16 }]}>
+        <View style={[s.navHUD, { paddingBottom: 18 }]}>
           <View style={{ flex: 1, marginRight: 16 }}>
             <Text style={s.navDest} numberOfLines={1}>{searchText || 'Destino'}</Text>
             <View style={s.navStats}>
@@ -1514,7 +1558,7 @@ export default function MapScreen() {
 
       {/* ── Trip Sheet ─────────────────────────────────────────────────── */}
       {tripSheet && !navMode && !showInfo && (
-        <View style={[s.tripSheet, { paddingBottom: insets.bottom + 20 }]}>
+        <View style={[s.tripSheet, { paddingBottom: 20 }]}>
           <View style={s.tripSheetHandle} />
 
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -1624,7 +1668,9 @@ function makeStyles(t: Theme) {
     fabActive: { backgroundColor: t.danger, shadowColor: t.danger },
     fabRaised: { bottom: 210 },
     fabTripRaised: { bottom: 300 },
-    fabNavRaised: { bottom: 105 },
+    // En navegación, el reporte va JUSTO ARRIBA del botón de stop (mismo lado
+    // derecho), apenas por encima del HUD de navegación.
+    fabNavRaised: { bottom: 104, right: 24 },
 
     playFab: {
       position: 'absolute', bottom: 284, right: 16,

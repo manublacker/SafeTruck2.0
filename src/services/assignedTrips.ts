@@ -82,16 +82,24 @@ export async function updateTripStatus(
   return res.trip ?? null
 }
 
+/** Tramo de la ruta para mostrar en la web (mismo formato que Route.segments). */
+export type RoutePathSegment = { coordinates: { lat: number; lng: number }[]; status: string }
+
 export async function sendLocation(
   lat: number,
   lng: number,
-  tripId: string,
+  tripId: string | null,
   driverName: string,
-  truckPlate?: string
+  truckPlate?: string,
+  route?: RoutePathSegment[] | null
 ): Promise<void> {
   await apiRequest('/api/locations', {
     method: 'POST',
-    body: JSON.stringify({ lat, lng, trip_id: tripId, driver_name: driverName, truck_plate: truckPlate }),
+    body: JSON.stringify({
+      lat, lng, trip_id: tripId ?? null, driver_name: driverName, truck_plate: truckPlate,
+      // La ruta (recorrido) la usa la web para dibujar el camino del chofer en vivo.
+      ...(route ? { route } : {}),
+    }),
   })
 }
 

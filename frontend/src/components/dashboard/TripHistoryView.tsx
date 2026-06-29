@@ -65,7 +65,14 @@ function csvEscape(value: string): string {
 
 // ── Vista ──────────────────────────────────────────────────────────────────
 
-export default function TripHistoryView() {
+interface Props {
+  /** Estados que muestra esta vista (ej. finalizados, o pendientes/en curso). */
+  statuses: AssignedTrip["status"][];
+  emptyTitle: string;
+  emptySubtitle: string;
+}
+
+export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }: Props) {
   const [trips, setTrips]     = useState<AssignedTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
@@ -128,6 +135,7 @@ export default function TripHistoryView() {
 
   const filtered = useMemo(() =>
     trips.filter((t) => {
+      if (!statuses.includes(t.status)) return false;
       if (filterDriver && t.driver_nombre !== filterDriver) return false;
       if (filterStatus && t.status !== filterStatus) return false;
 
@@ -142,7 +150,7 @@ export default function TripHistoryView() {
       }
       return true;
     }),
-    [trips, filterDriver, filterStatus, from, to]
+    [trips, statuses, filterDriver, filterStatus, from, to]
   );
 
   return (
@@ -168,9 +176,11 @@ export default function TripHistoryView() {
             onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option value="">Todos los estados</option>
-            {Object.entries(STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
+            {Object.entries(STATUS_LABELS)
+              .filter(([value]) => statuses.includes(value as AssignedTrip["status"]))
+              .map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
           </select>
         </div>
         <div style={{ minWidth: 160 }}>
@@ -281,12 +291,12 @@ export default function TripHistoryView() {
                       <Icons.Clock size={26} />
                     </div>
                     <p style={{ margin: 0, color: "var(--c-ink)", fontSize: "1.05rem", fontWeight: 700 }}>
-                      {trips.length === 0 ? "Todavía no hay viajes asignados" : "Sin resultados"}
+                      {(filterDriver || filterStatus || from || to) ? "Sin resultados" : emptyTitle}
                     </p>
                     <p style={{ margin: 0, color: "var(--c-ink-3)", fontSize: "0.9rem", lineHeight: 1.5, maxWidth: 360 }}>
-                      {trips.length === 0
-                        ? "Creá tu primer viaje desde el Live Map y vas a verlo acá con su estado y duración."
-                        : "No hay viajes que coincidan con los filtros aplicados."}
+                      {(filterDriver || filterStatus || from || to)
+                        ? "No hay viajes que coincidan con los filtros aplicados."
+                        : emptySubtitle}
                     </p>
                   </div>
                 </td>
