@@ -36,6 +36,10 @@ export default function LiveMapContainer({ onNavigate }: Props) {
   const [originPin, setOriginPin]               = useState<MapPin | null>(null);
   const [destinationPin, setDestinationPin]     = useState<MapPin | null>(null);
   const [driverLocations, setDriverLocations]   = useState<DriverLocation[]>([]);
+  // Mostramos el cartel "sin unidades" sólo si la lista quedó vacía de verdad
+  // (no ante vacíos momentáneos por la carrera entre el polling y el WebSocket,
+  // que hacían parpadear el cartel durante un viaje).
+  const [showEmptyOverlay, setShowEmptyOverlay] = useState(false);
   // Recorrido (ruta) por chofer, sólo de WS (no del polling) → no titila al pollear.
   const [driverRoutes, setDriverRoutes]         = useState<Record<string, RoutePathSegment[]>>({});
   const [assignedTrips, setAssignedTrips]       = useState<AssignedTrip[]>([]);
@@ -72,6 +76,18 @@ export default function LiveMapContainer({ onNavigate }: Props) {
     locationPollRef.current = setInterval(() => void pollLocations(), 30_000);
     return () => { if (locationPollRef.current) clearInterval(locationPollRef.current); };
   }, []);
+
+  // El cartel "sin unidades" aparece sólo si la lista quedó vacía ~2s seguidos.
+  // Si hay choferes, se oculta al instante. Así un vacío transitorio (carrera
+  // polling/WS) no hace parpadear el cartel mientras hay un viaje en curso.
+  useEffect(() => {
+    if (driverLocations.length > 0) {
+      setShowEmptyOverlay(false);
+      return;
+    }
+    const t = setTimeout(() => setShowEmptyOverlay(true), 2000);
+    return () => clearTimeout(t);
+  }, [driverLocations.length]);
 
   // Fetch de viajes asignados + polling de respaldo (cada 30s). El WebSocket
   // (trip_update/trip_assigned) maneja el tiempo real; el polling es fallback.
@@ -200,7 +216,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
 
         {/* Overlay "sin unidades": aparece cuando ningún chofer manda GPS.
             pointer-events:none → no bloquea el arrastre del mapa de fondo. */}
-        {driverLocations.length === 0 && (
+        {showEmptyOverlay && (
           <div
             style={{
               position: "absolute", inset: 20, zIndex: 400,
