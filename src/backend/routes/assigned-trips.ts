@@ -127,12 +127,16 @@ router.post('/personal', async (req: Request, res: Response) => {
 
     // distancia/duración: aceptamos el formato del motor de ruteo (distanceM /
     // estimatedDurationMin) o el de la app móvil (total_distance_km / _min).
-    const distanceM =
+    // OJO: las columnas son INTEGER, así que redondeamos SIEMPRE (si llega un
+    // decimal, ej. 16.8 min, el INSERT falla y no se crearía el viaje).
+    const rawDist =
       (route as any)?.distanceM ??
-      ((route as any)?.total_distance_km != null ? Math.round((route as any).total_distance_km * 1000) : null)
-    const durationMin =
+      ((route as any)?.total_distance_km != null ? (route as any).total_distance_km * 1000 : null)
+    const rawDur =
       (route as any)?.estimatedDurationMin ??
       ((route as any)?.total_duration_min ?? null)
+    const distanceM   = rawDist != null ? Math.round(rawDist) : null
+    const durationMin = rawDur  != null ? Math.round(rawDur)  : null
 
     const result = await pool.query<{ id: number }>(
       `INSERT INTO assigned_trips (
