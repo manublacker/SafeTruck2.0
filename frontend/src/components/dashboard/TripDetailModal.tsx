@@ -92,7 +92,7 @@ export default function TripDetailModal({ trip, onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div style={{ padding: `${r(22)}px ${r(26)}px`, display: "grid", gridTemplateColumns: "1fr 1fr", gap: `${r(22)}px ${r(28)}px` }}>
+        <div className="tdm-body" style={{ padding: `${r(22)}px ${r(26)}px`, display: "grid", gridTemplateColumns: "1fr 1fr", gap: `${r(22)}px ${r(28)}px` }}>
 
           {/* Ruta */}
           <section>

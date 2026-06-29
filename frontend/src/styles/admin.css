@@ -917,4 +917,12 @@ select.st-field.placeholder { color: var(--c-ink-3); }
 
   /* Filtros del historial: scroll horizontal en celu para que no rompan. */
   .st-filters-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* ── Modales: una sola columna y que entren en la pantalla del celu ── */
+  .st-modal {
+    max-width: calc(100vw - 24px) !important;
+    max-height: 88vh !important;
+    overflow-y: auto !important;
+  }
+  .tdm-body { grid-template-columns: 1fr !important; }
 }
