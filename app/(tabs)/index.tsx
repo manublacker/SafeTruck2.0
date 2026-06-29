@@ -12,7 +12,7 @@ import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme, isDarkTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
-import { fetchAllMyTrips, updateTripStatus, sendLocation, clearLocation, fetchMyAssignedTruck, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
+import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
 import { getRecentDestinations, addRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -185,6 +185,11 @@ export default function MapScreen() {
   // Espejo de la posición simulada, para mandarla al backend durante la simulación
   // (que la web muestre el camión recorriendo) sin re-disparar efectos cada tick.
   const simPositionRef = useRef<{ lat: number; lng: number } | null>(null)
+  // Viaje "personal" en curso (el que arma el propio conductor al navegar/simular
+  // una ruta suya). Guardamos su id para finalizarlo al frenar. `personalBusyRef`
+  // evita crear/finalizar dos veces mientras la llamada async está en vuelo.
+  const personalTripIdRef = useRef<number | null>(null)
+  const personalBusyRef = useRef(false)
 
   // ── Simulación de recorrido ──────────────────────────────────────────────
   // Anima un marcador a lo largo de `path` interpolando por segmentos, igual
@@ -630,6 +635,42 @@ export default function MapScreen() {
       void clearLocation().catch(() => null)
     }
   }, [simRunning, profile?.full_name, activeVehicle?.plate])
+
+  // VIAJE PERSONAL: cuando el conductor arma su propia ruta (busca un destino) y
+  // arranca a navegar o simular —sin un viaje asignado por la empresa— lo
+  // registramos como un viaje real "en curso", para que el empresario lo vea en
+  // sus viajes (en curso ahora, finalizado al terminar). Se crea al arrancar y se
+  // finaliza solo al frenar (cuando ya no está ni navegando ni simulando). Si está
+  // haciendo un viaje ASIGNADO (tripSheet en curso), no aplica: ese ya es un viaje.
+  useEffect(() => {
+    const assignedInProgress = tripSheet?.status === 'in_progress'
+    const hasOwnRoute = !!routeRef.current?.segments?.length
+    const selfActive = (navMode || simRunning) && !assignedInProgress && hasOwnRoute
+
+    if (selfActive && personalTripIdRef.current == null && !personalBusyRef.current) {
+      personalBusyRef.current = true
+      const origin = originOverride ?? locationRef.current
+      void createPersonalTrip({
+        origin_address: originOverride?.label ?? 'Mi ubicación',
+        destination_address: searchText || 'Destino',
+        origin_lat: origin?.lat ?? null,
+        origin_lng: origin?.lng ?? null,
+        destination_lat: destMarker?.lat ?? null,
+        destination_lng: destMarker?.lng ?? null,
+        route: routeRef.current,
+      })
+        .then((trip) => { personalTripIdRef.current = trip?.id ?? null })
+        .catch(() => null)
+        .finally(() => { personalBusyRef.current = false })
+    } else if (!selfActive && personalTripIdRef.current != null && !personalBusyRef.current) {
+      personalBusyRef.current = true
+      const id = personalTripIdRef.current
+      personalTripIdRef.current = null
+      void updateTripStatus(String(id), 'completed')
+        .catch(() => null)
+        .finally(() => { personalBusyRef.current = false })
+    }
+  }, [navMode, simRunning, tripSheet?.status, searchText, originOverride, destMarker])
 
   const handleTripAction = async (newStatus: AssignedTrip['status']) => {
     if (!tripSheet) return

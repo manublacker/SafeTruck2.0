@@ -344,6 +344,8 @@ export interface AssignedTrip {
   started_at?: string | null;
   completed_at?: string | null;
   status: string;
+  /** Origen del viaje: 'company' (lo asignó la empresa) o 'personal' (lo armó el conductor). */
+  trip_source?: string;
   created_at: string;
 }
 

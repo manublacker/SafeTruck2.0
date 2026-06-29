@@ -97,6 +97,86 @@ router.post('/', async (req: Request, res: Response) => {
   }
 })
 
+// POST /personal — El conductor crea su PROPIO viaje (no asignado por la empresa):
+// lo arma él al elegir un destino y arrancar a navegar/simular. Nace 'in_progress'
+// y se finaliza con PATCH /:id/status 'completed'. Así el empresario lo ve en sus
+// viajes (en curso ahora, finalizado al terminar). Se marca trip_source='personal'
+// para poder filtrarlo de los viajes designados por la empresa.
+router.post('/personal', async (req: Request, res: Response) => {
+  const userId = req.user!.id // app_user_id del conductor
+  const {
+    origin_address,
+    destination_address,
+    origin_lat,
+    origin_lng,
+    destination_lat,
+    destination_lng,
+    route,
+  } = req.body
+
+  try {
+    // ¿A qué empresa pertenece este conductor? (y su id en la tabla drivers)
+    const drvRes = await pool.query<{ id: number; user_id: string }>(
+      'SELECT id, user_id FROM drivers WHERE app_user_id = $1 AND is_active = true LIMIT 1',
+      [userId]
+    )
+    if (!drvRes.rowCount) {
+      return res.status(404).json({ error: 'Tu cuenta no está vinculada a ninguna empresa' })
+    }
+    const drv = drvRes.rows[0]
+
+    // distancia/duración: aceptamos el formato del motor de ruteo (distanceM /
+    // estimatedDurationMin) o el de la app móvil (total_distance_km / _min).
+    const distanceM =
+      (route as any)?.distanceM ??
+      ((route as any)?.total_distance_km != null ? Math.round((route as any).total_distance_km * 1000) : null)
+    const durationMin =
+      (route as any)?.estimatedDurationMin ??
+      ((route as any)?.total_duration_min ?? null)
+
+    const result = await pool.query<{ id: number }>(
+      `INSERT INTO assigned_trips (
+         empresa_user_id, driver_id, driver_app_user_id, truck_id,
+         origin_label, destination_label,
+         origin_lat, origin_lon, destination_lat, destination_lon,
+         path, distance_m, duration_min,
+         status, started_at, trip_source
+       ) VALUES (
+         $1, $2, $3,
+         (SELECT truck_id FROM truck_drivers WHERE driver_id = $2 LIMIT 1),
+         $4, $5, $6, $7, $8, $9, $10, $11, $12,
+         'in_progress', NOW(), 'personal'
+       )
+       RETURNING id`,
+      [
+        drv.user_id,
+        drv.id,
+        userId,
+        origin_address ?? null,
+        destination_address ?? null,
+        origin_lat ?? null,
+        origin_lng ?? null,
+        destination_lat ?? null,
+        destination_lng ?? null,
+        route ? JSON.stringify(route) : null,
+        distanceM,
+        durationMin,
+      ]
+    )
+
+    const trip = await getTripById(result.rows[0].id)
+    res.status(201).json({ success: true, trip })
+
+    // Tiempo real: que el empresario vea aparecer el viaje en curso al instante.
+    try {
+      broadcastToCompany(drv.user_id, { type: 'trip_update', trip }, { exclude: userId })
+    } catch { /* broadcast best-effort */ }
+  } catch (err: any) {
+    console.error('[POST /api/assigned-trips/personal]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // GET / — Admin lista sus viajes asignados
 router.get('/', async (req: Request, res: Response) => {
   const adminId = req.user!.id

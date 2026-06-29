@@ -20,6 +20,15 @@ function badgeClass(status: AssignedTrip["status"]) {
   return "st-badge st-badge-pendiente"; // pending
 }
 
+// Origen del viaje: lo asignó la empresa o lo armó el propio conductor.
+function tripSource(t: AssignedTrip): "company" | "personal" {
+  return t.trip_source === "personal" ? "personal" : "company";
+}
+const SOURCE_LABELS: Record<"company" | "personal", string> = {
+  company:  "Empresa",
+  personal: "Personal",
+};
+
 // ── Helpers de presentación ────────────────────────────────────────────────
 
 /** Fecha representativa del viaje: cuándo terminó, o empezó, o está agendado. */
@@ -79,6 +88,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
 
   const [filterDriver, setFilterDriver] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterSource, setFilterSource] = useState("");
   const [from, setFrom] = useState("");
   const [to,   setTo]   = useState("");
 
@@ -97,11 +107,11 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
 
   useEffect(() => { void loadTrips(); }, [loadTrips]);
 
-  const reset = () => { setFilterDriver(""); setFilterStatus(""); setFrom(""); setTo(""); };
+  const reset = () => { setFilterDriver(""); setFilterStatus(""); setFilterSource(""); setFrom(""); setTo(""); };
 
   // Exporta a CSV exactamente lo que está filtrado en pantalla.
   const exportCSV = () => {
-    const headers = ["Origen", "Destino", "Conductor", "Camión", "Fecha", "Duración", "Estado"];
+    const headers = ["Origen", "Destino", "Conductor", "Camión", "Fecha", "Duración", "Tipo", "Estado"];
     const rows = filtered.map((t) => [
       t.origin_label ?? "",
       t.destination_label ?? "",
@@ -109,6 +119,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
       t.truck_patente ?? "",
       formatTripDate(t),
       formatDuration(t),
+      SOURCE_LABELS[tripSource(t)],
       STATUS_LABELS[t.status] ?? t.status,
     ]);
     const csv = [headers, ...rows]
@@ -138,6 +149,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
       if (!statuses.includes(t.status)) return false;
       if (filterDriver && t.driver_nombre !== filterDriver) return false;
       if (filterStatus && t.status !== filterStatus) return false;
+      if (filterSource && tripSource(t) !== filterSource) return false;
 
       const d = tripDate(t);
       if (from) {
@@ -150,7 +162,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
       }
       return true;
     }),
-    [trips, statuses, filterDriver, filterStatus, from, to]
+    [trips, statuses, filterDriver, filterStatus, filterSource, from, to]
   );
 
   return (
@@ -183,6 +195,18 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
               ))}
           </select>
         </div>
+        <div style={{ minWidth: 180 }}>
+          <label className="st-label">Tipo</label>
+          <select
+            className={`st-select${!filterSource ? " placeholder" : ""}`}
+            value={filterSource}
+            onChange={(e) => setFilterSource(e.target.value)}
+          >
+            <option value="">Todos los tipos</option>
+            <option value="company">Designado por la empresa</option>
+            <option value="personal">Personal del conductor</option>
+          </select>
+        </div>
         <div style={{ minWidth: 160 }}>
           <label className="st-label">Desde</label>
           <input type="date" className="st-input" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -191,7 +215,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
           <label className="st-label">Hasta</label>
           <input type="date" className="st-input" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
-        {(filterDriver || filterStatus || from || to) && (
+        {(filterDriver || filterStatus || filterSource || from || to) && (
           <button className="st-btn-ghost" onClick={reset}>
             Restablecer
           </button>
@@ -241,6 +265,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
               <th>Camión</th>
               <th>Fecha</th>
               <th>Duración</th>
+              <th>Tipo</th>
               <th>Estado</th>
             </tr>
           </thead>
@@ -258,12 +283,24 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
                 <td style={{ fontVariantNumeric: "tabular-nums", color: "#6b7280" }}>{t.truck_patente ?? "—"}</td>
                 <td style={{ color: "#6b7280" }}>{formatTripDate(t)}</td>
                 <td style={{ fontVariantNumeric: "tabular-nums", color: "#6b7280" }}>{formatDuration(t)}</td>
+                <td>
+                  <span
+                    className="st-badge"
+                    style={
+                      tripSource(t) === "personal"
+                        ? { background: "#EEF2FF", color: "#4338CA" }
+                        : { background: "var(--c-surface-2)", color: "var(--c-ink-2)" }
+                    }
+                  >
+                    {SOURCE_LABELS[tripSource(t)]}
+                  </span>
+                </td>
                 <td><span className={badgeClass(t.status)}>{STATUS_LABELS[t.status] ?? t.status}</span></td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ padding: 0 }}>
+                <td colSpan={7} style={{ padding: 0 }}>
                   <div
                     style={{
                       display: "flex",
@@ -291,10 +328,10 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
                       <Icons.Clock size={26} />
                     </div>
                     <p style={{ margin: 0, color: "var(--c-ink)", fontSize: "1.05rem", fontWeight: 700 }}>
-                      {(filterDriver || filterStatus || from || to) ? "Sin resultados" : emptyTitle}
+                      {(filterDriver || filterStatus || filterSource || from || to) ? "Sin resultados" : emptyTitle}
                     </p>
                     <p style={{ margin: 0, color: "var(--c-ink-3)", fontSize: "0.9rem", lineHeight: 1.5, maxWidth: 360 }}>
-                      {(filterDriver || filterStatus || from || to)
+                      {(filterDriver || filterStatus || filterSource || from || to)
                         ? "No hay viajes que coincidan con los filtros aplicados."
                         : emptySubtitle}
                     </p>

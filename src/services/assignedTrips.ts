@@ -82,6 +82,28 @@ export async function updateTripStatus(
   return res.trip ?? null
 }
 
+/**
+ * Crea un viaje "personal": el que arma el propio conductor al elegir un destino
+ * y arrancar a navegar/simular (sin que la empresa se lo asigne). Nace en curso;
+ * se finaliza después con updateTripStatus(id, 'completed'). El backend resuelve
+ * la empresa y el camión del conductor a partir de su sesión.
+ */
+export async function createPersonalTrip(input: {
+  origin_address: string | null
+  destination_address: string | null
+  origin_lat: number | null
+  origin_lng: number | null
+  destination_lat: number | null
+  destination_lng: number | null
+  route?: unknown
+}): Promise<AssignedTrip | null> {
+  const res = await apiRequest<{ success: boolean; trip: AssignedTrip }>(
+    '/api/assigned-trips/personal',
+    { method: 'POST', body: JSON.stringify(input) }
+  )
+  return res.trip ?? null
+}
+
 /** Tramo de la ruta para mostrar en la web (mismo formato que Route.segments). */
 export type RoutePathSegment = { coordinates: { lat: number; lng: number }[]; status: string }
 
