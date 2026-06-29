@@ -174,7 +174,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
       {/* Filtros */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 9, flexWrap: "wrap", marginBottom: 16, background: "#fff", border: "1px solid var(--c-border)", borderRadius: "var(--r-lg)", padding: 18 }}>
-        <div style={{ minWidth: 175 }}>
+        <div style={{ minWidth: 155 }}>
           <label className="st-label" style={flushPad}>Conductor</label>
           <select
             className={`st-select${!filterDriver ? " placeholder" : ""}`}
@@ -182,11 +182,11 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             value={filterDriver}
             onChange={(e) => setFilterDriver(e.target.value)}
           >
-            <option value="">Todos los conductores</option>
+            <option value="">Todos</option>
             {driverNames.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
-        <div style={{ minWidth: 150 }}>
+        <div style={{ minWidth: 140 }}>
           <label className="st-label" style={flushPad}>Estado</label>
           <select
             className={`st-select${!filterStatus ? " placeholder" : ""}`}
@@ -194,7 +194,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
           >
-            <option value="">Todos los estados</option>
+            <option value="">Todos</option>
             {Object.entries(STATUS_LABELS)
               .filter(([value]) => statuses.includes(value as AssignedTrip["status"]))
               .map(([value, label]) => (
@@ -202,7 +202,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
               ))}
           </select>
         </div>
-        <div style={{ minWidth: 160 }}>
+        <div style={{ minWidth: 140 }}>
           <label className="st-label" style={flushPad}>Tipo</label>
           <select
             className={`st-select${!filterSource ? " placeholder" : ""}`}
@@ -210,7 +210,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             value={filterSource}
             onChange={(e) => setFilterSource(e.target.value)}
           >
-            <option value="">Todos los tipos</option>
+            <option value="">Todos</option>
             <option value="company">Empresa</option>
             <option value="personal">Personal</option>
           </select>
