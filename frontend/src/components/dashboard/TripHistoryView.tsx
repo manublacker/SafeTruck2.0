@@ -168,9 +168,9 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
   return (
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
       {/* Filtros */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap", marginBottom: 16, background: "#fff", border: "1px solid var(--c-border)", borderRadius: "var(--r-lg)", padding: 18 }}>
-        <div style={{ minWidth: 200 }}>
-          <label className="st-label">Conductor</label>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap", marginBottom: 16, background: "#fff", border: "1px solid var(--c-border)", borderRadius: "var(--r-lg)", padding: 18 }}>
+        <div style={{ minWidth: 175 }}>
+          <label className="st-label" style={{ paddingLeft: 14 }}>Conductor</label>
           <select
             className={`st-select${!filterDriver ? " placeholder" : ""}`}
             value={filterDriver}
@@ -180,8 +180,8 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             {driverNames.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
-        <div style={{ minWidth: 180 }}>
-          <label className="st-label">Estado</label>
+        <div style={{ minWidth: 150 }}>
+          <label className="st-label" style={{ paddingLeft: 14 }}>Estado</label>
           <select
             className={`st-select${!filterStatus ? " placeholder" : ""}`}
             value={filterStatus}
@@ -195,8 +195,8 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
               ))}
           </select>
         </div>
-        <div style={{ minWidth: 180 }}>
-          <label className="st-label">Tipo</label>
+        <div style={{ minWidth: 160 }}>
+          <label className="st-label" style={{ paddingLeft: 14 }}>Tipo</label>
           <select
             className={`st-select${!filterSource ? " placeholder" : ""}`}
             value={filterSource}
@@ -207,12 +207,12 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             <option value="personal">Personal del conductor</option>
           </select>
         </div>
-        <div style={{ minWidth: 160 }}>
-          <label className="st-label">Desde</label>
+        <div style={{ minWidth: 150 }}>
+          <label className="st-label" style={{ paddingLeft: 14 }}>Desde</label>
           <input type="date" className="st-input" value={from} onChange={(e) => setFrom(e.target.value)} />
         </div>
-        <div style={{ minWidth: 160 }}>
-          <label className="st-label">Hasta</label>
+        <div style={{ minWidth: 150 }}>
+          <label className="st-label" style={{ paddingLeft: 14 }}>Hasta</label>
           <input type="date" className="st-input" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
         {(filterDriver || filterStatus || filterSource || from || to) && (
