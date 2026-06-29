@@ -809,6 +809,9 @@ select.st-field.placeholder { color: var(--c-ink-3); }
      espacio abajo para la barra de tabs. */
   .admin-content {
     overflow-y: auto !important;
+    /* La página NUNCA scrollea en horizontal: si algo se va de ancho, se
+       clampea acá. El único que scrollea de costado es la fila de filtros. */
+    overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
     padding-bottom: calc(66px + env(safe-area-inset-bottom));
   }
@@ -968,18 +971,28 @@ select.st-field.placeholder { color: var(--c-ink-3); }
     border-radius: 0 !important;
     padding: 0 !important;
     margin-bottom: 14px !important;
+    /* No dejamos que la barra crezca más que la pantalla. */
+    min-width: 0 !important;
+    max-width: 100% !important;
   }
-  /* Fila de chips que scrollea en horizontal. Los márgenes negativos +
-     padding hacen que sangren con el borde de la pantalla. */
+  /* Fila de chips que scrollea SOLO en horizontal y de forma aislada: el dedo
+     mueve los chips, nunca la página. La clave es width:100% + min-width:0
+     (si no, la fila crece para entrar todos los chips y empuja la pantalla). */
   .st-filters-scroll {
     display: flex !important;
     flex-wrap: nowrap;
     gap: 8px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     overflow-x: auto;
+    overflow-y: hidden;
+    /* El scroll lateral no se "contagia" a la página. */
+    overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    margin: 0 -16px;
-    padding: 0 16px 2px;
+    /* Un pelín de aire al final para que el último chip no quede pegado. */
+    padding: 0 2px 2px 0;
   }
   .st-filters-scroll::-webkit-scrollbar { display: none; }
   /* Cada filtro pasa a ser un chip tipo pill (label + valor en línea). */
