@@ -271,6 +271,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             <tr>
               <th>Ruta</th>
               <th>Conductor</th>
+              <th>Camión</th>
               <th>Fecha</th>
               <th>Tipo</th>
               <th>Estado</th>
@@ -295,12 +296,8 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
                     </div>
                   </div>
                 </td>
-                <td>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <span style={{ color: "#0d0d0d", fontWeight: 500 }}>{t.driver_nombre ?? `Conductor #${t.driver_id}`}</span>
-                    <span style={{ fontVariantNumeric: "tabular-nums", color: "#6b7280", fontSize: "0.8rem", whiteSpace: "nowrap" }}>{t.truck_patente ?? "—"}</span>
-                  </div>
-                </td>
+                <td style={{ color: "#0d0d0d" }}>{t.driver_nombre ?? `Conductor #${t.driver_id}`}</td>
+                <td style={{ fontVariantNumeric: "tabular-nums", color: "#6b7280", whiteSpace: "nowrap" }}>{t.truck_patente ?? "—"}</td>
                 <td style={{ color: "#6b7280", whiteSpace: "nowrap" }}>{formatTripDate(t)}</td>
                 <td>
                   <span
@@ -319,7 +316,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ padding: 0 }}>
+                <td colSpan={6} style={{ padding: 0 }}>
                   <div
                     style={{
                       display: "flex",
