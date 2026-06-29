@@ -3,7 +3,7 @@ import type { AssignedTrip } from "@/services/api";
 
 // Factor de escala del modal: todas las medidas del diseño se multiplican por
 // esto, así crece TODO proporcionalmente (subí/bajá este número para ajustar).
-const S = 1.15;
+const S = 1.08;
 const r = (n: number) => Math.round(n * S);
 
 const STATUS_LABELS: Record<string, string> = {
