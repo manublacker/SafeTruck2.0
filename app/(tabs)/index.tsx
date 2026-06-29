@@ -257,12 +257,18 @@ export default function MapScreen() {
           const a = coords[i], b = coords[i + 1]
           const interpLat = a.lat + (b.lat - a.lat) * progress.frac
           const interpLng = a.lng + (b.lng - a.lng) * progress.frac
+          // El gris llega HASTA la posición interpolada del camión (no se queda
+          // en el punto anterior ni se adelanta).
           passed.push({ latitude: a.lat, longitude: a.lng })
+          passed.push({ latitude: interpLat, longitude: interpLng })
           segRemaining.push({ lat: interpLat, lng: interpLng }, b)
         } else {
           segRemaining.push(coords[i])
         }
-        if (i < coords.length - 1) pointCounter++
+        // Avanzamos el contador en CADA punto (igual que el path plano de la
+        // simulación, que incluye los puntos de borde entre segmentos). Antes se
+        // salteaba el último de cada segmento y el gris se iba adelantando.
+        pointCounter++
       }
       if (segRemaining.length >= 2) remaining.push({ ...seg, coordinates: segRemaining })
     }
