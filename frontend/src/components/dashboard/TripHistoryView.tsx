@@ -269,9 +269,8 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
         <table className="st-table">
           <thead>
             <tr>
-              <th>Origen → Destino</th>
+              <th>Ruta</th>
               <th>Conductor</th>
-              <th>Camión</th>
               <th>Fecha</th>
               <th>Tipo</th>
               <th>Estado</th>
@@ -281,15 +280,28 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             {filtered.map((t) => (
               <tr key={t.id}>
                 <td>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
-                    <span>{t.origin_label ?? "—"}</span>
-                    <span style={{ color: "var(--c-ink-3)" }}><Icons.Arrow /></span>
-                    <span>{t.destination_label ?? "—"}</span>
+                  <div style={{ maxWidth: 340 }}>
+                    <div
+                      title={t.origin_label ?? ""}
+                      style={{ fontWeight: 600, color: "var(--c-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                    >
+                      {t.origin_label ?? "—"}
+                    </div>
+                    <div
+                      title={t.destination_label ?? ""}
+                      style={{ color: "var(--c-ink-2)", fontSize: "0.85rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                    >
+                      <span style={{ color: "var(--c-ink-3)" }}>→</span> {t.destination_label ?? "—"}
+                    </div>
                   </div>
                 </td>
-                <td style={{ color: "#0d0d0d" }}>{t.driver_nombre ?? `Conductor #${t.driver_id}`}</td>
-                <td style={{ fontVariantNumeric: "tabular-nums", color: "#6b7280" }}>{t.truck_patente ?? "—"}</td>
-                <td style={{ color: "#6b7280" }}>{formatTripDate(t)}</td>
+                <td>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ color: "#0d0d0d", fontWeight: 500 }}>{t.driver_nombre ?? `Conductor #${t.driver_id}`}</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums", color: "#6b7280", fontSize: "0.8rem", whiteSpace: "nowrap" }}>{t.truck_patente ?? "—"}</span>
+                  </div>
+                </td>
+                <td style={{ color: "#6b7280", whiteSpace: "nowrap" }}>{formatTripDate(t)}</td>
                 <td>
                   <span
                     className="st-badge"
@@ -307,7 +319,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ padding: 0 }}>
+                <td colSpan={5} style={{ padding: 0 }}>
                   <div
                     style={{
                       display: "flex",
