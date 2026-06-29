@@ -273,7 +273,6 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
               <th>Conductor</th>
               <th>Camión</th>
               <th>Fecha</th>
-              <th>Duración</th>
               <th>Tipo</th>
               <th>Estado</th>
             </tr>
@@ -291,7 +290,6 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
                 <td style={{ color: "#0d0d0d" }}>{t.driver_nombre ?? `Conductor #${t.driver_id}`}</td>
                 <td style={{ fontVariantNumeric: "tabular-nums", color: "#6b7280" }}>{t.truck_patente ?? "—"}</td>
                 <td style={{ color: "#6b7280" }}>{formatTripDate(t)}</td>
-                <td style={{ fontVariantNumeric: "tabular-nums", color: "#6b7280" }}>{formatDuration(t)}</td>
                 <td>
                   <span
                     className="st-badge"
@@ -309,7 +307,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ padding: 0 }}>
+                <td colSpan={6} style={{ padding: 0 }}>
                   <div
                     style={{
                       display: "flex",
