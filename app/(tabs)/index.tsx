@@ -1558,7 +1558,7 @@ export default function MapScreen() {
 
       {/* ── Trip Sheet ─────────────────────────────────────────────────── */}
       {tripSheet && !navMode && !showInfo && (
-        <View style={[s.tripSheet, { paddingBottom: insets.bottom + 20 }]}>
+        <View style={[s.tripSheet, { paddingBottom: 20 }]}>
           <View style={s.tripSheetHandle} />
 
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
