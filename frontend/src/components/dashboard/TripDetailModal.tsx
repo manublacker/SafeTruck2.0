@@ -74,11 +74,11 @@ export default function TripDetailModal({ trip, onClose }: Props) {
     <div className="st-modal-backdrop" onClick={onClose}>
       <div
         className="st-modal"
-        style={{ maxWidth: 840 }}
+        style={{ maxWidth: 900, padding: 34 }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Encabezado: título + badges de estado/tipo + cerrar */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 30 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
             <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "#0d0d0d", margin: 0 }}>
               Detalle del viaje
@@ -113,13 +113,13 @@ export default function TripDetailModal({ trip, onClose }: Props) {
         </div>
 
         {/* Cuerpo en 2 columnas: Ruta (timeline) | Asignación y recorrido (tarjetas) */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 36, marginBottom: 22 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48, marginBottom: 30 }}>
           <Section title="Ruta">
             <Timeline origin={trip.origin_label} destination={trip.destination_label} />
           </Section>
 
           <Section title="Asignación y recorrido">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <Card label="Conductor" value={trip.driver_nombre ?? `Conductor #${trip.driver_id}`} />
               <Card label="Camión"    value={trip.truck_patente ?? "—"} />
               <Card label="Distancia" value={dist.value} unit={dist.unit} />
@@ -129,17 +129,24 @@ export default function TripDetailModal({ trip, onClose }: Props) {
         </div>
 
         {/* Tiempos: grilla de 2 columnas (Agendado/Iniciado · Finalizado/Creado) */}
-        <Section title="Tiempos">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 40px" }}>
-            <TimeRow label="Agendado"   value={fmtDateTime(trip.scheduled_at)} />
-            <TimeRow label="Iniciado"   value={fmtDateTime(trip.started_at)} />
-            <TimeRow label="Finalizado" value={fmtDateTime(trip.completed_at)} />
-            <TimeRow label="Creado"     value={fmtDateTime(trip.created_at)} />
-          </div>
-        </Section>
+        <div style={{ borderTop: "1px solid var(--c-border)", paddingTop: 26 }}>
+          <Section title="Tiempos">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 48px" }}>
+              <TimeRow label="Agendado"   value={fmtDateTime(trip.scheduled_at)} />
+              <TimeRow label="Iniciado"   value={fmtDateTime(trip.started_at)} />
+              <TimeRow label="Finalizado" value={fmtDateTime(trip.completed_at)} />
+              <TimeRow label="Creado"     value={fmtDateTime(trip.created_at)} />
+            </div>
+          </Section>
+        </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-          <button type="button" className="st-btn-cta" onClick={onClose}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 28 }}>
+          <button
+            type="button"
+            className="st-btn-secondary"
+            style={{ padding: "8px 20px", fontSize: "0.85rem" }}
+            onClick={onClose}
+          >
             Cerrar
           </button>
         </div>
@@ -155,7 +162,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div>
       <div style={{
         fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.04em",
-        textTransform: "uppercase", color: "var(--c-ink-3)", marginBottom: 12,
+        textTransform: "uppercase", color: "var(--c-ink-3)", marginBottom: 14,
       }}>
         {title}
       </div>
@@ -171,9 +178,9 @@ function Timeline({ origin, destination }: { origin: string | null; destination:
       <div style={{ display: "flex", gap: 12 }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", alignSelf: "stretch" }}>
           <span style={{ width: 12, height: 12, borderRadius: "50%", background: "var(--c-success)", flexShrink: 0, marginTop: 2 }} />
-          <span style={{ flex: 1, width: 2, background: "var(--c-border)", marginTop: 4, marginBottom: 4, minHeight: 14 }} />
+          <span style={{ flex: 1, width: 2, background: "var(--c-border)", marginTop: 5, marginBottom: 5, minHeight: 24 }} />
         </div>
-        <div style={{ minWidth: 0, paddingBottom: 18 }}>
+        <div style={{ minWidth: 0, paddingBottom: 28 }}>
           <div style={{ fontSize: "0.78rem", color: "var(--c-ink-3)", fontWeight: 600, marginBottom: 3 }}>Origen</div>
           <div style={{ fontSize: "0.95rem", color: "var(--c-ink)", fontWeight: 600, lineHeight: 1.35 }}>{origin ?? "—"}</div>
         </div>
@@ -194,12 +201,12 @@ function Card({ label, value, unit }: { label: string; value: string; unit?: str
   return (
     <div style={{
       background: "var(--c-surface-2)", border: "1px solid var(--c-border)",
-      borderRadius: 12, padding: "12px 14px", minWidth: 0,
+      borderRadius: 14, padding: "16px 18px", minWidth: 0,
     }}>
-      <div style={{ fontSize: "0.75rem", color: "var(--c-ink-3)", marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: "0.78rem", color: "var(--c-ink-3)", marginBottom: 8 }}>{label}</div>
       <div
         title={value}
-        style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--c-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+        style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--c-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
       >
         {value}
         {unit ? <span style={{ fontSize: "0.82rem", fontWeight: 500, color: "var(--c-ink-2)", marginLeft: 4 }}>{unit}</span> : null}
