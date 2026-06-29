@@ -794,7 +794,12 @@ select.st-field.placeholder { color: var(--c-ink-3); }
 /* Estos sólo se ven en mobile (la media query los enciende). */
 .st-bottomnav { display: none; }
 .st-topbar-account-mobile { display: none; }
+.st-topbar-brand-mobile { display: none; }
 .st-trip-cards { display: none; }
+.st-page-head { display: none; }
+/* En desktop este wrapper es transparente: sus hijos (los filtros) se comportan
+   como hijos directos de la barra, idéntico a antes. En mobile pasa a flex. */
+.st-filters-scroll { display: contents; }
 
 @media (max-width: 768px) {
   /* El sidebar de escritorio desaparece; navega la barra inferior. */
@@ -812,18 +817,55 @@ select.st-field.placeholder { color: var(--c-ink-3); }
   .st-topbar {
     padding: 0 14px;
     padding-top: env(safe-area-inset-top);
-    height: calc(54px + env(safe-area-inset-top));
+    height: calc(58px + env(safe-area-inset-top));
+    background: #fff;
   }
-  .st-topbar-title { font-size: 1rem; }
+
+  /* Marca en el header (logo + Logística AMBA / SafeTruck), como el diseño. */
+  .st-topbar-brand-mobile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .st-topbar-brand-logo {
+    flex-shrink: 0;
+    width: 38px; height: 38px;
+    border-radius: 11px;
+    background: var(--c-accent);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .st-topbar-brand-logo img { width: 24px; height: 24px; object-fit: contain; }
+  .st-topbar-brand-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+  .st-topbar-brand-sub {
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--c-ink-3);
+  }
+  .st-topbar-brand-name { font-size: 1rem; font-weight: 800; color: var(--c-ink); }
+
+  /* Fondo gris cálido de la página (las tarjetas blancas resaltan encima). */
+  .admin-content { background: #f4f3f0 !important; }
+  .st-view-root { background: transparent !important; padding: 16px !important; }
+
+  /* Encabezado de página: título grande + fecha (lo que antes iba en el topbar). */
+  .st-page-head { display: block; padding: 16px 16px 4px; }
+  .st-page-head-title {
+    margin: 0; font-size: 1.7rem; font-weight: 800;
+    color: var(--c-ink); letter-spacing: -0.02em; line-height: 1.1;
+  }
+  .st-page-head-date {
+    margin-top: 4px; font-size: 0.92rem; font-weight: 500;
+    color: var(--c-ink-3); text-transform: capitalize;
+  }
 
   /* Avatar de cuenta arriba a la derecha (en desktop está en el sidebar). */
   .st-topbar-account-mobile {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px; height: 36px;
+    width: 38px; height: 38px;
     border-radius: 50%;
-    background: var(--c-navy);
+    background: #11302c;
     color: #fff;
     border: none;
     font-weight: 700;
@@ -915,8 +957,94 @@ select.st-field.placeholder { color: var(--c-ink-3); }
   .st-trip-cards-empty-title { margin: 0; color: var(--c-ink); font-size: 1.05rem; font-weight: 700; }
   .st-trip-cards-empty-sub { margin: 0; color: var(--c-ink-3); font-size: 0.9rem; line-height: 1.5; max-width: 360px; }
 
-  /* Filtros del historial: scroll horizontal en celu para que no rompan. */
-  .st-filters-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* ── Filtros: de la card en grilla a chips con scroll + botones abajo ── */
+  .st-filters-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    /* Quitamos la card: en mobile los filtros son chips sueltos. */
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin-bottom: 14px !important;
+  }
+  /* Fila de chips que scrollea en horizontal. Los márgenes negativos +
+     padding hacen que sangren con el borde de la pantalla. */
+  .st-filters-scroll {
+    display: flex !important;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 -16px;
+    padding: 0 16px 2px;
+  }
+  .st-filters-scroll::-webkit-scrollbar { display: none; }
+  /* Cada filtro pasa a ser un chip tipo pill (label + valor en línea). */
+  .st-filter {
+    min-width: 0 !important;
+    flex: 0 0 auto;
+    display: inline-flex !important;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid var(--c-border-strong);
+    border-radius: 999px;
+    padding: 8px 14px;
+    background: #fff;
+    white-space: nowrap;
+  }
+  .st-filter .st-label {
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--c-ink-3);
+    white-space: nowrap;
+  }
+  .st-filter .st-select,
+  .st-filter .st-input {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    width: auto !important;
+    min-width: 0;
+    font-size: 0.85rem !important;
+    font-weight: 700;
+    color: var(--c-ink) !important;
+    box-shadow: none !important;
+  }
+  .st-filter .st-select {
+    /* Restauramos la flechita (el reset de background la había borrado). */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa1ac' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") !important;
+    background-repeat: no-repeat !important;
+    background-position: right center !important;
+    padding-right: 18px !important;
+  }
+  .st-filter .st-input { font-variant-numeric: tabular-nums; }
+
+  /* Botones en su propia fila, a lo ancho. Actualizar = verde oscuro (diseño). */
+  .st-filters-actions {
+    margin-left: 0 !important;
+    width: 100%;
+    gap: 10px !important;
+  }
+  .st-filters-actions .st-btn-secondary {
+    flex: 1 1 0;
+    min-width: 0 !important;
+    justify-content: center;
+    padding: 12px 14px !important;
+    border-radius: 12px !important;
+    font-weight: 700;
+  }
+  .st-btn-refresh-mobile {
+    background: #11302c !important;
+    color: #fff !important;
+    border-color: #11302c !important;
+  }
 
   /* ── Modales: una sola columna y que entren en la pantalla del celu ── */
   .st-modal {

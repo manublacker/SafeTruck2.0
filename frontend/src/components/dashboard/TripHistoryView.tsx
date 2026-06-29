@@ -121,64 +121,68 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
   const flushPad = { paddingLeft: 6 };
 
   return (
-    <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
+    <div className="st-view-root" style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
       {/* Filtros */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 9, flexWrap: "wrap", marginBottom: 16, background: "#fff", border: "1px solid var(--c-border)", borderRadius: "var(--r-lg)", padding: 18 }}>
-        <div style={{ minWidth: 155 }}>
-          <label className="st-label" style={flushPad}>Conductor</label>
-          <select
-            className={`st-select${!filterDriver ? " placeholder" : ""}`}
-            style={flushPad}
-            value={filterDriver}
-            onChange={(e) => setFilterDriver(e.target.value)}
-          >
-            <option value="">Todos</option>
-            {driverNames.map((name) => <option key={name} value={name}>{name}</option>)}
-          </select>
+      <div className="st-filters-bar" style={{ display: "flex", alignItems: "flex-end", gap: 9, flexWrap: "wrap", marginBottom: 16, background: "#fff", border: "1px solid var(--c-border)", borderRadius: "var(--r-lg)", padding: 18 }}>
+        {/* En desktop este wrapper es transparente (display:contents); en mobile
+            se vuelve una fila de chips con scroll horizontal. */}
+        <div className="st-filters-scroll">
+          <div className="st-filter" style={{ minWidth: 155 }}>
+            <label className="st-label" style={flushPad}>Conductor</label>
+            <select
+              className={`st-select${!filterDriver ? " placeholder" : ""}`}
+              style={flushPad}
+              value={filterDriver}
+              onChange={(e) => setFilterDriver(e.target.value)}
+            >
+              <option value="">Todos</option>
+              {driverNames.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </div>
+          <div className="st-filter" style={{ minWidth: 140 }}>
+            <label className="st-label" style={flushPad}>Estado</label>
+            <select
+              className={`st-select${!filterStatus ? " placeholder" : ""}`}
+              style={flushPad}
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+            >
+              <option value="">Todos</option>
+              {Object.entries(STATUS_LABELS)
+                .filter(([value]) => statuses.includes(value as AssignedTrip["status"]))
+                .map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+            </select>
+          </div>
+          <div className="st-filter" style={{ minWidth: 140 }}>
+            <label className="st-label" style={flushPad}>Tipo</label>
+            <select
+              className={`st-select${!filterSource ? " placeholder" : ""}`}
+              style={flushPad}
+              value={filterSource}
+              onChange={(e) => setFilterSource(e.target.value)}
+            >
+              <option value="">Todos</option>
+              <option value="company">Empresa</option>
+              <option value="personal">Personal</option>
+            </select>
+          </div>
+          <div className="st-filter" style={{ minWidth: 140 }}>
+            <label className="st-label" style={flushPad}>Desde</label>
+            <input type="date" className="st-input" style={flushPad} value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div className="st-filter" style={{ minWidth: 140 }}>
+            <label className="st-label" style={flushPad}>Hasta</label>
+            <input type="date" className="st-input" style={flushPad} value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          {(filterDriver || filterStatus || filterSource || from || to) && (
+            <button className="st-btn-ghost" onClick={reset}>
+              Restablecer
+            </button>
+          )}
         </div>
-        <div style={{ minWidth: 140 }}>
-          <label className="st-label" style={flushPad}>Estado</label>
-          <select
-            className={`st-select${!filterStatus ? " placeholder" : ""}`}
-            style={flushPad}
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="">Todos</option>
-            {Object.entries(STATUS_LABELS)
-              .filter(([value]) => statuses.includes(value as AssignedTrip["status"]))
-              .map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-          </select>
-        </div>
-        <div style={{ minWidth: 140 }}>
-          <label className="st-label" style={flushPad}>Tipo</label>
-          <select
-            className={`st-select${!filterSource ? " placeholder" : ""}`}
-            style={flushPad}
-            value={filterSource}
-            onChange={(e) => setFilterSource(e.target.value)}
-          >
-            <option value="">Todos</option>
-            <option value="company">Empresa</option>
-            <option value="personal">Personal</option>
-          </select>
-        </div>
-        <div style={{ minWidth: 140 }}>
-          <label className="st-label" style={flushPad}>Desde</label>
-          <input type="date" className="st-input" style={flushPad} value={from} onChange={(e) => setFrom(e.target.value)} />
-        </div>
-        <div style={{ minWidth: 140 }}>
-          <label className="st-label" style={flushPad}>Hasta</label>
-          <input type="date" className="st-input" style={flushPad} value={to} onChange={(e) => setTo(e.target.value)} />
-        </div>
-        {(filterDriver || filterStatus || filterSource || from || to) && (
-          <button className="st-btn-ghost" onClick={reset}>
-            Restablecer
-          </button>
-        )}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+        <div className="st-filters-actions" style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <button
             className="st-btn-secondary"
             onClick={exportCSV}
@@ -188,7 +192,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             Exportar CSV
           </button>
           <button
-            className="st-btn-secondary"
+            className="st-btn-secondary st-btn-refresh-mobile"
             style={{ minWidth: 134 }}
             onClick={() => void loadTrips()}
             disabled={loading}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Icons } from "./DashboardIcons";
 import { useAuth } from "@/contexts/AuthContext";
+import safeTruckLogo from "@/assets/logo_safetruck.png";
 
 interface Props {
   title: string;
@@ -38,7 +39,19 @@ export default function AdminTopBar({ title, onToggleSidebar, onAccount }: Props
         >
           <Icons.PanelLeft size={20} />
         </button>
-        <h1 className="st-topbar-title">
+
+        {/* Marca: SÓLO en mobile (en desktop la marca está en el sidebar). */}
+        <div className="st-topbar-brand-mobile">
+          <span className="st-topbar-brand-logo">
+            <img src={safeTruckLogo} alt="SafeTruck" />
+          </span>
+          <span className="st-topbar-brand-text">
+            <span className="st-topbar-brand-sub">Logística AMBA</span>
+            <span className="st-topbar-brand-name">SafeTruck</span>
+          </span>
+        </div>
+
+        <h1 className="st-topbar-title hide-on-mobile">
           {title}
         </h1>
         {today && (

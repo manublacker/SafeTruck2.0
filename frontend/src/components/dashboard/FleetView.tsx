@@ -44,7 +44,7 @@ export default function FleetView({ onNavigate, initialTab = "trucks" }: { onNav
   }, [loadDrivers, refreshDrivers]);
 
   return (
-    <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
+    <div className="st-view-root" style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
       <Tabs current={tab} onChange={setTab} />
 
       <div style={{ marginTop: 20 }}>

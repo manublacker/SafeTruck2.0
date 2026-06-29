@@ -30,9 +30,20 @@ function getInitialPage(): AdminPage {
   return VALID_PAGES.includes(hash) ? hash : "map";
 }
 
+function formatDateEsAR(): string {
+  try {
+    return new Intl.DateTimeFormat("es-AR", {
+      weekday: "long", day: "numeric", month: "long",
+    }).format(new Date());
+  } catch {
+    return "";
+  }
+}
+
 export default function Dashboard() {
   const [page, setPage]           = useState<AdminPage>(getInitialPage);
   const [collapsed, setCollapsed] = useState(false);
+  const [today] = useState(() => formatDateEsAR());
   const [billingSuccess, setBillingSuccess] = useState(false);
   const { refreshPlan, refreshTrucks, refreshDrivers } = useAuth();
 
@@ -71,6 +82,12 @@ export default function Dashboard() {
           onAccount={() => handleSetPage("account")}
         />
         <div className="admin-content">
+          {/* Encabezado de página: título grande + fecha. SÓLO mobile
+              (en desktop el título vive en el topbar; admin.css lo oculta). */}
+          <div className="st-page-head">
+            <h1 className="st-page-head-title">{TITLE[page]}</h1>
+            {today && <div className="st-page-head-date">{today}</div>}
+          </div>
           {page === "map"            && <LiveMapContainer onNavigate={handleSetPage} />}
           {page === "fleet"          && <FleetView onNavigate={handleSetPage} />}
           {page === "fleet-trucks"   && <FleetView onNavigate={handleSetPage} initialTab="trucks" />}
