@@ -170,11 +170,13 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
           </div>
           <div className="st-filter" style={{ minWidth: 140 }}>
             <label className="st-label" style={flushPad}>Desde</label>
-            <input type="date" className="st-input" style={flushPad} value={from} onChange={(e) => setFrom(e.target.value)} />
+            {/* "Desde" no puede ser posterior a "Hasta" (y viceversa abajo). */}
+            <input type="date" className="st-input" style={flushPad} value={from} max={to || undefined} onChange={(e) => { const v = e.target.value; if (to && v && v > to) return; setFrom(v); }} />
           </div>
           <div className="st-filter" style={{ minWidth: 140 }}>
             <label className="st-label" style={flushPad}>Hasta</label>
-            <input type="date" className="st-input" style={flushPad} value={to} onChange={(e) => setTo(e.target.value)} />
+            {/* "Hasta" no puede ser anterior a "Desde". */}
+            <input type="date" className="st-input" style={flushPad} value={to} min={from || undefined} onChange={(e) => { const v = e.target.value; if (from && v && v < from) return; setTo(v); }} />
           </div>
           {(filterDriver || filterStatus || filterSource || from || to) && (
             <button className="st-btn-ghost" onClick={reset}>
