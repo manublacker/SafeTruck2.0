@@ -615,9 +615,10 @@ export default function MapScreen() {
   }, [navMode, tripSheet?.status, profile?.full_name, activeVehicle?.plate])
 
   // Durante la SIMULACIÓN de recorrido: mandamos la posición simulada al backend
-  // (cada 3s) para que el empresario vea en la web el camión recorriendo la ruta,
-  // igual que si estuviera manejando. Más seguido que el tracking real (10s) para
-  // que el movimiento simulado se vea fluido en el mapa de la web.
+  // (cada 1s) para que el empresario vea en la web el camión recorriendo la ruta,
+  // igual que si estuviera manejando. Bien seguido (más que el tracking real de
+  // 10s) para que el movimiento y el recorrido se vean fluidos en el mapa web y
+  // que nunca haya un hueco que alcance a mostrar el cartel "sin unidades".
   useEffect(() => {
     if (!simRunning) return
     let cancelled = false
@@ -633,7 +634,7 @@ export default function MapScreen() {
       } catch { /* ignorar ticks fallidos de red */ }
     }
     void send()
-    const id = setInterval(() => void send(), 3_000)
+    const id = setInterval(() => void send(), 1_000)
     return () => {
       cancelled = true
       clearInterval(id)
