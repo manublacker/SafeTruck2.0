@@ -43,8 +43,12 @@ export async function calculateRoute(
     if (validRows.length === 0) throw new Error('Ruta vacía')
 
     const segments: RouteSegment[] = validRows.map((r: any) => {
+      const allowed = r.heavy_vehicle_allowed
+      const isFalse = allowed === false || allowed === 'false' || allowed === 'f' || allowed === null || allowed === undefined || allowed === 0
+      const isTrue = !isFalse && allowed !== null && allowed !== undefined
+
       let status: 'ok' | 'unauthorized' | 'unknown' = 'unknown'
-      if (r.heavy_vehicle_allowed === true) {
+      if (isTrue) {
         if (r.max_weight_kg && vehicle.weight_kg > r.max_weight_kg) {
           status = 'unauthorized'
         } else if (r.max_height_m && vehicle.height_m > r.max_height_m) {
@@ -52,14 +56,11 @@ export async function calculateRoute(
         } else {
           status = 'ok'
         }
-      } else if (r.heavy_vehicle_allowed === false) {
+      } else if (isFalse) {
         status = 'unauthorized'
       } else {
         status = 'unknown'
       }
-
-      // TODO: quitar este log después del test
-      console.log(`[DEBUG] edge=${r.edge_id} | ${r.street_name || '(sin nombre)'} | heavy_vehicle_allowed=${r.heavy_vehicle_allowed} | max_weight_kg=${r.max_weight_kg ?? '-'} | max_height_m=${r.max_height_m ?? '-'} | status=${status}`)
 
       const coords = parseGeom(r.geom)
       return {
@@ -89,17 +90,6 @@ export async function calculateRoute(
   }
 }
 
-/**
- * Registra una denuncia de un chofer sobre la arista más cercana a un punto.
- * Usa el MISMO pool/DB que el ruteo (pgr_edges), así la penalización que escribe
- * la "ve" pgr_route_truck en el próximo cálculo de ruta.
- *
- * Toda la lógica vive en la función SQL denunciar_punto() (ver migración
- * src/backend/migrations/003_denuncia_penalty_pgr.sql): snap a pgr_edges +
- * INSERT en edge_reports + recálculo de pgr_edges.denuncia_penalty por umbral.
- *
- * Devuelve el edge_id (pgr_edges.id) afectado.
- */
 export async function denunciarPunto(
   lat: number,
   lng: number,
@@ -134,4 +124,3 @@ function parseGeom(geom: any): { lat: number; lng: number }[] {
   }
   return []
 }
-
