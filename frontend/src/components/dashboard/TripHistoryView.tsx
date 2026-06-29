@@ -216,7 +216,9 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
       )}
 
       {!loading && !error && (
-        <table className="st-table">
+        <>
+        {/* Desktop: tabla ancha. Mobile (≤768px): tarjetas, más abajo. */}
+        <table className="st-table hide-on-mobile">
           <thead>
             <tr>
               <th>Ruta</th>
@@ -307,6 +309,61 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             )}
           </tbody>
         </table>
+
+        {/* Mobile: lista de tarjetas (mismos datos que la tabla, estilo del diseño). */}
+        <div className="st-trip-cards">
+          {filtered.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className="st-trip-card"
+              onClick={() => setSelected(t)}
+            >
+              <div className="st-trip-card-route" title={t.origin_label ?? ""}>
+                {t.origin_label ?? "—"}
+              </div>
+              <div className="st-trip-card-dest" title={t.destination_label ?? ""}>
+                <span className="arrow">→</span> {t.destination_label ?? "—"}
+              </div>
+              <div className="st-trip-card-meta">
+                <span>{t.driver_nombre ?? `Conductor #${t.driver_id}`}</span>
+                <span className="st-trip-card-dot" />
+                <span className="st-trip-card-plate">{t.truck_patente ?? "—"}</span>
+                <span className="st-trip-card-dot" />
+                <span>{formatTripDate(t)}</span>
+              </div>
+              <div className="st-trip-card-badges">
+                <span
+                  className="st-badge"
+                  style={
+                    tripSource(t) === "personal"
+                      ? { background: "#EEF2FF", color: "#4338CA" }
+                      : { background: "var(--c-surface-2)", color: "var(--c-ink-2)" }
+                  }
+                >
+                  {SOURCE_LABELS[tripSource(t)]}
+                </span>
+                <span className={badgeClass(t.status)}>{STATUS_LABELS[t.status] ?? t.status}</span>
+              </div>
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <div className="st-trip-cards-empty">
+              <div className="st-trip-cards-empty-icon">
+                <Icons.Clock size={26} />
+              </div>
+              <p className="st-trip-cards-empty-title">
+                {(filterDriver || filterStatus || filterSource || from || to) ? "Sin resultados" : emptyTitle}
+              </p>
+              <p className="st-trip-cards-empty-sub">
+                {(filterDriver || filterStatus || filterSource || from || to)
+                  ? "No hay viajes que coincidan con los filtros aplicados."
+                  : emptySubtitle}
+              </p>
+            </div>
+          )}
+        </div>
+        </>
       )}
 
       {selected && (

@@ -791,9 +791,10 @@ select.st-field.placeholder { color: var(--c-ink-3); }
    apilado. TODO vive acá adentro: en desktop no cambia absolutamente nada.
    ════════════════════════════════════════════════════════════════════ */
 
-/* Estos dos sólo se ven en mobile (la media query los enciende). */
+/* Estos sólo se ven en mobile (la media query los enciende). */
 .st-bottomnav { display: none; }
 .st-topbar-account-mobile { display: none; }
+.st-trip-cards { display: none; }
 
 @media (max-width: 768px) {
   /* El sidebar de escritorio desaparece; navega la barra inferior. */
@@ -877,4 +878,43 @@ select.st-field.placeholder { color: var(--c-ink-3); }
     padding: 16px !important;
     overflow: visible !important;
   }
+
+  /* ── Viajes / Historial: tarjetas en vez de la tabla ancha ── */
+  .st-trip-cards { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+  .st-trip-card {
+    width: 100%;
+    text-align: left;
+    background: #fff;
+    border: 1px solid var(--c-border);
+    border-radius: 16px;
+    padding: 16px;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+  }
+  .st-trip-card:active { background: #fbfaf8; }
+  .st-trip-card-route { font-size: 0.92rem; font-weight: 700; color: var(--c-ink); line-height: 1.35; }
+  .st-trip-card-dest { font-size: 0.82rem; color: var(--c-ink-2); margin-top: 4px; line-height: 1.35; }
+  .st-trip-card-dest .arrow { color: var(--c-ink-3); }
+  .st-trip-card-meta {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin-top: 12px; font-size: 0.78rem; color: var(--c-ink-3); font-weight: 600;
+  }
+  .st-trip-card-plate { font-variant-numeric: tabular-nums; }
+  .st-trip-card-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--c-border); }
+  .st-trip-card-badges { display: flex; gap: 8px; margin-top: 12px; }
+  .st-trip-cards-empty {
+    text-align: center; padding: 48px 24px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .st-trip-cards-empty-icon {
+    width: 56px; height: 56px; border-radius: 16px;
+    background: var(--c-surface-2); color: var(--c-ink-3);
+    display: flex; align-items: center; justify-content: center; margin-bottom: 10px;
+  }
+  .st-trip-cards-empty-title { margin: 0; color: var(--c-ink); font-size: 1.05rem; font-weight: 700; }
+  .st-trip-cards-empty-sub { margin: 0; color: var(--c-ink-3); font-size: 0.9rem; line-height: 1.5; max-width: 360px; }
+
+  /* Filtros del historial: scroll horizontal en celu para que no rompan. */
+  .st-filters-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
