@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator,
-  Modal, ScrollView, TextInput, Keyboard, Platform,
+  Modal, ScrollView, TextInput, Keyboard, Platform, AppState,
 } from 'react-native'
 import MapView, { Marker, Polyline, Region } from 'react-native-maps'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -14,6 +14,12 @@ import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
 import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
 import { getRecentDestinations, addRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
+
+// Corre una sola vez por sesión de app: al abrir, completamos viajes personales
+// que quedaron "in_progress" colgados de una sesión anterior (la app se cerró o
+// quedó mucho tiempo en segundo plano). Es a nivel módulo para no repetirlo en
+// cada re-montaje de la pantalla.
+let didCleanupDanglingPersonal = false
 
 async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession()
@@ -683,6 +689,46 @@ export default function MapScreen() {
         .finally(() => { personalBusyRef.current = false })
     }
   }, [navMode, simRunning, tripSheet?.status, searchText, originOverride, destMarker])
+
+  // Al abrir la app: completamos cualquier viaje PERSONAL que haya quedado
+  // "in_progress" colgado de una sesión anterior (la app se cerró o quedó mucho
+  // rato en segundo plano sin frenarlo). Corre una sola vez por sesión.
+  useEffect(() => {
+    if (didCleanupDanglingPersonal) return
+    didCleanupDanglingPersonal = true
+    void (async () => {
+      try {
+        const all = await fetchAllMyTrips()
+        const dangling = all.filter(t => t.status === 'in_progress' && t.trip_source === 'personal')
+        for (const t of dangling) await updateTripStatus(String(t.id), 'completed').catch(() => null)
+      } catch { /* ignorar */ }
+    })()
+  }, [])
+
+  // Si el conductor manda la app a SEGUNDO PLANO con un viaje personal en curso,
+  // lo cerramos: lo completamos, sacamos el marcador de la web y frenamos la
+  // simulación, volviendo a un mapa limpio. Un viaje personal es "estoy manejando
+  // AHORA"; si se va de la app no debe quedar colgado en curso ni con ruta
+  // huérfana. (En un viaje ASIGNADO no aplica: no hay personalTripId.)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'background') return
+      const id = personalTripIdRef.current
+      if (id == null) return
+      personalTripIdRef.current = null
+      void updateTripStatus(String(id), 'completed').catch(() => null)
+      void clearLocation().catch(() => null)
+      if (simIntervalRef.current) { clearInterval(simIntervalRef.current); simIntervalRef.current = null }
+      setSimRunning(false)
+      setSimPaused(false)
+      setSimPosition(null)
+      setSimProgress(null)
+      simDataRef.current = null
+      clearRoute()
+    })
+    return () => sub.remove()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleTripAction = async (newStatus: AssignedTrip['status']) => {
     if (!tripSheet) return

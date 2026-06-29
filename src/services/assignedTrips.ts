@@ -17,6 +17,8 @@ export interface AssignedTrip {
   distance_m: number | null
   duration_min: number | null
   status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled'
+  /** 'company' (lo asignó la empresa) o 'personal' (lo armó el conductor). */
+  trip_source?: string
   scheduled_at: string | null
   accepted_at: string | null
   started_at: string | null
