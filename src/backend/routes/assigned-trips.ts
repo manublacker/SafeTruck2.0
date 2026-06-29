@@ -185,6 +185,26 @@ router.post('/personal', async (req: Request, res: Response) => {
 router.get('/', async (req: Request, res: Response) => {
   const adminId = req.user!.id
   try {
+    // Auto-limpieza: un viaje PERSONAL manda ubicación seguido mientras está
+    // activo. Si lleva >2 min sin mandar (el chofer dejó la app en segundo plano
+    // o la cerró), quedó abandonado → lo completamos solo, así no aparece colgado
+    // "en curso". Los ASIGNADOS no se tocan (pueden retomarse). Best-effort.
+    try {
+      await pool.query(
+        `UPDATE assigned_trips at
+           SET status = 'completed', completed_at = NOW()
+         WHERE at.empresa_user_id = $1
+           AND at.trip_source = 'personal'
+           AND at.status = 'in_progress'
+           AND NOT EXISTS (
+             SELECT 1 FROM driver_locations dl
+             WHERE dl.driver_app_user_id = at.driver_app_user_id
+               AND dl.updated_at > NOW() - INTERVAL '2 minutes'
+           )`,
+        [adminId]
+      )
+    } catch { /* best-effort: si falla, igual devolvemos la lista */ }
+
     const result = await pool.query(
       `SELECT at.*,
               d.nombre     AS driver_nombre,
