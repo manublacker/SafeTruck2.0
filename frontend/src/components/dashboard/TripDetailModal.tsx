@@ -28,25 +28,30 @@ function fmtDateTime(iso: string | null | undefined): string {
   });
 }
 
-function fmtDistance(m: number | null | undefined): string {
-  if (m == null) return "—";
-  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
+/** Distancia separada en número + unidad (para resaltar el número en la tarjeta). */
+function distanceParts(m: number | null | undefined): { value: string; unit: string } {
+  if (m == null) return { value: "—", unit: "" };
+  if (m >= 1000) return { value: (m / 1000).toFixed(1), unit: "km" };
+  return { value: String(Math.round(m)), unit: "m" };
 }
 
 /** Duración real (finalizado - iniciado) si existe; si no, la estimada de la ruta. */
-function fmtDuration(t: AssignedTrip): string {
-  let minutes: number | null = null;
+function durationMinutes(t: AssignedTrip): number | null {
   if (t.started_at && t.completed_at) {
     const s = new Date(t.started_at).getTime();
     const e = new Date(t.completed_at).getTime();
-    if (!isNaN(s) && !isNaN(e) && e > s) minutes = Math.round((e - s) / 60000);
+    if (!isNaN(s) && !isNaN(e) && e > s) return Math.round((e - s) / 60000);
   }
-  if (minutes == null && t.duration_min != null) minutes = Math.round(t.duration_min);
-  if (minutes == null) return "—";
+  return t.duration_min != null ? Math.round(t.duration_min) : null;
+}
+
+function durationParts(t: AssignedTrip): { value: string; unit: string } {
+  const minutes = durationMinutes(t);
+  if (minutes == null) return { value: "—", unit: "" };
+  if (minutes < 60)    return { value: String(minutes), unit: "min" };
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  if (h === 0) return `${m} min`;
-  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+  return m === 0 ? { value: String(h), unit: "h" } : { value: `${h} h ${m}`, unit: "min" };
 }
 
 interface Props {
@@ -62,22 +67,25 @@ export default function TripDetailModal({ trip, onClose }: Props) {
   }, [onClose]);
 
   const isPersonal = trip.trip_source === "personal";
+  const dist = distanceParts(trip.distance_m);
+  const dur  = durationParts(trip);
 
   return (
     <div className="st-modal-backdrop" onClick={onClose}>
       <div
         className="st-modal"
-        style={{ maxWidth: 560 }}
+        style={{ maxWidth: 840 }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Encabezado: título + badges de estado/tipo + cerrar */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
-          <div>
-            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#0d0d0d", margin: "0 0 10px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "#0d0d0d", margin: 0 }}>
               Detalle del viaje
             </h3>
             <div style={{ display: "flex", gap: 8 }}>
-              <span className={statusBadgeClass(trip.status)}>
+              <span className={statusBadgeClass(trip.status)} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }} />
                 {STATUS_LABELS[trip.status] ?? trip.status}
               </span>
               <span
@@ -95,8 +103,8 @@ export default function TripDetailModal({ trip, onClose }: Props) {
             onClick={onClose}
             aria-label="Cerrar"
             style={{
-              background: "transparent", border: "none", cursor: "pointer", color: "#6b7280",
-              width: 32, height: 32, borderRadius: 8,
+              background: "var(--c-surface-2)", border: "none", cursor: "pointer", color: "#6b7280",
+              width: 34, height: 34, borderRadius: 8, flexShrink: 0,
               display: "inline-flex", alignItems: "center", justifyContent: "center",
             }}
           >
@@ -104,33 +112,34 @@ export default function TripDetailModal({ trip, onClose }: Props) {
           </button>
         </div>
 
-        {/* Ruta: origen y destino completos */}
-        <Section title="Ruta">
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <Endpoint color="var(--c-success)" label="Origen"  value={trip.origin_label} />
-            <Endpoint color="var(--c-accent)"  label="Destino" value={trip.destination_label} />
+        {/* Cuerpo en 2 columnas: Ruta (timeline) | Asignación y recorrido (tarjetas) */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 36, marginBottom: 22 }}>
+          <Section title="Ruta">
+            <Timeline origin={trip.origin_label} destination={trip.destination_label} />
+          </Section>
+
+          <Section title="Asignación y recorrido">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Card label="Conductor" value={trip.driver_nombre ?? `Conductor #${trip.driver_id}`} />
+              <Card label="Camión"    value={trip.truck_patente ?? "—"} />
+              <Card label="Distancia" value={dist.value} unit={dist.unit} />
+              <Card label="Duración"  value={dur.value}  unit={dur.unit} />
+            </div>
+          </Section>
+        </div>
+
+        {/* Tiempos: grilla de 2 columnas (Agendado/Iniciado · Finalizado/Creado) */}
+        <Section title="Tiempos">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 40px" }}>
+            <TimeRow label="Agendado"   value={fmtDateTime(trip.scheduled_at)} />
+            <TimeRow label="Iniciado"   value={fmtDateTime(trip.started_at)} />
+            <TimeRow label="Finalizado" value={fmtDateTime(trip.completed_at)} />
+            <TimeRow label="Creado"     value={fmtDateTime(trip.created_at)} />
           </div>
         </Section>
 
-        <Section title="Asignación">
-          <Row label="Conductor" value={trip.driver_nombre ?? `Conductor #${trip.driver_id}`} />
-          <Row label="Camión"    value={trip.truck_patente ?? "—"} />
-        </Section>
-
-        <Section title="Recorrido">
-          <Row label="Distancia" value={fmtDistance(trip.distance_m)} />
-          <Row label="Duración"  value={fmtDuration(trip)} />
-        </Section>
-
-        <Section title="Tiempos">
-          <Row label="Agendado"   value={fmtDateTime(trip.scheduled_at)} />
-          <Row label="Iniciado"   value={fmtDateTime(trip.started_at)} />
-          <Row label="Finalizado" value={fmtDateTime(trip.completed_at)} />
-          <Row label="Creado"     value={fmtDateTime(trip.created_at)} />
-        </Section>
-
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-          <button type="button" className="st-btn-secondary" onClick={onClose}>
+          <button type="button" className="st-btn-cta" onClick={onClose}>
             Cerrar
           </button>
         </div>
@@ -143,35 +152,67 @@ export default function TripDetailModal({ trip, onClose }: Props) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 18 }}>
+    <div>
       <div style={{
         fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.04em",
-        textTransform: "uppercase", color: "var(--c-ink-3)", marginBottom: 10,
+        textTransform: "uppercase", color: "var(--c-ink-3)", marginBottom: 12,
       }}>
         {title}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{children}</div>
+      {children}
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+/** Línea de tiempo origen → destino con puntos de color y línea de unión. */
+function Timeline({ origin, destination }: { origin: string | null; destination: string | null }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", alignSelf: "stretch" }}>
+          <span style={{ width: 12, height: 12, borderRadius: "50%", background: "var(--c-success)", flexShrink: 0, marginTop: 2 }} />
+          <span style={{ flex: 1, width: 2, background: "var(--c-border)", marginTop: 4, marginBottom: 4, minHeight: 14 }} />
+        </div>
+        <div style={{ minWidth: 0, paddingBottom: 18 }}>
+          <div style={{ fontSize: "0.78rem", color: "var(--c-ink-3)", fontWeight: 600, marginBottom: 3 }}>Origen</div>
+          <div style={{ fontSize: "0.95rem", color: "var(--c-ink)", fontWeight: 600, lineHeight: 1.35 }}>{origin ?? "—"}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 12 }}>
+        <span style={{ width: 12, height: 12, borderRadius: "50%", background: "var(--c-accent)", flexShrink: 0, marginTop: 2 }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: "0.78rem", color: "var(--c-ink-3)", fontWeight: 600, marginBottom: 3 }}>Destino</div>
+          <div style={{ fontSize: "0.95rem", color: "var(--c-ink)", fontWeight: 600, lineHeight: 1.35 }}>{destination ?? "—"}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Tarjeta con etiqueta arriba y valor resaltado abajo (con unidad opcional). */
+function Card({ label, value, unit }: { label: string; value: string; unit?: string }) {
+  return (
+    <div style={{
+      background: "var(--c-surface-2)", border: "1px solid var(--c-border)",
+      borderRadius: 12, padding: "12px 14px", minWidth: 0,
+    }}>
+      <div style={{ fontSize: "0.75rem", color: "var(--c-ink-3)", marginBottom: 5 }}>{label}</div>
+      <div
+        title={value}
+        style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--c-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+      >
+        {value}
+        {unit ? <span style={{ fontSize: "0.82rem", fontWeight: 500, color: "var(--c-ink-2)", marginLeft: 4 }}>{unit}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function TimeRow({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 16, fontSize: "0.9rem" }}>
       <span style={{ color: "var(--c-ink-3)" }}>{label}</span>
-      <span style={{ color: "var(--c-ink)", fontWeight: 500, textAlign: "right" }}>{value}</span>
-    </div>
-  );
-}
-
-function Endpoint({ color, label, value }: { color: string; label: string; value: string | null }) {
-  return (
-    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-      <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, marginTop: 5, flexShrink: 0 }} />
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: "0.72rem", color: "var(--c-ink-3)", fontWeight: 600 }}>{label}</div>
-        <div style={{ fontSize: "0.92rem", color: "var(--c-ink)", fontWeight: 500 }}>{value ?? "—"}</div>
-      </div>
+      <span style={{ color: "var(--c-ink)", fontWeight: 500, textAlign: "right", whiteSpace: "nowrap" }}>{value}</span>
     </div>
   );
 }
