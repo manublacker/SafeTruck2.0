@@ -168,7 +168,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
   return (
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
       {/* Filtros */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap", marginBottom: 16, background: "#fff", border: "1px solid var(--c-border)", borderRadius: "var(--r-lg)", padding: 18 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 9, flexWrap: "wrap", marginBottom: 16, background: "#fff", border: "1px solid var(--c-border)", borderRadius: "var(--r-lg)", padding: 18 }}>
         <div style={{ minWidth: 175 }}>
           <label className="st-label" style={{ paddingLeft: 14 }}>Conductor</label>
           <select
@@ -207,11 +207,11 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             <option value="personal">Personal del conductor</option>
           </select>
         </div>
-        <div style={{ minWidth: 150 }}>
+        <div style={{ minWidth: 140 }}>
           <label className="st-label" style={{ paddingLeft: 14 }}>Desde</label>
           <input type="date" className="st-input" value={from} onChange={(e) => setFrom(e.target.value)} />
         </div>
-        <div style={{ minWidth: 150 }}>
+        <div style={{ minWidth: 140 }}>
           <label className="st-label" style={{ paddingLeft: 14 }}>Hasta</label>
           <input type="date" className="st-input" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
@@ -220,7 +220,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             Restablecer
           </button>
         )}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <button
             className="st-btn-secondary"
             onClick={exportCSV}
@@ -231,6 +231,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
           </button>
           <button
             className="st-btn-secondary"
+            style={{ minWidth: 134 }}
             onClick={() => void loadTrips()}
             disabled={loading}
           >
