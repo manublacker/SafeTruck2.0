@@ -17,6 +17,15 @@ const PANEL_GAP = 16;
 const MAP_COLUMN_BASIS = "minmax(420px, 2fr)";
 const SIDE_COLUMN_BASIS = "minmax(380px, 1fr)";
 
+// Cache a nivel módulo de la data "en vivo". Cuando el admin va a otra pestaña y
+// vuelve, este componente se vuelve a montar; sin el cache el mapa arrancaba
+// VACÍO (sin camión ni recorrido) hasta re-fetchear, mostrando el cartel "sin
+// unidades" y perdiendo la ruta unos segundos. Con el cache, al volver se ve al
+// instante lo último conocido y el polling/WebSocket lo refresca enseguida.
+let cachedLocations: DriverLocation[] = [];
+let cachedRoutes: Record<string, RoutePathSegment[]> = {};
+let cachedTrips: AssignedTrip[] = [];
+
 interface Props {
   onNavigate: (page: AdminPage) => void;
 }
@@ -35,15 +44,15 @@ export default function LiveMapContainer({ onNavigate }: Props) {
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
   const [originPin, setOriginPin]               = useState<MapPin | null>(null);
   const [destinationPin, setDestinationPin]     = useState<MapPin | null>(null);
-  const [driverLocations, setDriverLocations]   = useState<DriverLocation[]>([]);
+  const [driverLocations, setDriverLocations]   = useState<DriverLocation[]>(() => cachedLocations);
   // Mostramos el cartel "sin unidades" sólo si la lista quedó vacía de verdad
   // (no ante vacíos momentáneos por la carrera entre el polling y el WebSocket,
   // que hacían parpadear el cartel durante un viaje).
   const [showEmptyOverlay, setShowEmptyOverlay] = useState(false);
   // Recorrido (ruta) por chofer, sólo de WS (no del polling) → no titila al pollear.
-  const [driverRoutes, setDriverRoutes]         = useState<Record<string, RoutePathSegment[]>>({});
-  const [assignedTrips, setAssignedTrips]       = useState<AssignedTrip[]>([]);
-  const [tripsLoading, setTripsLoading]         = useState(true);
+  const [driverRoutes, setDriverRoutes]         = useState<Record<string, RoutePathSegment[]>>(() => cachedRoutes);
+  const [assignedTrips, setAssignedTrips]       = useState<AssignedTrip[]>(() => cachedTrips);
+  const [tripsLoading, setTripsLoading]         = useState(cachedTrips.length === 0);
   const [creatorOpen, setCreatorOpen]           = useState(false);
 
   const locationPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -88,6 +97,12 @@ export default function LiveMapContainer({ onNavigate }: Props) {
     const t = setTimeout(() => setShowEmptyOverlay(true), 2000);
     return () => clearTimeout(t);
   }, [driverLocations.length]);
+
+  // Mantenemos el cache a nivel módulo al día, para que al volver a la pestaña
+  // del mapa se vea al instante lo último conocido (ver comentario arriba).
+  useEffect(() => { cachedLocations = driverLocations; }, [driverLocations]);
+  useEffect(() => { cachedRoutes = driverRoutes; }, [driverRoutes]);
+  useEffect(() => { cachedTrips = assignedTrips; }, [assignedTrips]);
 
   // Fetch de viajes asignados + polling de respaldo (cada 30s). El WebSocket
   // (trip_update/trip_assigned) maneja el tiempo real; el polling es fallback.
