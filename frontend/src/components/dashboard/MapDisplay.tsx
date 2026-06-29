@@ -138,7 +138,7 @@ export default function MapDisplay({ routeResponse, driverLocations = [], driver
   const driverMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const driverAnimRef = useRef<Map<string, number>>(new Map());
   // Capas (polilíneas) del recorrido de cada chofer, por driver_app_user_id.
-  const driverRouteLayersRef = useRef<Map<string, L.Polyline[]>>(new Map());
+  const driverRouteLayersRef = useRef<Map<string, L.Layer[]>>(new Map());
 
   // Inicialización + cleanup del mapa
   useEffect(() => {
@@ -248,7 +248,7 @@ export default function MapDisplay({ routeResponse, driverLocations = [], driver
     for (const [id, segments] of Object.entries(driverRoutes)) {
       const prev = layers.get(id);
       if (prev) prev.forEach((p) => p.remove());
-      const polys: L.Polyline[] = [];
+      const polys: L.Layer[] = [];
       const flat: L.LatLngTuple[] = []; // toda la ruta aplanada, para el gris
       for (const seg of segments) {
         const coords = (seg.coordinates ?? [])
@@ -284,6 +284,18 @@ export default function MapDisplay({ routeResponse, driverLocations = [], driver
           polys.push(grey);
         }
       }
+
+      // Puntos de partida (verde) y destino (rojo) del recorrido.
+      if (flat.length >= 1) {
+        const startDot = L.circleMarker(flat[0], {
+          radius: 7, color: "#ffffff", weight: 2, fillColor: "#16a34a", fillOpacity: 1,
+        }).addTo(map);
+        const endDot = L.circleMarker(flat[flat.length - 1], {
+          radius: 7, color: "#ffffff", weight: 2, fillColor: "#dc2626", fillOpacity: 1,
+        }).addTo(map);
+        polys.push(startDot, endDot);
+      }
+
       layers.set(id, polys);
     }
   }, [driverRoutes, driverLocations]);
