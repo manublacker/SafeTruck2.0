@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icons } from "./DashboardIcons";
 import { fetchAssignedTrips, type AssignedTrip } from "@/services/api";
+import TripDetailModal from "./TripDetailModal";
 
 // ── Estados: etiqueta y badge ──────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
   const [trips, setTrips]     = useState<AssignedTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
+  const [selected, setSelected] = useState<AssignedTrip | null>(null);
 
   const [filterDriver, setFilterDriver] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -279,7 +281,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
           </thead>
           <tbody>
             {filtered.map((t) => (
-              <tr key={t.id}>
+              <tr key={t.id} onClick={() => setSelected(t)} style={{ cursor: "pointer" }} title="Ver detalle del viaje">
                 <td>
                   <div style={{ maxWidth: 340 }}>
                     <div
@@ -357,6 +359,10 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             )}
           </tbody>
         </table>
+      )}
+
+      {selected && (
+        <TripDetailModal trip={selected} onClose={() => setSelected(null)} />
       )}
     </div>
   );
