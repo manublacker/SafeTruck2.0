@@ -509,6 +509,11 @@ export default function MapScreen() {
         { duration: 500 }
       )
     }
+    // Si era una simulación de una ruta PROPIA (búsqueda, sin viaje asignado),
+    // al frenar volvemos al mapa limpio (se borra el recorrido y el panel de
+    // origen/destino, que antes quedaban colgados). En un viaje asignado no
+    // tocamos nada: seguís en ese viaje.
+    if (!tripSheet) clearRoute()
   }
 
   const toggleSimPause = () => {
