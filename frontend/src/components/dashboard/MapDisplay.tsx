@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { RouteResponse } from "@/types/route";
+import { ACTIVE_TILE } from "@/lib/mapTiles";
 
 const DEFAULT_CENTER: L.LatLngTuple = [-34.6037, -58.3816];
 const DEFAULT_ZOOM = 11;
@@ -19,9 +20,9 @@ const FIT_PADDING: L.PointTuple = [48, 48];
 const FIT_MAX_ZOOM = 15;
 const INVALIDATE_DELAY_MS = 100;
 
-const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-const TILE_ATTRIBUTION = "&copy; OpenStreetMap contributors";
-const TILE_MAX_ZOOM = 19;
+const TILE_URL = ACTIVE_TILE.url;
+const TILE_ATTRIBUTION = ACTIVE_TILE.attribution;
+const TILE_MAX_ZOOM = ACTIVE_TILE.maxZoom;
 
 export interface DriverLocation {
   driver_app_user_id: string;

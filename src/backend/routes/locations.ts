@@ -8,13 +8,22 @@ const router = Router()
 router.use(authMiddleware)
 router.use(requireActiveSubscription)
 
-// GET / — Admin obtiene todas las ubicaciones activas (para el live map)
+// GET / — Admin obtiene las ubicaciones activas de SU empresa (para el live map)
 router.get('/', async (req: Request, res: Response) => {
+  const userId = req.user!.id
   try {
+    // Filtramos por los conductores que pertenecen a esta cuenta (drivers.user_id
+    // = admin dueño). Sin este filtro, el polling devolvía las ubicaciones de
+    // TODAS las empresas y se colaban camiones ajenos en el mapa. El broadcast
+    // por WebSocket (POST/DELETE) ya estaba aislado por empresa; esto alinea el GET.
     const result = await pool.query(
       `SELECT driver_app_user_id, driver_name, truck_plate, lat, lng, updated_at
        FROM driver_locations
-       WHERE updated_at > NOW() - INTERVAL '5 minutes'`
+       WHERE driver_app_user_id IN (
+         SELECT app_user_id FROM drivers WHERE user_id = $1 AND is_active = true
+       )
+       AND updated_at > NOW() - INTERVAL '5 minutes'`,
+      [userId]
     )
     res.json(result.rows)
   } catch (err: any) {
