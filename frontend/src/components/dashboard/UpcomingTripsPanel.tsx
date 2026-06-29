@@ -46,8 +46,11 @@ interface Props {
 }
 
 export default function UpcomingTripsPanel({ trips, loading, activeDrivers = [] }: Props) {
+  // "Viajes activos" = solo los que están EN CURSO ahora (más los choferes
+  // navegando, que se agregan aparte). Los pendientes/aceptados/agendados no
+  // se muestran acá: todavía no arrancaron.
   const sorted = [...trips]
-    .filter((t) => t.status !== "completed" && t.status !== "cancelled")
+    .filter((t) => t.status === "in_progress")
     .sort((a, b) => {
       if (!a.scheduled_at && !b.scheduled_at) return 0;
       if (!a.scheduled_at) return 1;
