@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { Icons } from "./DashboardIcons";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   title: string;
   onToggleSidebar: () => void;
+  /** Navegar a "Mi cuenta" (lo usa el botón de cuenta que sólo se ve en mobile). */
+  onAccount?: () => void;
 }
 
 function formatDateEsAR(): string {
@@ -16,14 +19,19 @@ function formatDateEsAR(): string {
   }
 }
 
-export default function AdminTopBar({ title, onToggleSidebar }: Props) {
+function initials(name: string) {
+  return name.split(" ").slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
+}
+
+export default function AdminTopBar({ title, onToggleSidebar, onAccount }: Props) {
   const [today] = useState(() => formatDateEsAR());
+  const { user } = useAuth();
 
   return (
     <header className="st-topbar">
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
         <button
-          className="st-toggle-btn"
+          className="st-toggle-btn hide-on-mobile"
           onClick={onToggleSidebar}
           title="Colapsar/expandir panel"
           aria-label="Colapsar/expandir panel"
@@ -48,6 +56,17 @@ export default function AdminTopBar({ title, onToggleSidebar }: Props) {
           </span>
         )}
       </div>
+
+      {/* Botón de cuenta: SÓLO en mobile (en desktop el acceso está en el sidebar). */}
+      <button
+        type="button"
+        className="st-topbar-account-mobile"
+        onClick={onAccount}
+        aria-label="Mi cuenta"
+        title="Mi cuenta"
+      >
+        {user ? initials(user.full_name) : "?"}
+      </button>
     </header>
   );
 }

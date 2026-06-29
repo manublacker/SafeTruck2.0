@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { confirmCheckout } from "@/services/api";
 import AdminSidebar, { type AdminPage } from "@/components/dashboard/AdminSidebar";
 import AdminTopBar from "@/components/dashboard/AdminTopBar";
+import AdminBottomNav from "@/components/dashboard/AdminBottomNav";
 import LiveMapContainer from "@/components/dashboard/LiveMapContainer";
 import FleetView from "@/components/dashboard/FleetView";
 import TripHistoryView from "@/components/dashboard/TripHistoryView";
@@ -64,7 +65,11 @@ export default function Dashboard() {
     <div className="admin-shell">
       <AdminSidebar page={page} setPage={handleSetPage} collapsed={collapsed} />
       <main className="admin-main">
-        <AdminTopBar title={TITLE[page]} onToggleSidebar={() => setCollapsed((c) => !c)} />
+        <AdminTopBar
+          title={TITLE[page]}
+          onToggleSidebar={() => setCollapsed((c) => !c)}
+          onAccount={() => handleSetPage("account")}
+        />
         <div className="admin-content">
           {page === "map"            && <LiveMapContainer onNavigate={handleSetPage} />}
           {page === "fleet"          && <FleetView onNavigate={handleSetPage} />}
@@ -87,6 +92,8 @@ export default function Dashboard() {
           {page === "account" && <AccountView onNavigate={setPage} billingSuccess={billingSuccess} />}
           {page === "plans"   && <PlansView />}
         </div>
+        {/* Barra inferior: sólo visible en mobile (la oculta admin.css en desktop). */}
+        <AdminBottomNav page={page} setPage={handleSetPage} />
       </main>
     </div>
   );

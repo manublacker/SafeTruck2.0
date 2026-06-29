@@ -785,3 +785,96 @@ select.st-field.placeholder { color: var(--c-ink-3); }
 .leaflet-tile {
   filter: brightness(0.78) saturate(1.15) contrast(1.05);
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   MOBILE (≤768px) — barra inferior + scroll del contenido + Live Map
+   apilado. TODO vive acá adentro: en desktop no cambia absolutamente nada.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Estos dos sólo se ven en mobile (la media query los enciende). */
+.st-bottomnav { display: none; }
+.st-topbar-account-mobile { display: none; }
+
+@media (max-width: 768px) {
+  /* El sidebar de escritorio desaparece; navega la barra inferior. */
+  .st-sidebar { display: none !important; }
+
+  /* El contenido pasa a scrollear (en desktop es overflow:hidden) y deja
+     espacio abajo para la barra de tabs. */
+  .admin-content {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(66px + env(safe-area-inset-bottom));
+  }
+
+  /* Topbar compacto, respetando la isla/notch. */
+  .st-topbar {
+    padding: 0 14px;
+    padding-top: env(safe-area-inset-top);
+    height: calc(54px + env(safe-area-inset-top));
+  }
+  .st-topbar-title { font-size: 1rem; }
+
+  /* Avatar de cuenta arriba a la derecha (en desktop está en el sidebar). */
+  .st-topbar-account-mobile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--c-navy);
+    color: #fff;
+    border: none;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  /* Barra de navegación inferior. */
+  .st-bottomnav {
+    display: flex;
+    flex-shrink: 0;
+    background: #fff;
+    border-top: 1px solid var(--c-border);
+    padding: 8px 6px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    z-index: 20;
+  }
+  .st-bottomnav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 2px;
+    color: var(--c-ink-3, #8a8f8c);
+    font-family: inherit;
+    transition: color 0.15s ease;
+  }
+  .st-bottomnav-item.active { color: var(--c-accent); }
+  .st-bottomnav-icon { display: inline-flex; width: 22px; height: 22px; }
+  .st-bottomnav-icon svg { width: 22px; height: 22px; }
+  .st-bottomnav-label { font-size: 0.66rem; font-weight: 700; }
+
+  /* ── Live Map: de 2 columnas (mapa | panel) a una sola, apilada ── */
+  .live-map-grid {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .live-map-mapcol {
+    height: 58vh !important;
+    min-height: 320px;
+    padding: 12px !important;
+  }
+  .live-map-panel {
+    border-left: none !important;
+    border-top: 1px solid #f0f0f0;
+    padding: 16px !important;
+    overflow: visible !important;
+  }
+}

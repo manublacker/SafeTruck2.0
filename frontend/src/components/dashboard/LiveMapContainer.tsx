@@ -206,6 +206,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
 
   return (
     <div
+      className="live-map-grid"
       style={{
         display: "grid",
         gridTemplateColumns: "minmax(0, 1fr) 380px",
@@ -216,7 +217,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
       }}
     >
       {/* Columna mapa (ahora a pleno: sin formulario encima) */}
-      <div style={{ position: "relative", padding: 20, background: "#fff", minHeight: 0 }}>
+      <div className="live-map-mapcol" style={{ position: "relative", padding: 20, background: "#fff", minHeight: 0 }}>
         <MapDisplay
           routeResponse={routeResult}
           driverLocations={driverLocations}
@@ -287,7 +288,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
 
       {/* Panel derecho: solo lectura (operaciones) + disparador del modal */}
       <div
-        className="scroll-y"
+        className="scroll-y live-map-panel"
         style={{
           background: "#fff",
           borderLeft: "1px solid #f0f0f0",
