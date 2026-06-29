@@ -1,6 +1,11 @@
 import { useEffect } from "react";
 import type { AssignedTrip } from "@/services/api";
 
+// Factor de escala del modal: todas las medidas del diseño se multiplican por
+// esto, así crece TODO proporcionalmente (subí/bajá este número para ajustar).
+const S = 1.15;
+const r = (n: number) => Math.round(n * S);
+
 const STATUS_LABELS: Record<string, string> = {
   pending:     "Pendiente",
   accepted:    "Aceptado",
@@ -84,23 +89,23 @@ export default function TripDetailModal({ trip, onClose }: Props) {
         className="st-modal"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: 720, padding: 0, border: "none", borderRadius: 20, overflow: "hidden",
+          maxWidth: r(720), padding: 0, border: "none", borderRadius: r(20), overflow: "hidden",
           background: "#fff",
           boxShadow: "0 24px 60px -16px rgba(24,24,27,.28), 0 4px 14px -6px rgba(24,24,27,.14)",
         }}
       >
         {/* Header */}
-        <div style={{ padding: "22px 26px 18px", borderBottom: "1px solid #f1f1f3", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0, fontSize: 21, lineHeight: 1.1, fontWeight: 700, color: "#18181b", letterSpacing: "-.02em" }}>
+        <div style={{ padding: `${r(22)}px ${r(26)}px ${r(18)}px`, borderBottom: "1px solid #f1f1f3", display: "flex", alignItems: "center", justifyContent: "space-between", gap: r(16) }}>
+          <div style={{ display: "flex", alignItems: "center", gap: r(14), flexWrap: "wrap" }}>
+            <h2 style={{ margin: 0, fontSize: r(21), lineHeight: 1.1, fontWeight: 700, color: "#18181b", letterSpacing: "-.02em" }}>
               Detalle del viaje
             </h2>
-            <div style={{ display: "flex", gap: 8 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 11px 4px 10px", borderRadius: 999, fontSize: "12.5px", fontWeight: 600, background: sc.bg, color: sc.fg }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: sc.dot }} />
+            <div style={{ display: "flex", gap: r(8) }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: r(7), padding: `${r(4)}px ${r(11)}px ${r(4)}px ${r(10)}px`, borderRadius: 999, fontSize: r(12.5), fontWeight: 600, background: sc.bg, color: sc.fg }}>
+                <span style={{ width: r(7), height: r(7), borderRadius: "50%", background: sc.dot }} />
                 {STATUS_LABELS[trip.status] ?? trip.status}
               </span>
-              <span style={{ display: "inline-flex", alignItems: "center", padding: "4px 11px", borderRadius: 999, fontSize: "12.5px", fontWeight: 600, ...(isPersonal ? { background: "#eef2ff", color: "#4338ca" } : { background: "#f4f4f5", color: "#52525b" }) }}>
+              <span style={{ display: "inline-flex", alignItems: "center", padding: `${r(4)}px ${r(11)}px`, borderRadius: 999, fontSize: r(12.5), fontWeight: 600, ...(isPersonal ? { background: "#eef2ff", color: "#4338ca" } : { background: "#f4f4f5", color: "#52525b" }) }}>
                 {isPersonal ? "Personal" : "Empresa"}
               </span>
             </div>
@@ -109,34 +114,34 @@ export default function TripDetailModal({ trip, onClose }: Props) {
             type="button"
             aria-label="Cerrar"
             onClick={onClose}
-            style={{ flex: "none", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "#f4f4f5", borderRadius: 9, cursor: "pointer", color: "#52525b" }}
+            style={{ flex: "none", width: r(32), height: r(32), display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "#f4f4f5", borderRadius: r(9), cursor: "pointer", color: "#52525b" }}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <svg width={r(15)} height={r(15)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
         </div>
 
         {/* Body */}
-        <div style={{ padding: "22px 26px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "22px 28px" }}>
+        <div style={{ padding: `${r(22)}px ${r(26)}px`, display: "grid", gridTemplateColumns: "1fr 1fr", gap: `${r(22)}px ${r(28)}px` }}>
 
           {/* Ruta */}
           <section>
             <SectionLabel>Ruta</SectionLabel>
-            <div style={{ display: "flex", gap: 13 }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 5 }}>
-                <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#16a34a", boxShadow: "0 0 0 3px rgba(22,163,74,.14)" }} />
-                <span style={{ flex: 1, width: 2, background: "#d4d4d8", margin: "5px 0", borderRadius: 2, minHeight: 20 }} />
-                <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#dc2626", boxShadow: "0 0 0 3px rgba(220,38,38,.14)" }} />
+            <div style={{ display: "flex", gap: r(13) }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: r(5) }}>
+                <span style={{ width: r(11), height: r(11), borderRadius: "50%", background: "#16a34a", boxShadow: "0 0 0 3px rgba(22,163,74,.14)" }} />
+                <span style={{ flex: 1, width: 2, background: "#d4d4d8", margin: `${r(5)}px 0`, borderRadius: 2, minHeight: r(20) }} />
+                <span style={{ width: r(11), height: r(11), borderRadius: "50%", background: "#dc2626", boxShadow: "0 0 0 3px rgba(220,38,38,.14)" }} />
               </div>
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: r(16), minWidth: 0 }}>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#a1a1aa", marginBottom: 3 }}>Origen</div>
-                  <div style={{ fontSize: "14.5px", fontWeight: 500, color: "#27272a", lineHeight: 1.4 }}>{trip.origin_label ?? "—"}</div>
+                  <div style={{ fontSize: r(12), fontWeight: 600, color: "#a1a1aa", marginBottom: r(3) }}>Origen</div>
+                  <div style={{ fontSize: r(14.5), fontWeight: 500, color: "#27272a", lineHeight: 1.4 }}>{trip.origin_label ?? "—"}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#a1a1aa", marginBottom: 3 }}>Destino</div>
-                  <div style={{ fontSize: "14.5px", fontWeight: 500, color: "#27272a", lineHeight: 1.4 }}>{trip.destination_label ?? "—"}</div>
+                  <div style={{ fontSize: r(12), fontWeight: 600, color: "#a1a1aa", marginBottom: r(3) }}>Destino</div>
+                  <div style={{ fontSize: r(14.5), fontWeight: 500, color: "#27272a", lineHeight: 1.4 }}>{trip.destination_label ?? "—"}</div>
                 </div>
               </div>
             </div>
@@ -145,7 +150,7 @@ export default function TripDetailModal({ trip, onClose }: Props) {
           {/* Asignación y recorrido */}
           <section>
             <SectionLabel>Asignación y recorrido</SectionLabel>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: r(10) }}>
               <Card label="Conductor" value={trip.driver_nombre ?? `Conductor #${trip.driver_id}`} />
               <Card label="Camión"    value={trip.truck_patente ?? "—"} mono />
               <Card label="Distancia" value={dist.value} unit={dist.unit} big />
@@ -156,14 +161,14 @@ export default function TripDetailModal({ trip, onClose }: Props) {
           {/* Tiempos (a todo el ancho) */}
           <section style={{ gridColumn: "1 / -1" }}>
             <SectionLabel>Tiempos</SectionLabel>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 32px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: `0 ${r(32)}px` }}>
               {times.map((t) => (
                 <div
                   key={t.label}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "8px 0", borderBottom: t.divider ? "1px solid #f1f1f3" : "none" }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: r(12), padding: `${r(8)}px 0`, borderBottom: t.divider ? "1px solid #f1f1f3" : "none" }}
                 >
-                  <span style={{ fontSize: "13.5px", fontWeight: 500, color: "#71717a" }}>{t.label}</span>
-                  <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#27272a", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{t.value}</span>
+                  <span style={{ fontSize: r(13.5), fontWeight: 500, color: "#71717a" }}>{t.label}</span>
+                  <span style={{ fontSize: r(13.5), fontWeight: 600, color: "#27272a", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{t.value}</span>
                 </div>
               ))}
             </div>
@@ -171,11 +176,11 @@ export default function TripDetailModal({ trip, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "14px 26px 18px", borderTop: "1px solid #f1f1f3", display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ padding: `${r(14)}px ${r(26)}px ${r(18)}px`, borderTop: "1px solid #f1f1f3", display: "flex", justifyContent: "flex-end" }}>
           <button
             type="button"
             onClick={onClose}
-            style={{ padding: "10px 22px", border: "none", borderRadius: 11, background: "#18181b", color: "#fff", fontSize: "14.5px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+            style={{ padding: `${r(10)}px ${r(22)}px`, border: "none", borderRadius: r(11), background: "#18181b", color: "#fff", fontSize: r(14.5), fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
           >
             Cerrar
           </button>
@@ -189,7 +194,7 @@ export default function TripDetailModal({ trip, onClose }: Props) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#a1a1aa", marginBottom: 13 }}>
+    <div style={{ fontSize: r(11), fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#a1a1aa", marginBottom: r(13) }}>
       {children}
     </div>
   );
@@ -197,14 +202,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function Card({ label, value, unit, big, mono }: { label: string; value: string; unit?: string; big?: boolean; mono?: boolean }) {
   return (
-    <div style={{ background: "#f7f7f8", border: "1px solid #efeff1", borderRadius: 13, padding: "11px 14px", minWidth: 0 }}>
-      <div style={{ fontSize: "11.5px", fontWeight: 600, color: "#a1a1aa", marginBottom: 4 }}>{label}</div>
+    <div style={{ background: "#f7f7f8", border: "1px solid #efeff1", borderRadius: r(13), padding: `${r(11)}px ${r(14)}px`, minWidth: 0 }}>
+      <div style={{ fontSize: r(11.5), fontWeight: 600, color: "#a1a1aa", marginBottom: r(4) }}>{label}</div>
       <div
         title={value}
-        style={{ fontSize: big ? 17 : 15, fontWeight: big ? 700 : 600, color: "#18181b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontVariantNumeric: mono ? "tabular-nums" : undefined }}
+        style={{ fontSize: big ? r(17) : r(15), fontWeight: big ? 700 : 600, color: "#18181b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontVariantNumeric: mono ? "tabular-nums" : undefined }}
       >
         {value}
-        {unit ? <span style={{ fontSize: 13, fontWeight: 600, color: "#71717a", marginLeft: 4 }}>{unit}</span> : null}
+        {unit ? <span style={{ fontSize: r(13), fontWeight: 600, color: "#71717a", marginLeft: r(4) }}>{unit}</span> : null}
       </div>
     </div>
   );
