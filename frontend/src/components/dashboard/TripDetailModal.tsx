@@ -1,18 +1,11 @@
 import { useEffect } from "react";
 import type { AssignedTrip } from "@/services/api";
+import { STATUS_LABELS, distanceParts, durationParts } from "@/lib/tripFormat";
 
 // Factor de escala del modal: todas las medidas del diseño se multiplican por
 // esto, así crece TODO proporcionalmente (subí/bajá este número para ajustar).
 const S = 1.08;
 const r = (n: number) => Math.round(n * S);
-
-const STATUS_LABELS: Record<string, string> = {
-  pending:     "Pendiente",
-  accepted:    "Aceptado",
-  in_progress: "En curso",
-  completed:   "Completado",
-  cancelled:   "Cancelado",
-};
 
 // Colores del badge de estado (mismo criterio que el diseño).
 function statusColors(status: string): { bg: string; fg: string; dot: string } {
@@ -33,30 +26,6 @@ function fmtDateTime(iso: string | null | undefined): string {
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit", hour12: true,
   });
-}
-
-function distanceParts(m: number | null | undefined): { value: string; unit: string } {
-  if (m == null) return { value: "—", unit: "" };
-  if (m >= 1000) return { value: (m / 1000).toFixed(1), unit: "km" };
-  return { value: String(Math.round(m)), unit: "m" };
-}
-
-function durationMinutes(t: AssignedTrip): number | null {
-  if (t.started_at && t.completed_at) {
-    const s = new Date(t.started_at).getTime();
-    const e = new Date(t.completed_at).getTime();
-    if (!isNaN(s) && !isNaN(e) && e > s) return Math.round((e - s) / 60000);
-  }
-  return t.duration_min != null ? Math.round(t.duration_min) : null;
-}
-
-function durationParts(t: AssignedTrip): { value: string; unit: string } {
-  const minutes = durationMinutes(t);
-  if (minutes == null) return { value: "—", unit: "" };
-  if (minutes < 60)    return { value: String(minutes), unit: "min" };
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m === 0 ? { value: String(h), unit: "h" } : { value: `${h} h ${m}`, unit: "min" };
 }
 
 interface Props {

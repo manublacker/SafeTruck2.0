@@ -2,75 +2,23 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icons } from "./DashboardIcons";
 import { fetchAssignedTrips, type AssignedTrip } from "@/services/api";
 import TripDetailModal from "./TripDetailModal";
-
-// ── Estados: etiqueta y badge ──────────────────────────────────────────────
-
-const STATUS_LABELS: Record<AssignedTrip["status"], string> = {
-  pending:     "Pendiente",
-  accepted:    "Aceptado",
-  in_progress: "En curso",
-  completed:   "Completado",
-  cancelled:   "Cancelado",
-};
-
-function badgeClass(status: AssignedTrip["status"]) {
-  if (status === "in_progress") return "st-badge st-badge-encurso";
-  if (status === "accepted")    return "st-badge st-badge-aceptado";
-  if (status === "completed")   return "st-badge st-badge-completado";
-  if (status === "cancelled")   return "st-badge st-badge-cancelado";
-  return "st-badge st-badge-pendiente"; // pending
-}
-
-// Origen del viaje: lo asignó la empresa o lo armó el propio conductor.
-function tripSource(t: AssignedTrip): "company" | "personal" {
-  return t.trip_source === "personal" ? "personal" : "company";
-}
-const SOURCE_LABELS: Record<"company" | "personal", string> = {
-  company:  "Empresa",
-  personal: "Personal",
-};
+import {
+  STATUS_LABELS,
+  SOURCE_LABELS,
+  statusBadgeClass as badgeClass,
+  tripSource,
+  tripDate,
+  formatDuration,
+  csvEscape,
+} from "@/lib/tripFormat";
 
 // ── Helpers de presentación ────────────────────────────────────────────────
 
-/** Fecha representativa del viaje: cuándo terminó, o empezó, o está agendado. */
-function tripDate(t: AssignedTrip): Date | null {
-  const iso = t.completed_at ?? t.started_at ?? t.scheduled_at ?? t.created_at;
-  if (!iso) return null;
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? null : d;
-}
-
+/** Fecha del viaje formateada (es-AR). Usa `tripDate` del lib compartido. */
 function formatTripDate(t: AssignedTrip): string {
   const d = tripDate(t);
   if (!d) return "—";
   return d.toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-/** Duración real (completed - started) si existe; si no, la estimada de la ruta. */
-function formatDuration(t: AssignedTrip): string {
-  let minutes: number | null = null;
-
-  if (t.started_at && t.completed_at) {
-    const start = new Date(t.started_at).getTime();
-    const end   = new Date(t.completed_at).getTime();
-    if (!isNaN(start) && !isNaN(end) && end > start) {
-      minutes = Math.round((end - start) / 60000);
-    }
-  }
-  if (minutes === null && t.duration_min != null) {
-    minutes = Math.round(t.duration_min);
-  }
-  if (minutes === null) return "—";
-
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m} min`;
-  return m === 0 ? `${h} h` : `${h} h ${m} min`;
-}
-
-/** Escapa un valor para CSV (separador ';', compatible con Excel en español). */
-function csvEscape(value: string): string {
-  return /[";\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
 // ── Vista ──────────────────────────────────────────────────────────────────
