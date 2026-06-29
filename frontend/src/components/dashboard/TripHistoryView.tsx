@@ -203,8 +203,8 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
             onChange={(e) => setFilterSource(e.target.value)}
           >
             <option value="">Todos los tipos</option>
-            <option value="company">Designado por la empresa</option>
-            <option value="personal">Personal del conductor</option>
+            <option value="company">Empresa</option>
+            <option value="personal">Personal</option>
           </select>
         </div>
         <div style={{ minWidth: 140 }}>
