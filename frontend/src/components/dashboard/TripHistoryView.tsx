@@ -165,14 +165,20 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
     [trips, statuses, filterDriver, filterStatus, filterSource, from, to]
   );
 
+  // Sangría chica y COMPARTIDA por el título y el contenido del campo, para que
+  // el texto del label y el del desplegable/fecha arranquen en el mismo punto,
+  // bien cerca del borde (ni el select corrido a la derecha, ni el label flotando).
+  const flushPad = { paddingLeft: 6 };
+
   return (
     <div style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
       {/* Filtros */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 9, flexWrap: "wrap", marginBottom: 16, background: "#fff", border: "1px solid var(--c-border)", borderRadius: "var(--r-lg)", padding: 18 }}>
         <div style={{ minWidth: 175 }}>
-          <label className="st-label" style={{ paddingLeft: 14 }}>Conductor</label>
+          <label className="st-label" style={flushPad}>Conductor</label>
           <select
             className={`st-select${!filterDriver ? " placeholder" : ""}`}
+            style={flushPad}
             value={filterDriver}
             onChange={(e) => setFilterDriver(e.target.value)}
           >
@@ -181,9 +187,10 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
           </select>
         </div>
         <div style={{ minWidth: 150 }}>
-          <label className="st-label" style={{ paddingLeft: 14 }}>Estado</label>
+          <label className="st-label" style={flushPad}>Estado</label>
           <select
             className={`st-select${!filterStatus ? " placeholder" : ""}`}
+            style={flushPad}
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
           >
@@ -196,9 +203,10 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
           </select>
         </div>
         <div style={{ minWidth: 160 }}>
-          <label className="st-label" style={{ paddingLeft: 14 }}>Tipo</label>
+          <label className="st-label" style={flushPad}>Tipo</label>
           <select
             className={`st-select${!filterSource ? " placeholder" : ""}`}
+            style={flushPad}
             value={filterSource}
             onChange={(e) => setFilterSource(e.target.value)}
           >
@@ -208,12 +216,12 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
           </select>
         </div>
         <div style={{ minWidth: 140 }}>
-          <label className="st-label" style={{ paddingLeft: 14 }}>Desde</label>
-          <input type="date" className="st-input" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <label className="st-label" style={flushPad}>Desde</label>
+          <input type="date" className="st-input" style={flushPad} value={from} onChange={(e) => setFrom(e.target.value)} />
         </div>
         <div style={{ minWidth: 140 }}>
-          <label className="st-label" style={{ paddingLeft: 14 }}>Hasta</label>
-          <input type="date" className="st-input" value={to} onChange={(e) => setTo(e.target.value)} />
+          <label className="st-label" style={flushPad}>Hasta</label>
+          <input type="date" className="st-input" style={flushPad} value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
         {(filterDriver || filterStatus || filterSource || from || to) && (
           <button className="st-btn-ghost" onClick={reset}>
