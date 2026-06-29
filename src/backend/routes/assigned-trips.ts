@@ -3,6 +3,12 @@ import { authMiddleware } from '../middleware/authMiddleware'
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription'
 import pool from '../db'
 import { broadcastToCompany } from '../realtime/hub'
+import {
+  distanceMetersFromRoute,
+  durationMinutesFromRoute,
+  isAssignableStatus,
+  timestampFieldForStatus,
+} from '../lib/trips'
 
 const router = Router()
 router.use(authMiddleware)
@@ -39,8 +45,8 @@ router.post('/', async (req: Request, res: Response) => {
     const driver = driverRes.rows[0]
 
     // Calcular distance_m y duration_min desde la ruta si vienen
-    const distanceM  = (route as any)?.distanceM ?? null
-    const durationMin = (route as any)?.estimatedDurationMin ?? null
+    const distanceM   = distanceMetersFromRoute(route as any)
+    const durationMin = durationMinutesFromRoute(route as any)
 
     const result = await pool.query<{ id: number }>(
       `INSERT INTO assigned_trips (
@@ -125,18 +131,11 @@ router.post('/personal', async (req: Request, res: Response) => {
     }
     const drv = drvRes.rows[0]
 
-    // distancia/duración: aceptamos el formato del motor de ruteo (distanceM /
-    // estimatedDurationMin) o el de la app móvil (total_distance_km / _min).
-    // OJO: las columnas son INTEGER, así que redondeamos SIEMPRE (si llega un
-    // decimal, ej. 16.8 min, el INSERT falla y no se crearía el viaje).
-    const rawDist =
-      (route as any)?.distanceM ??
-      ((route as any)?.total_distance_km != null ? (route as any).total_distance_km * 1000 : null)
-    const rawDur =
-      (route as any)?.estimatedDurationMin ??
-      ((route as any)?.total_duration_min ?? null)
-    const distanceM   = rawDist != null ? Math.round(rawDist) : null
-    const durationMin = rawDur  != null ? Math.round(rawDur)  : null
+    // distancia/duración: el helper acepta el formato del motor (distanceM /
+    // estimatedDurationMin) o el de la app móvil (total_distance_km / _min) y
+    // SIEMPRE redondea (las columnas son INTEGER; un decimal rompería el INSERT).
+    const distanceM   = distanceMetersFromRoute(route as any)
+    const durationMin = durationMinutesFromRoute(route as any)
 
     const result = await pool.query<{ id: number }>(
       `INSERT INTO assigned_trips (
@@ -245,9 +244,8 @@ router.get('/mine', async (req: Request, res: Response) => {
 router.patch('/:id/status', async (req: Request, res: Response) => {
   const userId = req.user!.id
   const { status } = req.body
-  const VALID = ['accepted', 'in_progress', 'completed', 'cancelled']
 
-  if (!VALID.includes(status)) {
+  if (!isAssignableStatus(status)) {
     return res.status(400).json({ error: 'Estado inválido' })
   }
 
@@ -278,10 +276,8 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
       }
     }
 
-    let extra = ''
-    if (status === 'accepted')    extra = ', accepted_at = NOW()'
-    if (status === 'in_progress') extra = ', started_at = NOW()'
-    if (status === 'completed')   extra = ', completed_at = NOW()'
+    const tsField = timestampFieldForStatus(status)
+    const extra = tsField ? `, ${tsField} = NOW()` : ''
 
     await pool.query(
       `UPDATE assigned_trips SET status = $1${extra} WHERE id = $2`,
