@@ -16,6 +16,22 @@ const ROUTE_COLORS: Record<string, string> = {
 };
 const ROUTE_WEIGHT = 5;
 const ROUTE_OPACITY = 0.9;
+// Gris para el tramo ya recorrido (igual que en la app del conductor): se pinta
+// encima de la ruta coloreada, hasta donde está el camión ahora.
+const ROUTE_PASSED_COLOR = "#9ca3af";
+
+/** Índice del punto de `pts` más cercano a (lat,lng). -1 si la lista está vacía. */
+function nearestIndex(pts: L.LatLngTuple[], lat: number, lng: number): number {
+  let best = -1;
+  let bestD = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const dLat = pts[i][0] - lat;
+    const dLng = pts[i][1] - lng;
+    const d = dLat * dLat + dLng * dLng;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
 const FIT_PADDING: L.PointTuple = [48, 48];
 const FIT_MAX_ZOOM = 15;
 const INVALIDATE_DELAY_MS = 100;
@@ -225,11 +241,15 @@ export default function MapDisplay({ routeResponse, driverLocations = [], driver
       }
     });
 
+    // Posición actual de cada chofer (para saber hasta dónde pintar el gris).
+    const locById = new Map(driverLocations.map((d) => [d.driver_app_user_id, d]));
+
     // Dibujar/redibujar el recorrido de cada chofer con ruta.
     for (const [id, segments] of Object.entries(driverRoutes)) {
       const prev = layers.get(id);
       if (prev) prev.forEach((p) => p.remove());
       const polys: L.Polyline[] = [];
+      const flat: L.LatLngTuple[] = []; // toda la ruta aplanada, para el gris
       for (const seg of segments) {
         const coords = (seg.coordinates ?? [])
           .map((c) => [c.lat, c.lng] as L.LatLngTuple);
@@ -244,10 +264,29 @@ export default function MapDisplay({ routeResponse, driverLocations = [], driver
           dashArray: seg.status === "unauthorized" ? "10,8" : undefined,
         }).addTo(map);
         polys.push(poly);
+        flat.push(...coords);
+      }
+
+      // Tramo ya recorrido en gris, encima de la ruta coloreada, hasta el punto
+      // más cercano a la posición actual del camión (no se adelanta: llega justo
+      // hasta donde está). Igual que en la app del conductor.
+      const loc = locById.get(id);
+      if (loc && flat.length >= 2) {
+        const idx = nearestIndex(flat, loc.lat, loc.lng);
+        if (idx >= 1) {
+          const grey = L.polyline(flat.slice(0, idx + 1), {
+            color: ROUTE_PASSED_COLOR,
+            weight: ROUTE_WEIGHT,
+            opacity: 0.95,
+            lineCap: "round",
+            lineJoin: "round",
+          }).addTo(map);
+          polys.push(grey);
+        }
       }
       layers.set(id, polys);
     }
-  }, [driverRoutes]);
+  }, [driverRoutes, driverLocations]);
 
   // Pin de origen (preview antes de calcular ruta)
   useEffect(() => {
