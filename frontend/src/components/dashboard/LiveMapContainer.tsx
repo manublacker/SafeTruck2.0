@@ -104,6 +104,20 @@ export default function LiveMapContainer({ onNavigate }: Props) {
   useEffect(() => { cachedRoutes = driverRoutes; }, [driverRoutes]);
   useEffect(() => { cachedTrips = assignedTrips; }, [assignedTrips]);
 
+  // Si un chofer ya no está en la lista de posiciones (terminó el viaje, salió de
+  // la app o expiró su ubicación a los 5 min), sacamos también su RECORRIDO. Sin
+  // esto quedaba una ruta "huérfana" dibujada en el mapa sin ningún camión.
+  useEffect(() => {
+    const activeIds = new Set(driverLocations.map((d) => d.driver_app_user_id));
+    setDriverRoutes((prev) => {
+      const ids = Object.keys(prev);
+      if (ids.every((id) => activeIds.has(id))) return prev; // nada huérfano
+      const next: Record<string, RoutePathSegment[]> = {};
+      for (const id of ids) if (activeIds.has(id)) next[id] = prev[id];
+      return next;
+    });
+  }, [driverLocations]);
+
   // Fetch de viajes asignados + polling de respaldo (cada 30s). El WebSocket
   // (trip_update/trip_assigned) maneja el tiempo real; el polling es fallback.
   const refreshTrips = useCallback(async () => {
