@@ -182,6 +182,9 @@ export default function MapScreen() {
   // Espejo de la ruta calculada (currentRoute) para mandarla con la ubicación sin
   // re-disparar el efecto de tracking. La web la usa para dibujar el recorrido.
   const routeRef = useRef<typeof currentRoute>(null)
+  // Espejo de la posición simulada, para mandarla al backend durante la simulación
+  // (que la web muestre el camión recorriendo) sin re-disparar efectos cada tick.
+  const simPositionRef = useRef<{ lat: number; lng: number } | null>(null)
 
   // ── Simulación de recorrido ──────────────────────────────────────────────
   // Anima un marcador a lo largo de `path` interpolando por segmentos, igual
@@ -531,7 +534,9 @@ export default function MapScreen() {
 
   // GPS tracking for in_progress trip (no depende del mapa, queda igual)
   useEffect(() => {
-    if (!tripSheet || tripSheet.status !== 'in_progress') {
+    // Durante la simulación NO mandamos el GPS real (lo maneja el efecto de
+    // simulación, que envía la posición simulada). Así no se pisan dos posiciones.
+    if (!tripSheet || tripSheet.status !== 'in_progress' || simRunning) {
       if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
       return
     }
@@ -558,11 +563,12 @@ export default function MapScreen() {
       cancelled = true
       if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
     }
-  }, [tripSheet?.id, tripSheet?.status, profile?.full_name])
+  }, [tripSheet?.id, tripSheet?.status, simRunning, profile?.full_name])
 
   // Mantiene locationRef / routeRef con lo último (sin re-disparar efectos).
   useEffect(() => { locationRef.current = location }, [location])
   useEffect(() => { routeRef.current = currentRoute }, [currentRoute])
+  useEffect(() => { simPositionRef.current = simPosition ? { lat: simPosition.lat, lng: simPosition.lng } : null }, [simPosition])
 
   // GPS tracking en NAVEGACIÓN LIBRE: si el chofer navega una ruta que buscó él
   // (sin un viaje asignado en curso), igual mandamos su ubicación para que el
@@ -596,6 +602,34 @@ export default function MapScreen() {
       void clearLocation().catch(() => null)
     }
   }, [navMode, tripSheet?.status, profile?.full_name, activeVehicle?.plate])
+
+  // Durante la SIMULACIÓN de recorrido: mandamos la posición simulada al backend
+  // (cada 3s) para que el empresario vea en la web el camión recorriendo la ruta,
+  // igual que si estuviera manejando. Más seguido que el tracking real (10s) para
+  // que el movimiento simulado se vea fluido en el mapa de la web.
+  useEffect(() => {
+    if (!simRunning) return
+    let cancelled = false
+    const send = async () => {
+      const p = simPositionRef.current
+      if (!p || cancelled) return
+      try {
+        await sendLocation(
+          p.lat, p.lng,
+          null, profile?.full_name ?? 'Conductor', activeVehicle?.plate,
+          routeRef.current?.segments ?? null,
+        )
+      } catch { /* ignorar ticks fallidos de red */ }
+    }
+    void send()
+    const id = setInterval(() => void send(), 3_000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+      // Al terminar la simulación, sacamos el marcador de la web.
+      void clearLocation().catch(() => null)
+    }
+  }, [simRunning, profile?.full_name, activeVehicle?.plate])
 
   const handleTripAction = async (newStatus: AssignedTrip['status']) => {
     if (!tripSheet) return
