@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useRouter, useFocusEffect } from 'expo-router'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 import { fetchAllMyTrips, type AssignedTrip } from '../../src/services/assignedTrips'
@@ -209,6 +209,13 @@ export default function TripsScreen() {
       void loadTrips('silent')
     }
   })
+
+  // Al entrar a la pestaña Viajes recargamos la lista. Necesario porque cuando
+  // el propio conductor cambia un estado desde el MAPA (ej. completa un viaje),
+  // el broadcast de tiempo real lo EXCLUYE a él (es quien lo originó), así que
+  // su lista quedaría "en curso" vieja hasta el polling de 30s. Con esto, al
+  // volver a Viajes ve el estado correcto al instante.
+  useFocusEffect(useCallback(() => { void loadTrips('silent') }, [loadTrips]))
 
   const firstName    = profile?.full_name?.split(' ')[0] ?? 'conductor'
   const enCurso      = trips.filter(tr => tr.status === 'in_progress' || tr.status === 'accepted')

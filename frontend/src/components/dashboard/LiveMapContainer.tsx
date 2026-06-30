@@ -80,6 +80,16 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
   // mientras uno está en vuelo, el resultado tardío del anterior se descarta.
   const viewReqRef      = useRef(0);
 
+  // Cierra el creador de viajes y LIMPIA la ruta de preview + los pines. Sin esto,
+  // la ruta calculada en el modal quedaba dibujada para siempre en el Live Map
+  // (que es de tracking en vivo), conviviendo con el overlay "sin unidades".
+  const closeCreator = useCallback(() => {
+    setCreatorOpen(false);
+    setRouteResult(null);
+    setOriginPin(null);
+    setDestinationPin(null);
+  }, []);
+
   // Carga directa de trucks y drivers (no depende del auth context que arranca vacío)
   useEffect(() => {
     Promise.all([fetchTrucks(), fetchDrivers()])
@@ -182,10 +192,10 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
   // Cerrar el modal de "Nuevo viaje" con Escape
   useEffect(() => {
     if (!creatorOpen) return;
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setCreatorOpen(false); }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeCreator(); }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [creatorOpen]);
+  }, [creatorOpen, closeCreator]);
 
   // "Ver viaje": cuando llega un viaje desde otra sección, RECALCULAMOS la ruta en
   // el momento con las características ACTUALES del camión del viaje (así refleja
@@ -461,7 +471,7 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
       {creatorOpen && (
         <div
           className="st-modal-backdrop"
-          onClick={(e) => { if (e.target === e.currentTarget) setCreatorOpen(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeCreator(); }}
         >
           <div
             className="st-modal"
@@ -469,7 +479,7 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
           >
             <button
               aria-label="Cerrar"
-              onClick={() => setCreatorOpen(false)}
+              onClick={() => closeCreator()}
               style={{
                 position: "absolute", top: 16, right: 16, zIndex: 1,
                 width: 30, height: 30, borderRadius: 8, border: "1px solid var(--c-border)",

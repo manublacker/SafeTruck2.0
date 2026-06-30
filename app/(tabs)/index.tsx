@@ -12,8 +12,9 @@ import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme, isDarkTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
-import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
+import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, fetchMyDriverProfile, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
 import { getRecentDestinations, addRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
+import { useRealtime } from '../../src/services/realtime'
 
 // Corre una sola vez por sesión de app: al abrir, completamos viajes personales
 // que quedaron "in_progress" colgados de una sesión anterior (la app se cerró o
@@ -122,33 +123,67 @@ export default function MapScreen() {
   const { activeVehicle, currentRoute, setCurrentRoute, setOrigin, setDestination, setActiveVehicle } = useStore()
   const profile = useStore(st => st.profile)
 
-  // Cargar camión asignado al montar el mapa (por si el conductor no pasó por Perfil)
-  // Refrescamos el camión asignado CADA VEZ que se entra al mapa (no solo al
-  // montar), así si la empresa cambió las características del camión, la próxima
-  // ruta que calcule el conductor usa las specs actualizadas.
-  // Solo seteamos si hay camión: una respuesta vacía (o un fallo de red) NO debe
-  // pisar el vehículo que ya pudo haber cargado la pantalla de Perfil, porque eso
-  // dispararía el banner "sin camión" y bloquearía el ruteo.
-  useFocusEffect(
-    useCallback(() => {
-      fetchMyAssignedTruck().then(truck => {
-        if (!truck) return
-        setActiveVehicle({
-          id:         String(truck.id),
-          user_id:    '',
-          plate:      truck.patente ?? '',
-          name:       truck.name,
-          weight_kg:  truck.max_weight_kg,
-          height_m:   truck.max_height_m,
-          width_m:    truck.max_width_m,
-          length_m:   truck.max_length_m,
-          axles:      0,
-          is_default: true,
-          created_at: '',
-        })
-      }).catch(() => null)
-    }, [setActiveVehicle])
-  )
+  // Pide el camión asignado y lo aplica al store.
+  //  - allowClear=false (montaje): una respuesta vacía NO pisa el vehículo que
+  //    ya pudo cargar la pantalla de Perfil (evita un flash de "sin camión").
+  //  - allowClear=true (foco / tiempo real): aplicamos la verdad, incluso null
+  //    (la empresa le quitó el camión) -> mostramos el banner "sin camión".
+  // En AMBOS casos, si falla la red, `fetchMyAssignedTruck` lanza y el .catch
+  // deja el vehículo actual intacto (no lo borramos por un error de conexión).
+  // true una vez que terminó el PRIMER chequeo del camión. Sirve para no mostrar
+  // el banner "sin camión" durante el ~1s inicial (cuando activeVehicle todavía
+  // es null porque la consulta no respondió): evita el flash al abrir la app.
+  const [truckChecked, setTruckChecked] = useState(false)
+  const refreshAssignedTruck = useCallback((allowClear: boolean) => {
+    fetchMyAssignedTruck()
+      .then(truck => {
+        if (truck) {
+          setActiveVehicle({
+            id:         String(truck.id),
+            user_id:    '',
+            plate:      truck.patente ?? '',
+            name:       truck.name,
+            weight_kg:  truck.max_weight_kg,
+            height_m:   truck.max_height_m,
+            width_m:    truck.max_width_m,
+            length_m:   truck.max_length_m,
+            axles:      0,
+            is_default: true,
+            created_at: '',
+          })
+        } else if (allowClear) {
+          setActiveVehicle(null)
+        }
+        // Recién acá sabemos si hay camión o no (consulta OK). En error (catch)
+        // no lo marcamos: seguimos sin afirmar "sin camión".
+        setTruckChecked(true)
+      })
+      .catch(() => null)
+  }, [setActiveVehicle])
+
+  // Al montar el mapa (por si el conductor no pasó por Perfil): conservador.
+  useEffect(() => { refreshAssignedTruck(false) }, [refreshAssignedTruck])
+
+  // Cada vez que se vuelve a esta pantalla, refrescamos el camión: así un cambio
+  // hecho en la web se ve con solo navegar a otra tab y volver (sin reiniciar).
+  useFocusEffect(useCallback(() => { refreshAssignedTruck(true) }, [refreshAssignedTruck]))
+
+  // Tiempo real: si la empresa cambió/quitó el camión, el backend emite
+  // 'truck_update' y refrescamos al instante, sin que el chofer haga nada.
+  useRealtime(useCallback((e) => {
+    if (e.type === 'truck_update') refreshAssignedTruck(true)
+  }, [refreshAssignedTruck]))
+
+  // ¿La cuenta logueada es de CONDUCTOR? GET /me devuelve null si no está
+  // vinculada a ningún driver (típicamente una cuenta de EMPRESA/admin que
+  // entró al móvil por error). null = todavía no sabemos. Sirve para mostrar
+  // un aviso claro en vez de la vista de conductor vacía y confusa.
+  const [accountIsDriver, setAccountIsDriver] = useState<boolean | null>(null)
+  useEffect(() => {
+    fetchMyDriverProfile()
+      .then((p) => setAccountIsDriver(p !== null))
+      .catch(() => { /* error de red: dejamos null, no afirmamos nada */ })
+  }, [])
 
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [destMarker, setDestMarker] = useState<{ lat: number; lng: number } | null>(null)
@@ -1135,6 +1170,38 @@ export default function MapScreen() {
     }
   }
 
+  // Frena un viaje ASIGNADO en curso: lo vuelve a 'accepted' (deja de figurar
+  // "en curso" para el empresario) y saca la ubicación viva del mapa. Así no
+  // queda colgado in_progress al cerrar la ruta. Best-effort.
+  const stopAssignedTrip = async (id: number) => {
+    try { await updateTripStatus(String(id), 'accepted') } catch { /* best-effort */ }
+    try { await clearLocation() } catch { /* best-effort */ }
+  }
+
+  // Acción de la cruz (✕). Si hay un viaje ASIGNADO en curso, NO alcanza con
+  // limpiar la pantalla (quedaría in_progress en la base sin que nadie lo haga):
+  // pedimos confirmación y lo frenamos en el backend. Para todo lo demás (una
+  // búsqueda libre, un viaje no iniciado) limpia directo, como antes.
+  const handleClearPressed = () => {
+    const active = tripSheet
+    if (active && active.status === 'in_progress' && active.trip_source !== 'personal') {
+      Alert.alert(
+        'Frenar viaje',
+        'Este viaje está en curso. Si lo frenás vuelve a "aceptado" y lo podés retomar cuando quieras.',
+        [
+          { text: 'Seguir el viaje', style: 'cancel' },
+          {
+            text: 'Frenar',
+            style: 'destructive',
+            onPress: () => { void stopAssignedTrip(active.id); clearRoute() },
+          },
+        ],
+      )
+      return
+    }
+    clearRoute()
+  }
+
   const startNavigation = async () => {
     if (!location) return
     // Si ya había un watcher corriendo (doble-tap accidental), lo limpiamos
@@ -1231,8 +1298,12 @@ export default function MapScreen() {
             Durante la simulación, el tramo recorrido se pinta gris tenue (estilo
             Waze/Google Maps) y solo el restante mantiene los colores reales. */}
         {(() => {
+          // Si hay un viaje ASIGNADO en pantalla (su ruta la dibuja la Etapa 4),
+          // NO dibujamos también la ruta libre acá: si no, se ven dos caminos
+          // superpuestos. La ruta del viaje asignado tiene prioridad.
+          const hasTripRoute = !!tripSegments || tripStoredPath.length >= 2
           const segs = currentRoute?.segments
-          if (!segs?.length) return null
+          if (hasTripRoute || !segs?.length) return null
           const { passed, remaining } = simRunning
             ? splitSegmentsByProgress(segs, simProgress)
             : { passed: [], remaining: segs }
@@ -1378,7 +1449,7 @@ export default function MapScreen() {
                 />
               </View>
             </View>
-            <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute} accessibilityLabel="Cancelar ruta">
+            <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={handleClearPressed} accessibilityLabel="Cancelar ruta">
               <Ionicons name="close-outline" size={18} color={t.danger} />
             </TouchableOpacity>
           </View>
@@ -1408,7 +1479,7 @@ export default function MapScreen() {
             </TouchableOpacity>
 
             {(currentRoute || tripSheet || searchText.length > 0) && (
-              <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute}>
+              <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={handleClearPressed}>
                 <Ionicons name="close-outline" size={18} color={t.danger} />
               </TouchableOpacity>
             )}
@@ -1480,12 +1551,17 @@ export default function MapScreen() {
       </View>
 
       {/* Banner sin vehículo */}
-      {!activeVehicle && (
+      {accountIsDriver === false ? (
+        <View style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}>
+          <Ionicons name="information-circle-outline" size={15} color={t.warning} />
+          <Text style={s.bannerText}>Esta cuenta es de empresa. Para manejar, entrá con tu cuenta de conductor.</Text>
+        </View>
+      ) : (truckChecked && !activeVehicle && (
         <View style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}>
           <Ionicons name="warning-outline" size={15} color={t.warning} />
           <Text style={s.bannerText}>Tu empresa aún no te asignó un camión</Text>
         </View>
-      )}
+      ))}
 
 
       {/* Loading */}

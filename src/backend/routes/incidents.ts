@@ -25,7 +25,9 @@ router.post("/", authMiddleware, async (req: Request, res: Response) => {
     return;
   }
 
-  if (!lat || !lon) {
+  // `== null` para no rechazar coordenadas válidas en 0 (consistente con
+  // /api/locations y /api/reports).
+  if (lat == null || lon == null) {
     res.status(400).json({ error: "Coordenadas lat/lon requeridas." });
     return;
   }

@@ -44,8 +44,11 @@ router.post("/", async (req: Request, res: Response) => {
     return;
   }
 
-  // valido que llegue al menos una forma de identificar la arista
-  if (!arista_id && (!lat || !lon)) {
+  // valido que llegue al menos una forma de identificar la arista.
+  // Uso `== null` (no `!lat`) para no descartar coordenadas válidas en 0, igual
+  // que /api/locations. (0,0 no es un punto real del AMBA, pero mantenemos el
+  // criterio consistente en todo el backend.)
+  if (!arista_id && (lat == null || lon == null)) {
     res.status(400).json({
       error: "Enviá arista_id o coordenadas lat/lon para identificar la calle.",
     });
@@ -56,7 +59,7 @@ router.post("/", async (req: Request, res: Response) => {
     let aristaIdFinal: number | null = arista_id ?? null;
 
     // si no vino arista_id directo, busco la arista más cercana al punto tocado
-    if (!aristaIdFinal && lat && lon) {
+    if (aristaIdFinal == null && lat != null && lon != null) {
       const resSnap = await pool.query(
         `SELECT a.id
          FROM aristas a
