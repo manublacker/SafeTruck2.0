@@ -31,9 +31,11 @@ function fmtDateTime(iso: string | null | undefined): string {
 interface Props {
   trip: AssignedTrip;
   onClose: () => void;
+  /** Si se provee, muestra un botón "Ver viaje" que lleva el viaje al mapa. */
+  onViewOnMap?: (trip: AssignedTrip) => void;
 }
 
-export default function TripDetailModal({ trip, onClose }: Props) {
+export default function TripDetailModal({ trip, onClose, onViewOnMap }: Props) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
     window.addEventListener("keydown", onKey);
@@ -145,7 +147,19 @@ export default function TripDetailModal({ trip, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: `${r(14)}px ${r(26)}px ${r(18)}px`, borderTop: "1px solid #f1f1f3", display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ padding: `${r(14)}px ${r(26)}px ${r(18)}px`, borderTop: "1px solid #f1f1f3", display: "flex", justifyContent: onViewOnMap ? "space-between" : "flex-end", gap: r(10) }}>
+          {onViewOnMap && (
+            <button
+              type="button"
+              onClick={() => { onViewOnMap(trip); onClose(); }}
+              style={{ display: "inline-flex", alignItems: "center", gap: r(8), padding: `${r(10)}px ${r(22)}px`, border: "1px solid #e4e4e7", borderRadius: r(11), background: "#fff", color: "#18181b", fontSize: r(14.5), fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              <svg width={r(16)} height={r(16)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 20l-5.5 2.5v-15L9 5m0 15l6-2.5M9 20V5m6 12.5L20.5 20v-15L15 7.5m0 10V7.5m0 0L9 5" />
+              </svg>
+              Ver viaje
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}

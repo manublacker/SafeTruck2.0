@@ -1,22 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
-import RouteCalculator, { type RouteCalculatorHandle, type PinPreview } from "./RouteCalculator";
-import { createAssignedTrip, SubscriptionRequiredError } from "@/services/api";
+import RouteCalculator, { type RouteCalculatorHandle, type PinPreview, type CalculateResult } from "./RouteCalculator";
 import { useAuth } from "@/contexts/AuthContext";
 
 const FLASH_DURATION_MS = 4000;
 const MUTED = "#6b7280";
 const PLACEHOLDER = "#9ca3af";
 
+/** Datos listos para asignar el viaje, que el creador entrega al padre cuando
+ *  la ruta ya se calculó. El padre cierra el modal y muestra la barra de asignar. */
+export interface ReadyAssignment {
+  result: CalculateResult;
+  driverId: number;
+  truckId: number;
+  driverName: string;
+  scheduledAt?: string;
+}
+
 interface Props {
-  routeResult: RouteResponse | null;
   availableDrivers: Driver[];
   assignedTruck: Truck | null;
   selectedDriverId: number | null;
   onSelectDriver: (id: number | null) => void;
   onRouteCalculated: (result: RouteResponse) => void;
-  onTripCreated?: () => void;
+  /** La ruta se calculó y se dibujó: el padre cierra el modal y muestra la barra. */
+  onReadyToAssign: (a: ReadyAssignment) => void;
   onOriginPinned?: (pin: PinPreview | null) => void;
   onDestinationPinned?: (pin: PinPreview | null) => void;
   onSubscriptionRequired?: () => void;
@@ -26,13 +35,12 @@ interface DraftTrip { date: string; time: string }
 const EMPTY_DRAFT: DraftTrip = { date: "", time: "" };
 
 export default function TripCreator({
-  routeResult,
   availableDrivers,
   assignedTruck,
   selectedDriverId,
   onSelectDriver,
   onRouteCalculated,
-  onTripCreated,
+  onReadyToAssign,
   onOriginPinned,
   onDestinationPinned,
   onSubscriptionRequired,
@@ -41,7 +49,7 @@ export default function TripCreator({
   const hasSubscription = user?.plan != null;
   const [draft, setDraft]       = useState<DraftTrip>(EMPTY_DRAFT);
   const [flash, setFlash]       = useState<{ msg: string; ok: boolean }>({ msg: "", ok: true });
-  const [submitting, setSubmitting] = useState(false);
+  const [calculating, setCalculating] = useState(false);
   const routeRef = useRef<RouteCalculatorHandle>(null);
 
   useEffect(() => {
@@ -52,7 +60,7 @@ export default function TripCreator({
 
   const hasDrivers  = availableDrivers.length > 0;
   const hasTruck    = Boolean(assignedTruck);
-  const formDisabled = !hasDrivers || !hasTruck || submitting || !hasSubscription;
+  const formDisabled = !hasDrivers || !hasTruck || calculating || !hasSubscription;
   const today = new Date().toISOString().slice(0, 10);
 
   return (
@@ -89,7 +97,7 @@ export default function TripCreator({
         </p>
       )}
 
-      <form onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }}
+      <form onSubmit={(e) => { e.preventDefault(); void handleCalculate(); }}
         style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
         <div>
@@ -137,17 +145,15 @@ export default function TripCreator({
           onSubscriptionRequired={onSubscriptionRequired}
         />
 
-        {routeResult?.found && assignedTruck && (
-          <RouteSummary route={routeResult} truckName={assignedTruck.modelo ?? assignedTruck.name} />
-        )}
-
+        {/* Calcular la ruta: la dibuja en el mapa, cierra el modal y muestra la
+            barra flotante con "Asignar viaje" (lo maneja el contenedor del mapa). */}
         <button
           type="submit"
           className="st-btn-cta"
           disabled={formDisabled}
-          title={!hasSubscription ? "Activá tu suscripción para asignar viajes" : undefined}
+          title={!hasSubscription ? "Activá tu suscripción para calcular rutas" : undefined}
         >
-          {submitting ? "Asignando viaje…" : "Asignar viaje"}
+          {calculating ? "Calculando ruta…" : "Calcular ruta"}
         </button>
 
         {flash.msg && (
@@ -165,42 +171,32 @@ export default function TripCreator({
     </div>
   );
 
-  async function handleSubmit() {
+  // Calcula la ruta (la dibuja en el mapa vía onRouteCalculated dentro de
+  // calculate()) y, si salió bien, entrega los datos al padre para que cierre el
+  // modal y muestre la barra flotante de "Asignar viaje".
+  async function handleCalculate() {
     if (formDisabled || !assignedTruck || selectedDriverId === null) return;
     const driver = availableDrivers.find((d) => d.id === selectedDriverId);
     if (!driver) return;
+    if (!draft.date || !draft.time) {
+      setFlash({ msg: "Completá fecha y hora.", ok: false });
+      return;
+    }
 
-    setSubmitting(true);
+    setCalculating(true);
+    setFlash({ msg: "", ok: true });
     try {
       const result = await routeRef.current?.calculate();
-      if (!result) return;
-
-      const scheduledAt = draft.date && draft.time ? `${draft.date}T${draft.time}:00` : undefined;
-
-      await createAssignedTrip({
-        driver_id:           selectedDriverId,
-        truck_id:            assignedTruck.id,
-        origin_address:      result.originLabel,
-        destination_address: result.destinationLabel,
-        origin_lat:          result.originLat,
-        origin_lng:          result.originLon,
-        destination_lat:     result.destinationLat,
-        destination_lng:     result.destinationLon,
-        route:               result.route,
-        scheduled_at:        scheduledAt,
+      if (!result) return; // calculate() ya mostró su propio error/banner
+      onReadyToAssign({
+        result,
+        driverId:   selectedDriverId,
+        truckId:    assignedTruck.id,
+        driverName: driver.nombre,
+        scheduledAt: `${draft.date}T${draft.time}:00`,
       });
-
-      setFlash({ msg: `Viaje asignado a ${driver.nombre} · ${result.originLabel} → ${result.destinationLabel}`, ok: true });
-      setDraft(EMPTY_DRAFT);
-      onTripCreated?.();
-    } catch (err) {
-      if (err instanceof SubscriptionRequiredError) {
-        onSubscriptionRequired?.();
-      } else {
-        setFlash({ msg: `Error: ${err instanceof Error ? err.message : "No se pudo crear el viaje"}`, ok: false });
-      }
     } finally {
-      setSubmitting(false);
+      setCalculating(false);
     }
   }
 }
@@ -237,15 +233,3 @@ function AssignedTruckCard({ truck, hasDrivers }: { truck: Truck | null; hasDriv
   );
 }
 
-function RouteSummary({ route, truckName }: { route: RouteResponse; truckName: string }) {
-  return (
-    <div style={{
-      background: "#fafafa", border: "1px solid #f0f0f0", borderRadius: 10,
-      padding: "10px 12px", fontSize: "0.82rem", color: MUTED, lineHeight: 1.45,
-    }}>
-      <div><strong style={{ color: "#0d0d0d" }}>{truckName}</strong></div>
-      <div>{route.originLabel} → {route.destinationLabel}</div>
-      <div>{(route.distanceM / 1000).toFixed(1)} km · ~{route.estimatedDurationMin} min</div>
-    </div>
-  );
-}

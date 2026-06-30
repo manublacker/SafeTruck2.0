@@ -347,6 +347,10 @@ export interface AssignedTrip {
   /** Origen del viaje: 'company' (lo asignó la empresa) o 'personal' (lo armó el conductor). */
   trip_source?: string;
   created_at: string;
+  /** Ruta calculada y guardada al crear el viaje (RouteResponse con los tramos
+   *  coloreados). Puede venir como objeto (JSONB) o string (TEXT) según la columna,
+   *  o null en viajes viejos. Se usa para "Ver viaje" en el mapa. */
+  path?: RouteResponse | string | null;
 }
 
 export async function fetchAssignedTrips(): Promise<AssignedTrip[]> {

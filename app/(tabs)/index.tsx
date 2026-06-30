@@ -322,16 +322,26 @@ export default function MapScreen() {
   }
 
   // ── Trip visualization (navegado desde Viajes) ─────────────────────────
-  const { tripId } = useLocalSearchParams<{ tripId?: string }>()
+  // `nav` es un nonce que cambia en cada toque desde la lista de Viajes, así
+  // reabrir el MISMO viaje (mismo tripId) igual re-dispara la carga. Sin esto, el
+  // efecto atado a [tripId] no corría al tocar dos veces el mismo viaje.
+  const { tripId, nav } = useLocalSearchParams<{ tripId?: string; nav?: string }>()
   const router = useRouter()
   const [tripSheet, setTripSheet] = useState<AssignedTrip | null>(null)
   const [tripUpdating, setTripUpdating] = useState(false)
   const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const routeAbortRef = useRef<AbortController | null>(null)
+  // Generación del dibujo del viaje: se incrementa cada vez que arranca un dibujo
+  // nuevo (loadTripById / recolor) o se invalida el contexto (calculateRoute / se
+  // cierra el viaje). Los draws async comparan contra esta gen ANTES de escribir
+  // el estado, así un fetch lento que vuelve tarde no resucita una ruta vieja
+  // encima de lo que el usuario ya cambió. (Análogo a routeAbortRef de la ruta manual.)
+  const tripDrawRef = useRef(0)
 
   // Dibuja la ruta del viaje con el path GUARDADO (línea azul fija). Fallback
   // cuando no se puede recalcular (sin camión asignado, sin coords o sin red).
-  const drawStoredTripPath = useCallback((trip: AssignedTrip) => {
+  const drawStoredTripPath = useCallback((trip: AssignedTrip, gen: number) => {
+    if (tripDrawRef.current !== gen) return  // el contexto cambió mientras tanto
     const path = (() => {
       try {
         const p = typeof trip.path === 'string' ? JSON.parse(trip.path) : trip.path
@@ -357,7 +367,7 @@ export default function MapScreen() {
   // Recalcula la ruta del viaje en el momento (origen → destino) con el camión
   // del conductor y la dibuja coloreada por tramo (verde apto / rojo no apto).
   // Usa el MISMO motor (Aiven, /route) que el ruteo en vivo. Devuelve true si lo logró.
-  const drawColoredTripRoute = useCallback(async (trip: AssignedTrip): Promise<boolean> => {
+  const drawColoredTripRoute = useCallback(async (trip: AssignedTrip, gen: number): Promise<boolean> => {
     const oLat = trip.origin_lat, oLng = trip.origin_lon
     const dLat = trip.destination_lat, dLng = trip.destination_lon
     if (oLat == null || oLng == null || dLat == null || dLng == null) return false
@@ -378,6 +388,9 @@ export default function MapScreen() {
         }),
       })
       const data = await res.json().catch(() => ({}))
+      // El usuario cambió de contexto (buscó otra ruta, cerró el viaje, abrió otro)
+      // mientras este fetch estaba en vuelo: descartamos para no pisar lo nuevo.
+      if (tripDrawRef.current !== gen) return false
       const segments = data?.route?.segments
       if (!res.ok || !Array.isArray(segments) || segments.length === 0) return false
       tripSegmentsRef.current = segments
@@ -401,6 +414,7 @@ export default function MapScreen() {
   }, [])
 
   const loadTripById = useCallback(async (id: string) => {
+    const gen = ++tripDrawRef.current  // invalida draws viejos en vuelo
     // Cancela cualquier cálculo de ruta manual que esté en curso.
     routeAbortRef.current?.abort()
     routeAbortRef.current = null
@@ -417,14 +431,15 @@ export default function MapScreen() {
     setTripOriginDest({ originLat: null, originLng: null, destLat: null, destLng: null })
     try {
       const all = await fetchAllMyTrips()
+      if (tripDrawRef.current !== gen) return  // se abrió otro viaje / se buscó otra ruta
       const found = all.find(t => String(t.id) === id)
       if (!found) {
         Alert.alert('Viaje no disponible', 'No encontramos ese viaje. Puede que haya cambiado o ya no esté asignado a vos.')
         return
       }
       setTripSheet(found)
-      const colored = await drawColoredTripRoute(found)
-      if (!colored) drawStoredTripPath(found)
+      const colored = await drawColoredTripRoute(found, gen)
+      if (!colored) drawStoredTripPath(found, gen)
     } catch {
       Alert.alert('Error', 'No se pudo cargar el viaje. Revisá tu conexión e intentá de nuevo.')
     }
@@ -440,8 +455,12 @@ export default function MapScreen() {
 
   useEffect(() => {
     if (tripId) {
+      // Si ya estás navegando/simulando ESTE mismo viaje, no recargues: evita
+      // cortar la navegación en curso al re-tocar el viaje desde la lista.
+      if ((navMode || simRunning) && tripSheet && String(tripSheet.id) === tripId) return
       void loadTripById(tripId)
     } else {
+      tripDrawRef.current++  // invalida cualquier dibujo de viaje async en vuelo
       setTripSheet(null)
       // ── Limpiar la ruta del viaje asignado del mapa ──────────────────
       // Sin esto, al cerrar el sheet las Polylines quedan renderizadas para siempre.
@@ -453,7 +472,37 @@ export default function MapScreen() {
       // ─────────────────────────────────────────────────────────────────
       if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null }
     }
-  }, [tripId])
+    // Depende también de `nav`: reabrir el mismo viaje cambia el nonce y re-carga.
+    // navMode/simRunning/tripSheet se leen a propósito sin estar en deps (no queremos
+    // re-disparar la carga cuando cambian, solo al navegar a un viaje).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId, nav])
+
+  // ── H1/H4: recolorear la ruta del viaje cuando cambia el CAMIÓN ────────────
+  // Si la empresa cambia las características del camión (peso/alto/ancho), la ruta
+  // YA dibujada queda con los colores (apto/no apto) del camión viejo, porque nada
+  // la recalcula. Acá detectamos el cambio de specs y la recoloreamos con el camión
+  // nuevo, y refrescamos los datos del viaje (panel) por si la web lo reasignó.
+  // No recoloreamos en pleno viaje (navMode/simRunning) para no saltar la cámara.
+  const vKey = activeVehicle ? `${activeVehicle.weight_kg}|${activeVehicle.height_m}|${activeVehicle.width_m}` : ''
+  const prevVKeyRef = useRef(vKey)
+  useEffect(() => {
+    if (prevVKeyRef.current === vKey) return
+    prevVKeyRef.current = vKey
+    if (!vKey) return
+    if (tripSheet && !navMode && !simRunning) {
+      const gen = ++tripDrawRef.current
+      void drawColoredTripRoute(tripSheet, gen)
+      // Refresca el panel del viaje sin resetear nada (por si cambió en el server).
+      fetchAllMyTrips()
+        .then(all => {
+          const fresh = all.find(t => t.id === tripSheet.id)
+          if (fresh && tripDrawRef.current === gen) setTripSheet(fresh)
+        })
+        .catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vKey])
 
   // ── Simulación de recorrido (ETAPA 6 — todavía no migrada) ──────────────
   const simPathLatLng = (): [number, number][] => {
@@ -1037,6 +1086,9 @@ export default function MapScreen() {
     setCurrentRoute(null)
     setShowInfo(false)
     // Limpia un viaje previo para que no quede solapado con la nueva búsqueda.
+    // Bump de tripDrawRef: invalida cualquier dibujo de viaje async en vuelo, así
+    // un fetch lento del viaje no resucita su ruta encima de esta búsqueda.
+    tripDrawRef.current++
     setTripSheet(null)
     setTripSegments(null)
     setTripStoredPath([])

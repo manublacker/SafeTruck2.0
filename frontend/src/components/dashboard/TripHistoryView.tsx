@@ -28,9 +28,11 @@ interface Props {
   statuses: AssignedTrip["status"][];
   emptyTitle: string;
   emptySubtitle: string;
+  /** Si se provee, el detalle del viaje muestra "Ver viaje" para abrirlo en el mapa. */
+  onViewTrip?: (trip: AssignedTrip) => void;
 }
 
-export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }: Props) {
+export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, onViewTrip }: Props) {
   const [trips, setTrips]     = useState<AssignedTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
@@ -373,7 +375,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle }:
       )}
 
       {selected && (
-        <TripDetailModal trip={selected} onClose={() => setSelected(null)} />
+        <TripDetailModal trip={selected} onClose={() => setSelected(null)} onViewOnMap={onViewTrip} />
       )}
     </div>
   );

@@ -9,6 +9,7 @@ import FleetView from "@/components/dashboard/FleetView";
 import TripHistoryView from "@/components/dashboard/TripHistoryView";
 import AccountView from "@/components/dashboard/AccountView";
 import PlansView from "@/components/dashboard/PlansView";
+import type { AssignedTrip } from "@/services/api";
 
 import "@/styles/admin.css";
 
@@ -45,6 +46,8 @@ export default function Dashboard() {
   const [collapsed, setCollapsed] = useState(false);
   const [today] = useState(() => formatDateEsAR());
   const [billingSuccess, setBillingSuccess] = useState(false);
+  // Viaje que el usuario pidió "Ver viaje" desde el detalle: lo llevamos al mapa.
+  const [tripToShow, setTripToShow] = useState<AssignedTrip | null>(null);
   const { refreshPlan, refreshTrucks, refreshDrivers } = useAuth();
 
   useEffect(() => {
@@ -72,6 +75,11 @@ export default function Dashboard() {
     setPage(newPage);
   }
 
+  function handleViewTrip(trip: AssignedTrip) {
+    setTripToShow(trip);
+    handleSetPage("map");
+  }
+
   return (
     <div className="admin-shell">
       <AdminSidebar page={page} setPage={handleSetPage} collapsed={collapsed} />
@@ -88,7 +96,7 @@ export default function Dashboard() {
             <h1 className="st-page-head-title">{TITLE[page]}</h1>
             {today && <div className="st-page-head-date">{today}</div>}
           </div>
-          {page === "map"            && <LiveMapContainer onNavigate={handleSetPage} />}
+          {page === "map"            && <LiveMapContainer onNavigate={handleSetPage} tripToShow={tripToShow} onTripShown={() => setTripToShow(null)} />}
           {page === "fleet"          && <FleetView onNavigate={handleSetPage} />}
           {page === "fleet-trucks"   && <FleetView onNavigate={handleSetPage} initialTab="trucks" />}
           {page === "fleet-drivers"  && <FleetView onNavigate={handleSetPage} initialTab="drivers" />}
@@ -97,6 +105,7 @@ export default function Dashboard() {
               statuses={["pending", "accepted", "in_progress"]}
               emptyTitle="No hay viajes pendientes ni en curso"
               emptySubtitle="Los viajes que asignes o que estén en camino van a aparecer acá."
+              onViewTrip={handleViewTrip}
             />
           )}
           {page === "trips" && (
@@ -104,6 +113,7 @@ export default function Dashboard() {
               statuses={["completed", "cancelled"]}
               emptyTitle="Todavía no hay viajes finalizados"
               emptySubtitle="Acá vas a ver los viajes completados y cancelados, con su duración."
+              onViewTrip={handleViewTrip}
             />
           )}
           {page === "account" && <AccountView onNavigate={setPage} billingSuccess={billingSuccess} />}
