@@ -8,6 +8,7 @@
  * Para el conductor, los eventos relevantes son:
  *   - trip_assigned: la empresa le asignó un viaje nuevo (aparece sin refrescar).
  *   - trip_update:   un viaje cambió de estado.
+ *   - truck_update:  la empresa le cambió/quitó el camión asignado (re-fetch).
  * (driver_location va sólo a los admins; el conductor no lo recibe.)
  */
 import { useEffect, useRef } from 'react'
@@ -19,6 +20,7 @@ export type RealtimeEvent =
   | { type: 'connected'; role: 'admin' | 'driver'; companyId: string }
   | { type: 'trip_assigned'; trip: Record<string, unknown> }
   | { type: 'trip_update'; trip: Record<string, unknown> }
+  | { type: 'truck_update' }
   | { type: 'driver_location'; location: Record<string, unknown> }
   | { type: 'driver_location_removed'; driver_app_user_id: string }
 

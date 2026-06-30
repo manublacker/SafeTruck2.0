@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
 import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
 import { getRecentDestinations, addRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
+import { useRealtime } from '../../src/services/realtime'
 
 // Corre una sola vez por sesión de app: al abrir, completamos viajes personales
 // que quedaron "in_progress" colgados de una sesión anterior (la app se cerró o
@@ -122,28 +123,49 @@ export default function MapScreen() {
   const { activeVehicle, currentRoute, setCurrentRoute, setOrigin, setDestination, setActiveVehicle } = useStore()
   const profile = useStore(st => st.profile)
 
-  // Cargar camión asignado al montar el mapa (por si el conductor no pasó por Perfil)
-  useEffect(() => {
-    // Solo seteamos si hay camión: una respuesta vacía (o un fallo de red) NO
-    // debe pisar el vehículo que ya pudo haber cargado la pantalla de Perfil,
-    // porque eso dispararía el banner "sin camión" y bloquearía el ruteo.
-    fetchMyAssignedTruck().then(truck => {
-      if (!truck) return
-      setActiveVehicle({
-        id:         String(truck.id),
-        user_id:    '',
-        plate:      truck.patente ?? '',
-        name:       truck.name,
-        weight_kg:  truck.max_weight_kg,
-        height_m:   truck.max_height_m,
-        width_m:    truck.max_width_m,
-        length_m:   truck.max_length_m,
-        axles:      0,
-        is_default: true,
-        created_at: '',
+  // Pide el camión asignado y lo aplica al store.
+  //  - allowClear=false (montaje): una respuesta vacía NO pisa el vehículo que
+  //    ya pudo cargar la pantalla de Perfil (evita un flash de "sin camión").
+  //  - allowClear=true (foco / tiempo real): aplicamos la verdad, incluso null
+  //    (la empresa le quitó el camión) -> mostramos el banner "sin camión".
+  // En AMBOS casos, si falla la red, `fetchMyAssignedTruck` lanza y el .catch
+  // deja el vehículo actual intacto (no lo borramos por un error de conexión).
+  const refreshAssignedTruck = useCallback((allowClear: boolean) => {
+    fetchMyAssignedTruck()
+      .then(truck => {
+        if (truck) {
+          setActiveVehicle({
+            id:         String(truck.id),
+            user_id:    '',
+            plate:      truck.patente ?? '',
+            name:       truck.name,
+            weight_kg:  truck.max_weight_kg,
+            height_m:   truck.max_height_m,
+            width_m:    truck.max_width_m,
+            length_m:   truck.max_length_m,
+            axles:      0,
+            is_default: true,
+            created_at: '',
+          })
+        } else if (allowClear) {
+          setActiveVehicle(null)
+        }
       })
-    }).catch(() => null)
-  }, [])
+      .catch(() => null)
+  }, [setActiveVehicle])
+
+  // Al montar el mapa (por si el conductor no pasó por Perfil): conservador.
+  useEffect(() => { refreshAssignedTruck(false) }, [refreshAssignedTruck])
+
+  // Cada vez que se vuelve a esta pantalla, refrescamos el camión: así un cambio
+  // hecho en la web se ve con solo navegar a otra tab y volver (sin reiniciar).
+  useFocusEffect(useCallback(() => { refreshAssignedTruck(true) }, [refreshAssignedTruck]))
+
+  // Tiempo real: si la empresa cambió/quitó el camión, el backend emite
+  // 'truck_update' y refrescamos al instante, sin que el chofer haga nada.
+  useRealtime(useCallback((e) => {
+    if (e.type === 'truck_update') refreshAssignedTruck(true)
+  }, [refreshAssignedTruck]))
 
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [destMarker, setDestMarker] = useState<{ lat: number; lng: number } | null>(null)
