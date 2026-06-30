@@ -337,6 +337,11 @@ export default function MapScreen() {
   // el estado, así un fetch lento que vuelve tarde no resucita una ruta vieja
   // encima de lo que el usuario ya cambió. (Análogo a routeAbortRef de la ruta manual.)
   const tripDrawRef = useRef(0)
+  // Override del ORIGEN del viaje asignado: si el chofer elige "Salir desde mi
+  // ubicación", la ruta del viaje se recalcula desde su GPS actual hacia el destino,
+  // en vez del origen guardado del viaje. drawColoredTripRoute lee este ref.
+  const tripOriginRef = useRef<{ lat: number; lng: number } | null>(null)
+  const [tripFromCurrent, setTripFromCurrent] = useState(false)
 
   // Dibuja la ruta del viaje con el path GUARDADO (línea azul fija). Fallback
   // cuando no se puede recalcular (sin camión asignado, sin coords o sin red).
@@ -368,7 +373,9 @@ export default function MapScreen() {
   // del conductor y la dibuja coloreada por tramo (verde apto / rojo no apto).
   // Usa el MISMO motor (Aiven, /route) que el ruteo en vivo. Devuelve true si lo logró.
   const drawColoredTripRoute = useCallback(async (trip: AssignedTrip, gen: number): Promise<boolean> => {
-    const oLat = trip.origin_lat, oLng = trip.origin_lon
+    // Si el chofer pidió salir desde su ubicación actual, usamos ese origen.
+    const ov = tripOriginRef.current
+    const oLat = ov?.lat ?? trip.origin_lat, oLng = ov?.lng ?? trip.origin_lon
     const dLat = trip.destination_lat, dLng = trip.destination_lon
     if (oLat == null || oLng == null || dLat == null || dLng == null) return false
     const vehicle = useStore.getState().activeVehicle
@@ -415,6 +422,8 @@ export default function MapScreen() {
 
   const loadTripById = useCallback(async (id: string) => {
     const gen = ++tripDrawRef.current  // invalida draws viejos en vuelo
+    tripOriginRef.current = null       // viaje nuevo: arranca desde su origen guardado
+    setTripFromCurrent(false)
     // Cancela cualquier cálculo de ruta manual que esté en curso.
     routeAbortRef.current?.abort()
     routeAbortRef.current = null
@@ -445,6 +454,30 @@ export default function MapScreen() {
     }
   }, [drawColoredTripRoute, drawStoredTripPath])
 
+  // "Salir desde mi ubicación": recalcula la ruta del viaje asignado desde el GPS
+  // actual hacia el destino del viaje (en vez del origen guardado).
+  const useCurrentAsTripOrigin = useCallback(() => {
+    const loc = locationRef.current
+    if (!loc) { Alert.alert('Sin ubicación', 'Todavía no tenemos tu ubicación. Esperá unos segundos a que el GPS responda.'); return }
+    if (!tripSheet) return
+    tripOriginRef.current = { lat: loc.lat, lng: loc.lng }
+    setTripFromCurrent(true)
+    const gen = ++tripDrawRef.current
+    void drawColoredTripRoute(tripSheet, gen)
+  }, [tripSheet, drawColoredTripRoute])
+
+  // Vuelve a usar el origen guardado del viaje.
+  const useTripSavedOrigin = useCallback(() => {
+    if (!tripSheet) return
+    tripOriginRef.current = null
+    setTripFromCurrent(false)
+    const gen = ++tripDrawRef.current
+    void (async () => {
+      const ok = await drawColoredTripRoute(tripSheet, gen)
+      if (!ok && tripDrawRef.current === gen) drawStoredTripPath(tripSheet, gen)
+    })()
+  }, [tripSheet, drawColoredTripRoute, drawStoredTripPath])
+
   // Liberar la suscripción de GPS de alta precisión y el timer de simulación
   // si el componente se desmonta (cambio de tab / logout).
   useEffect(() => () => {
@@ -461,6 +494,8 @@ export default function MapScreen() {
       void loadTripById(tripId)
     } else {
       tripDrawRef.current++  // invalida cualquier dibujo de viaje async en vuelo
+      tripOriginRef.current = null
+      setTripFromCurrent(false)
       setTripSheet(null)
       // ── Limpiar la ruta del viaje asignado del mapa ──────────────────
       // Sin esto, al cerrar el sheet las Polylines quedan renderizadas para siempre.
@@ -845,8 +880,8 @@ export default function MapScreen() {
             longitudeDelta: 0.01,
           }, 800)
         } else {
-          const startLat = tripSheet.origin_lat ?? location?.lat
-          const startLng = tripSheet.origin_lon ?? location?.lng
+          const startLat = tripOriginRef.current?.lat ?? tripSheet.origin_lat ?? location?.lat
+          const startLng = tripOriginRef.current?.lng ?? tripSheet.origin_lon ?? location?.lng
           if (startLat != null && startLng != null && mapRef.current) {
             mapRef.current.animateToRegion({
               latitude: startLat,
@@ -1015,8 +1050,9 @@ export default function MapScreen() {
     setShowOriginSearch(false)
     Keyboard.dismiss()
     mapRef.current?.animateToRegion({ latitude: lat, longitude: lng, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 500)
-    // Si ya hay un destino elegido, recalculamos la ruta desde el nuevo origen.
-    if (destMarker) calculateRoute(destMarker.lat, destMarker.lng)
+    // Si ya hay un destino elegido, recalculamos desde el nuevo origen (explícito,
+    // para no leer el originOverride viejo del estado).
+    if (destMarker) calculateRoute(destMarker.lat, destMarker.lng, { lat, lng })
   }
 
   // Vuelve a usar la ubicación GPS como origen.
@@ -1026,7 +1062,8 @@ export default function MapScreen() {
     setOriginResults([])
     setShowOriginSearch(false)
     Keyboard.dismiss()
-    if (destMarker) calculateRoute(destMarker.lat, destMarker.lng)
+    // Recalcula desde el GPS actual (explícito: el originOverride todavía es el viejo).
+    if (destMarker && location) calculateRoute(destMarker.lat, destMarker.lng, location)
   }
 
   // Abre el modal de denuncia. Por defecto apunta a la ubicación actual (GPS).
@@ -1074,12 +1111,15 @@ export default function MapScreen() {
     Keyboard.dismiss()
   }
 
-  const calculateRoute = async (destLat: number, destLng: number) => {
+  // `originArg` permite pasar el origen EXPLÍCITO (lo usan selectOrigin/resetOrigin):
+  // si no se pasa, recién ahí caemos al originOverride del estado o al GPS. Sin esto,
+  // cambiar el origen y recalcular en la misma acción leía el originOverride VIEJO
+  // (el setState aún no aplicó) y la ruta "salía de otro lado".
+  const calculateRoute = async (destLat: number, destLng: number, originArg?: { lat: number; lng: number }) => {
     if (loading) return
-    // Origen: la dirección elegida en "Salir desde…" o, por defecto, el GPS del chofer.
-    const originPoint = originOverride
-      ? { lat: originOverride.lat, lng: originOverride.lng }
-      : location
+    // Origen: el explícito, o la dirección elegida en "Salir desde…", o el GPS del chofer.
+    const originPoint = originArg
+      ?? (originOverride ? { lat: originOverride.lat, lng: originOverride.lng } : location)
     if (!originPoint) return Alert.alert('Error', 'Esperando GPS...')
     if (!activeVehicle) return Alert.alert('Sin vehículo', 'Tu empresa aún no te asignó un camión')
     setDestMarker({ lat: destLat, lng: destLng })
@@ -1871,6 +1911,19 @@ export default function MapScreen() {
                 </View>
               )}
             </View>
+          )}
+
+          {/* Origen del viaje: por defecto el guardado; se puede cambiar a la ubicación actual. */}
+          {!navMode && !simRunning && (
+            <TouchableOpacity
+              onPress={tripFromCurrent ? useTripSavedOrigin : useCurrentAsTripOrigin}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: t.border, marginBottom: 8 }}
+            >
+              <Ionicons name={tripFromCurrent ? 'flag-outline' : 'navigate-outline'} size={15} color={t.text} />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: t.text }}>
+                {tripFromCurrent ? 'Volver al origen del viaje' : 'Salir desde mi ubicación'}
+              </Text>
+            </TouchableOpacity>
           )}
 
           {tripUpdating ? (
