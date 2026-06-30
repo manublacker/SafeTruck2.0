@@ -22,12 +22,21 @@ function normalizeQuery(query: string): string {
   return query.trim().replace(/\s+/g, " ");
 }
 
+// Capitaliza tipo título pero deja los conectores en minúscula ("Cramer y
+// Echeverría", "Avenida de Mayo"), en vez de "Cramer Y Echeverría".
+const LOWER_WORDS = new Set(["y", "e", "de", "del", "la", "las", "los", "el", "da", "do"]);
+function titleCaseEs(s: string): string {
+  return s.toLowerCase().replace(/[a-zñáéíóúü]+/g, (w) =>
+    LOWER_WORDS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)
+  );
+}
+
 // Busca calles en el backend propio usando trigramas
 async function searchBackend(query: string): Promise<GeoSuggestion[]> {
   try {
     const results = await searchStreets(query);
     return results.map((r) => ({
-      label:  r.nombre.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()),
+      label:  titleCaseEs(r.nombre),
       lat:    r.lat,
       lon:    r.lon,
       score:  parseFloat(r.score),

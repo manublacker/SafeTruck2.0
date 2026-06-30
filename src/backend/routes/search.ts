@@ -53,6 +53,70 @@ async function searchNominatim(q: string): Promise<Array<{ nombre: string; nombr
   }
 }
 
+// "X y Y" / "X e Y" / "X esq. Y": consulta de intersección.
+const INTERSECTION_RE = /^\s*(.+?)\s+(?:y|e|esq\.?|esquina)\s+(.+?)\s*$/i;
+
+function titleCaseEs(s: string): string {
+  return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function prettyMuni(m: string | null | undefined): string {
+  if (!m || m.toUpperCase() === "CABA") return "";
+  return " · " + m.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Busca el/los punto(s) donde se cruzan dos calles ("X y Y"). Una intersección
+ * real es un NODO compartido por una arista de X y una de Y, así que la
+ * encontramos con un join por id de nodo (índices btree en source/target) —
+ * mucho más rápido y preciso que geocodificar el texto entero o usar
+ * ST_Intersects geométrico. Devuelve hasta 4 candidatos deduplicados, con
+ * municipio para desambiguar calles homónimas del conurbano.
+ */
+async function findIntersections(q: string) {
+  const m = q.match(INTERSECTION_RE);
+  if (!m) return [];
+  const a = m[1].trim();
+  const b = m[2].trim();
+  if (a.length < 3 || b.length < 3) return [];
+
+  try {
+    const r = await aivenPool.query(
+      `WITH a AS (
+         SELECT source AS node FROM pgr_edges WHERE unaccent_immutable(lower(street_name)) ILIKE '%'||unaccent_immutable(lower($1))||'%'
+         UNION SELECT target FROM pgr_edges WHERE unaccent_immutable(lower(street_name)) ILIKE '%'||unaccent_immutable(lower($1))||'%'
+       ),
+       b AS (
+         SELECT source AS node FROM pgr_edges WHERE unaccent_immutable(lower(street_name)) ILIKE '%'||unaccent_immutable(lower($2))||'%'
+         UNION SELECT target FROM pgr_edges WHERE unaccent_immutable(lower(street_name)) ILIKE '%'||unaccent_immutable(lower($2))||'%'
+       )
+       SELECT ST_Y(n.geom) AS lat, ST_X(n.geom) AS lon,
+              (SELECT municipality FROM pgr_edges e WHERE e.source = n.id OR e.target = n.id LIMIT 1) AS muni
+       FROM a JOIN b ON a.node = b.node
+       JOIN pgr_nodes n ON n.id = a.node
+       LIMIT 12`,
+      [a, b]
+    );
+
+    const seen = new Set<string>();
+    const out: Array<{ nombre: string; nombreOriginal: string; lat: number; lon: number; score: string; source: string }> = [];
+    for (const row of r.rows) {
+      const lat = parseFloat(row.lat);
+      const lon = parseFloat(row.lon);
+      const key = `${lat.toFixed(4)},${lon.toFixed(4)}`; // dedup ~11m
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const label = `${titleCaseEs(a)} y ${titleCaseEs(b)}${prettyMuni(row.muni)}`;
+      out.push({ nombre: label, nombreOriginal: label, lat, lon, score: "0.99", source: "local" });
+      if (out.length >= 4) break;
+    }
+    return out;
+  } catch (err) {
+    console.error("Error buscando intersección:", err);
+    return [];
+  }
+}
+
 router.get("/", async (req: Request, res: Response) => {
   const q = (req.query.q as string | undefined)?.trim();
   if (!q || q.length < 2) {
@@ -61,6 +125,10 @@ router.get("/", async (req: Request, res: Response) => {
   }
 
   let localResults: Array<{ nombre: string; nombreOriginal: string; lat: number; lon: number; score: string; source: string }> = [];
+
+  // Intersecciones "X y Y": van PRIMERO (score 0.99). Si q no es intersección,
+  // devuelve [] y seguimos con la búsqueda normal por nombre de calle.
+  const intersections = await findIntersections(q);
 
   try {
     const result = await aivenPool.query(
@@ -101,6 +169,9 @@ router.get("/", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("Error en búsqueda local (Aiven):", err);
   }
+
+  // Las intersecciones (si las hay) van al frente del resultado.
+  if (intersections.length) localResults = [...intersections, ...localResults];
 
   try {
     if (localResults.length >= 10) {
