@@ -12,7 +12,7 @@ import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme, isDarkTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
-import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
+import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, fetchMyDriverProfile, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
 import { getRecentDestinations, addRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
 import { useRealtime } from '../../src/services/realtime'
 
@@ -166,6 +166,17 @@ export default function MapScreen() {
   useRealtime(useCallback((e) => {
     if (e.type === 'truck_update') refreshAssignedTruck(true)
   }, [refreshAssignedTruck]))
+
+  // ¿La cuenta logueada es de CONDUCTOR? GET /me devuelve null si no está
+  // vinculada a ningún driver (típicamente una cuenta de EMPRESA/admin que
+  // entró al móvil por error). null = todavía no sabemos. Sirve para mostrar
+  // un aviso claro en vez de la vista de conductor vacía y confusa.
+  const [accountIsDriver, setAccountIsDriver] = useState<boolean | null>(null)
+  useEffect(() => {
+    fetchMyDriverProfile()
+      .then((p) => setAccountIsDriver(p !== null))
+      .catch(() => { /* error de red: dejamos null, no afirmamos nada */ })
+  }, [])
 
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [destMarker, setDestMarker] = useState<{ lat: number; lng: number } | null>(null)
@@ -1152,6 +1163,38 @@ export default function MapScreen() {
     }
   }
 
+  // Frena un viaje ASIGNADO en curso: lo vuelve a 'accepted' (deja de figurar
+  // "en curso" para el empresario) y saca la ubicación viva del mapa. Así no
+  // queda colgado in_progress al cerrar la ruta. Best-effort.
+  const stopAssignedTrip = async (id: number) => {
+    try { await updateTripStatus(String(id), 'accepted') } catch { /* best-effort */ }
+    try { await clearLocation() } catch { /* best-effort */ }
+  }
+
+  // Acción de la cruz (✕). Si hay un viaje ASIGNADO en curso, NO alcanza con
+  // limpiar la pantalla (quedaría in_progress en la base sin que nadie lo haga):
+  // pedimos confirmación y lo frenamos en el backend. Para todo lo demás (una
+  // búsqueda libre, un viaje no iniciado) limpia directo, como antes.
+  const handleClearPressed = () => {
+    const active = tripSheet
+    if (active && active.status === 'in_progress' && active.trip_source !== 'personal') {
+      Alert.alert(
+        'Frenar viaje',
+        'Este viaje está en curso. Si lo frenás vuelve a "aceptado" y lo podés retomar cuando quieras.',
+        [
+          { text: 'Seguir el viaje', style: 'cancel' },
+          {
+            text: 'Frenar',
+            style: 'destructive',
+            onPress: () => { void stopAssignedTrip(active.id); clearRoute() },
+          },
+        ],
+      )
+      return
+    }
+    clearRoute()
+  }
+
   const startNavigation = async () => {
     if (!location) return
     // Si ya había un watcher corriendo (doble-tap accidental), lo limpiamos
@@ -1248,8 +1291,12 @@ export default function MapScreen() {
             Durante la simulación, el tramo recorrido se pinta gris tenue (estilo
             Waze/Google Maps) y solo el restante mantiene los colores reales. */}
         {(() => {
+          // Si hay un viaje ASIGNADO en pantalla (su ruta la dibuja la Etapa 4),
+          // NO dibujamos también la ruta libre acá: si no, se ven dos caminos
+          // superpuestos. La ruta del viaje asignado tiene prioridad.
+          const hasTripRoute = !!tripSegments || tripStoredPath.length >= 2
           const segs = currentRoute?.segments
-          if (!segs?.length) return null
+          if (hasTripRoute || !segs?.length) return null
           const { passed, remaining } = simRunning
             ? splitSegmentsByProgress(segs, simProgress)
             : { passed: [], remaining: segs }
@@ -1395,7 +1442,7 @@ export default function MapScreen() {
                 />
               </View>
             </View>
-            <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute} accessibilityLabel="Cancelar ruta">
+            <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={handleClearPressed} accessibilityLabel="Cancelar ruta">
               <Ionicons name="close-outline" size={18} color={t.danger} />
             </TouchableOpacity>
           </View>
@@ -1425,7 +1472,7 @@ export default function MapScreen() {
             </TouchableOpacity>
 
             {(currentRoute || tripSheet || searchText.length > 0) && (
-              <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={clearRoute}>
+              <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={handleClearPressed}>
                 <Ionicons name="close-outline" size={18} color={t.danger} />
               </TouchableOpacity>
             )}
@@ -1497,12 +1544,17 @@ export default function MapScreen() {
       </View>
 
       {/* Banner sin vehículo */}
-      {!activeVehicle && (
+      {accountIsDriver === false ? (
+        <View style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}>
+          <Ionicons name="information-circle-outline" size={15} color={t.warning} />
+          <Text style={s.bannerText}>Esta cuenta es de empresa. Para manejar, entrá con tu cuenta de conductor.</Text>
+        </View>
+      ) : (!activeVehicle && (
         <View style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}>
           <Ionicons name="warning-outline" size={15} color={t.warning} />
           <Text style={s.bannerText}>Tu empresa aún no te asignó un camión</Text>
         </View>
-      )}
+      ))}
 
 
       {/* Loading */}
