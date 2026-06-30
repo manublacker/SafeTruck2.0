@@ -356,13 +356,15 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
     >
       {/* Columna mapa (ahora a pleno: sin formulario encima) */}
       <div className="live-map-mapcol" style={{ position: "relative", padding: 20, background: "#fff", minHeight: 0 }}>
-        {/* Mientras se previsualiza un viaje a asignar (pendingAssign), el mapa
-            muestra SOLO esa ruta: ocultamos los viajes en curso (posiciones +
-            recorridos). Al asignar o cancelar, vuelven a aparecer. */}
+        {/* Cuando hay una ruta "enfocada" en el mapa —un viaje a asignar
+            (pendingAssign) o uno que se está mirando (viewingTrip)— mostramos SOLO
+            esa ruta: ocultamos los viajes en curso (posiciones + recorridos), así
+            no se solapan si entra una ubicación nueva del chofer por WebSocket.
+            Al asignar/cancelar o volver a "En vivo", reaparecen. */}
         <MapDisplay
           routeResponse={routeResult}
-          driverLocations={pendingAssign ? [] : driverLocations}
-          driverRoutes={pendingAssign ? {} : driverRoutes}
+          driverLocations={pendingAssign || viewingTrip ? [] : driverLocations}
+          driverRoutes={pendingAssign || viewingTrip ? {} : driverRoutes}
           originPin={originPin}
           destinationPin={destinationPin}
         />
