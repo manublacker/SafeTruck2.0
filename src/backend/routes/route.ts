@@ -104,6 +104,14 @@ router.post("/", async (req: Request, res: Response) => {
         ["Probá modificar restricciones o seleccionar otro destino."]
       );
     }
+    // Guard de distancia (router.ts): origen y destino demasiado lejos. Casi
+    // siempre es un nombre de lugar que geocodificó mal a un punto lejano.
+    if (/fuera de zona/i.test(msg)) {
+      return emptyResponse(
+        "El origen y el destino están demasiado lejos o fuera del área de servicio (AMBA).",
+        ["Revisá las direcciones y elegilas desde las sugerencias del buscador."]
+      );
+    }
     // Timeout del motor (statement_timeout): casi siempre es un origen/destino
     // escrito a mano que cayó fuera de las calles ruteables. Lo tratamos como
     // "sin ruta" amable (200), NO como un 500 con "contactá al backend".
