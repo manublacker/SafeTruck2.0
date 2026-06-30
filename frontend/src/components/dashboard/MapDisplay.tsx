@@ -244,45 +244,64 @@ export default function MapDisplay({ routeResponse, driverLocations = [], driver
     // Posición actual de cada chofer (para saber hasta dónde pintar el gris).
     const locById = new Map(driverLocations.map((d) => [d.driver_app_user_id, d]));
 
-    // Dibujar/redibujar el recorrido de cada chofer con ruta.
+    // Dibujar/redibujar el recorrido de cada chofer. PARTIMOS la ruta en el punto
+    // más cercano a la posición actual del camión: el tramo recorrido se dibuja
+    // SOLO en gris y el restante SOLO coloreado. Antes se dibujaba la ruta
+    // coloreada completa con el gris ENCIMA, y el verde/rojo se asomaba abajo.
     for (const [id, segments] of Object.entries(driverRoutes)) {
       const prev = layers.get(id);
       if (prev) prev.forEach((p) => p.remove());
       const polys: L.Layer[] = [];
-      const flat: L.LatLngTuple[] = []; // toda la ruta aplanada, para el gris
+
+      // Aplanamos (para nearestIndex) guardando coords + status por segmento.
+      const flat: L.LatLngTuple[] = [];
+      const segs: { coords: L.LatLngTuple[]; status: string }[] = [];
       for (const seg of segments) {
-        const coords = (seg.coordinates ?? [])
-          .map((c) => [c.lat, c.lng] as L.LatLngTuple);
+        const coords = (seg.coordinates ?? []).map((c) => [c.lat, c.lng] as L.LatLngTuple);
         if (coords.length < 2) continue;
-        const color = ROUTE_COLORS[seg.status ?? "unknown"] ?? ROUTE_COLORS.unknown;
-        const poly = L.polyline(coords, {
-          color,
-          weight: ROUTE_WEIGHT,
-          opacity: ROUTE_OPACITY,
-          lineCap: "round",
-          lineJoin: "round",
-          dashArray: seg.status === "unauthorized" ? "10,8" : undefined,
-        }).addTo(map);
-        polys.push(poly);
+        segs.push({ coords, status: seg.status ?? "unknown" });
         flat.push(...coords);
       }
 
-      // Tramo ya recorrido en gris, encima de la ruta coloreada, hasta el punto
-      // más cercano a la posición actual del camión (no se adelanta: llega justo
-      // hasta donde está). Igual que en la app del conductor.
+      // Hasta dónde llegó el camión (índice en `flat`). -1 = sin posición → todo coloreado.
       const loc = locById.get(id);
-      if (loc && flat.length >= 2) {
-        const idx = nearestIndex(flat, loc.lat, loc.lng);
-        if (idx >= 1) {
-          const grey = L.polyline(flat.slice(0, idx + 1), {
-            color: ROUTE_PASSED_COLOR,
+      const splitIdx = loc && flat.length >= 2 ? nearestIndex(flat, loc.lat, loc.lng) : -1;
+
+      // Tramo RESTANTE, coloreado por aptitud (sólo de splitIdx en adelante).
+      let offset = 0;
+      for (const { coords, status } of segs) {
+        const segStart = offset;
+        offset += coords.length;
+        let from = 0;
+        if (splitIdx >= 0) {
+          if (segStart + coords.length - 1 < splitIdx) continue; // ya recorrido entero
+          from = Math.max(0, splitIdx - segStart);
+        }
+        const part = from > 0 ? coords.slice(from) : coords;
+        if (part.length < 2) continue;
+        polys.push(
+          L.polyline(part, {
+            color: ROUTE_COLORS[status] ?? ROUTE_COLORS.unknown,
             weight: ROUTE_WEIGHT,
-            opacity: 0.95,
+            opacity: ROUTE_OPACITY,
             lineCap: "round",
             lineJoin: "round",
-          }).addTo(map);
-          polys.push(grey);
-        }
+            dashArray: status === "unauthorized" ? "10,8" : undefined,
+          }).addTo(map),
+        );
+      }
+
+      // Tramo RECORRIDO en gris (de 0 a splitIdx), sin nada coloreado abajo.
+      if (splitIdx >= 1) {
+        polys.push(
+          L.polyline(flat.slice(0, splitIdx + 1), {
+            color: ROUTE_PASSED_COLOR,
+            weight: ROUTE_WEIGHT,
+            opacity: 1,
+            lineCap: "round",
+            lineJoin: "round",
+          }).addTo(map),
+        );
       }
 
       // Puntos de partida (verde) y destino (rojo) del recorrido.
