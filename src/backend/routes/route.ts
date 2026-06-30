@@ -104,6 +104,15 @@ router.post("/", async (req: Request, res: Response) => {
         ["Probá modificar restricciones o seleccionar otro destino."]
       );
     }
+    // Timeout del motor (statement_timeout): casi siempre es un origen/destino
+    // escrito a mano que cayó fuera de las calles ruteables. Lo tratamos como
+    // "sin ruta" amable (200), NO como un 500 con "contactá al backend".
+    if (/statement timeout|canceling statement/i.test(msg)) {
+      return emptyResponse(
+        "No pudimos calcular la ruta desde ese punto.",
+        ["Elegí el origen y el destino de la lista de sugerencias para que caigan sobre una calle ruteable."]
+      );
+    }
     console.error("Error en /api/routes:", error);
     return emptyResponse("Error interno del servidor.",
       ["Contactá al equipo de backend."], 500);

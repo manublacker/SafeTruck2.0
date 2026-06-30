@@ -29,7 +29,12 @@ export async function calculateRoute(
 
   const client = await getPool().connect()
   try {
-    await client.query("SET statement_timeout = '120s'")
+    // 45s (antes 120s): una ruta normal del AMBA se calcula en pocos segundos;
+    // si tarda más suele ser un punto que no engancha con el grafo (origen
+    // escrito a mano que cayó fuera de las calles). Mejor cortar y avisar amable
+    // que colgar 2 minutos. El handler de /api/routes traduce el timeout a un
+    // "no encontramos ruta" (no a un 500).
+    await client.query("SET statement_timeout = '45s'")
     const result = await client.query(
       'SELECT * FROM pgr_route_truck($1, $2, $3, $4)',
       [origin.lat, origin.lng, destination.lat, destination.lng]

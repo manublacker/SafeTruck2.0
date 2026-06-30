@@ -113,12 +113,19 @@ export async function searchLocations(query: string): Promise<GeoSuggestion[]> {
 }
 
 /**
- * Geocodifica texto libre — devuelve el primer resultado o lanza un error.
+ * Geocodifica texto libre (cuando el usuario NO eligió una sugerencia).
+ *
+ * Para RUTEAR preferimos un punto del buscador propio (`source: "backend"`), que
+ * está sobre el grafo de calles: pgr_route_truck lo engancha al instante. Un
+ * punto de Nominatim puede caer fuera de las calles ruteables y hacer que el
+ * motor se cuelgue hasta el timeout (de ahí el HTTP 500 al asignar a mano). Si
+ * no hay resultado del backend, caemos al primero (Nominatim) igual.
  */
 export async function geocodeLocation(query: string): Promise<GeoSuggestion> {
   const results = await searchLocations(query);
   if (!results.length) {
     throw new Error("No encontramos una ubicacion valida para ese texto.");
   }
-  return results[0];
+  const onGraph = results.find((r) => r.source === "backend");
+  return onGraph ?? results[0];
 }

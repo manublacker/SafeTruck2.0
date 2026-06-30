@@ -801,6 +801,13 @@ select.st-field.placeholder { color: var(--c-ink-3); }
    como hijos directos de la barra, idéntico a antes. En mobile pasa a flex. */
 .st-filters-scroll { display: contents; }
 
+/* Root scrolleable de las vistas (Historial, Flota): SIN esto el `height:100%`
+   + `padding:24` inline lo hacían medir 100%+48px (el dashboard no tiene
+   box-sizing:border-box global), y como .admin-content es overflow:hidden, los
+   últimos ~48px (el último renglón) quedaban recortados y no se podía scrollear
+   hasta el fondo. Con border-box el alto INCLUYE el padding y entra justo. */
+.st-view-root { box-sizing: border-box; }
+
 @media (max-width: 768px) {
   /* El sidebar de escritorio desaparece; navega la barra inferior. */
   .st-sidebar { display: none !important; }
