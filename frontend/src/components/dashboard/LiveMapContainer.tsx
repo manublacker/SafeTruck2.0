@@ -58,6 +58,16 @@ export default function LiveMapContainer({ onNavigate }: Props) {
   const locationPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tripsPollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Cierra el creador de viajes y LIMPIA la ruta de preview + los pines. Sin esto,
+  // la ruta calculada en el modal quedaba dibujada para siempre en el Live Map
+  // (que es de tracking en vivo), conviviendo con el overlay "sin unidades".
+  const closeCreator = useCallback(() => {
+    setCreatorOpen(false);
+    setRouteResult(null);
+    setOriginPin(null);
+    setDestinationPin(null);
+  }, []);
+
   // Carga directa de trucks y drivers (no depende del auth context que arranca vacío)
   useEffect(() => {
     Promise.all([fetchTrucks(), fetchDrivers()])
@@ -172,10 +182,10 @@ export default function LiveMapContainer({ onNavigate }: Props) {
   // Cerrar el modal de "Nuevo viaje" con Escape
   useEffect(() => {
     if (!creatorOpen) return;
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setCreatorOpen(false); }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeCreator(); }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [creatorOpen]);
+  }, [creatorOpen, closeCreator]);
 
   const assignedTruck = trucks.find((t) => t.driver?.id === selectedDriverId) ?? null;
   const hasTrucks           = trucks.length > 0;
@@ -350,7 +360,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
       {creatorOpen && (
         <div
           className="st-modal-backdrop"
-          onClick={(e) => { if (e.target === e.currentTarget) setCreatorOpen(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeCreator(); }}
         >
           <div
             className="st-modal"
@@ -358,7 +368,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
           >
             <button
               aria-label="Cerrar"
-              onClick={() => setCreatorOpen(false)}
+              onClick={() => closeCreator()}
               style={{
                 position: "absolute", top: 16, right: 16, zIndex: 1,
                 width: 30, height: 30, borderRadius: 8, border: "1px solid var(--c-border)",
@@ -375,7 +385,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
               selectedDriverId={selectedDriverId}
               onSelectDriver={setSelectedDriverId}
               onRouteCalculated={(r) => { setRouteResult(r); setOriginPin(null); setDestinationPin(null); }}
-              onTripCreated={() => { void refreshTrips(); setCreatorOpen(false); }}
+              onTripCreated={() => { void refreshTrips(); closeCreator(); }}
               onOriginPinned={(p) => setOriginPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
               onDestinationPinned={(p) => setDestinationPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
               onSubscriptionRequired={() => onNavigate("plans")}
