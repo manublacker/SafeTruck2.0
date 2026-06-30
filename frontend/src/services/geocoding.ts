@@ -124,16 +124,24 @@ export async function searchLocations(query: string): Promise<GeoSuggestion[]> {
 /**
  * Geocodifica texto libre (cuando el usuario NO eligió una sugerencia).
  *
- * Para RUTEAR preferimos un punto del buscador propio (`source: "backend"`), que
- * está sobre el grafo de calles: pgr_route_truck lo engancha al instante. Un
- * punto de Nominatim puede caer fuera de las calles ruteables y hacer que el
- * motor se cuelgue hasta el timeout (de ahí el HTTP 500 al asignar a mano). Si
- * no hay resultado del backend, caemos al primero (Nominatim) igual.
+ * - Si el texto trae una ALTURA ("Crámer 1234"): preferimos el punto EXACTO de
+ *   Nominatim — la dirección puntual, a mitad de cuadra. (El buscador propio solo
+ *   tiene calles, sin numeración, así que daría el centro de la calle.) El ruteo
+ *   engancha igual ese punto al grafo.
+ * - Si es una calle o intersección ("Crámer", "Cramer y Echeverría"): preferimos
+ *   el punto del buscador propio (`source: "backend"`), que ya está sobre el
+ *   grafo — pgr_route_truck lo resuelve al toque.
+ * - Si no hay nada de eso, caemos al primer resultado.
  */
 export async function geocodeLocation(query: string): Promise<GeoSuggestion> {
   const results = await searchLocations(query);
   if (!results.length) {
     throw new Error("No encontramos una ubicacion valida para ese texto.");
+  }
+  // ¿Trae altura? (número de 2+ cifras → es una dirección puntual, no una calle).
+  if (/\d{2,}/.test(query)) {
+    const exact = results.find((r) => r.source === "nominatim");
+    if (exact) return exact;
   }
   const onGraph = results.find((r) => r.source === "backend");
   return onGraph ?? results[0];
