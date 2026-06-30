@@ -222,8 +222,10 @@ export default function TripsScreen() {
   const pendientes   = trips.filter(tr => tr.status === 'pending')
   const completados  = trips.filter(tr => tr.status === 'completed' || tr.status === 'cancelled').slice(0, 10)
 
+  // `nav` (nonce) cambia en cada toque: así reabrir el MISMO viaje vuelve a
+  // dispararse en el mapa aunque el tripId no cambie.
   const goToMap = (trip: AssignedTrip) =>
-    router.navigate({ pathname: '/(tabs)/', params: { tripId: String(trip.id) } } as any)
+    router.navigate({ pathname: '/(tabs)/', params: { tripId: String(trip.id), nav: String(Date.now()) } } as any)
 
   const bgColor = isDark ? t.bg : '#F7F8FA'
 
