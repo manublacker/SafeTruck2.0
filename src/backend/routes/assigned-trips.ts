@@ -310,6 +310,28 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
   }
 })
 
+// DELETE /:id — El admin elimina un viaje de SU empresa (cualquier estado).
+router.delete('/:id', async (req: Request, res: Response) => {
+  const userId = req.user!.id
+  try {
+    // Soltamos la referencia en driver_locations (trip_id) por si hay FK, así el
+    // borrado nunca falla por una ubicación que apuntaba a este viaje.
+    await pool.query('UPDATE driver_locations SET trip_id = NULL WHERE trip_id = $1', [req.params.id])
+      .catch(() => {})
+
+    const result = await pool.query(
+      'DELETE FROM assigned_trips WHERE id = $1 AND empresa_user_id = $2',
+      [req.params.id, userId],
+    )
+    if (!result.rowCount) {
+      return res.status(404).json({ error: 'Viaje no encontrado' })
+    }
+    res.status(204).send()
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 async function getTripById(id: number) {
   const r = await pool.query(
     `SELECT at.*, d.nombre AS driver_nombre, t.patente AS truck_patente

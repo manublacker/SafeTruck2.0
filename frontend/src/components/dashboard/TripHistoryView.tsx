@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icons } from "./DashboardIcons";
-import { fetchAssignedTrips, type AssignedTrip } from "@/services/api";
+import { fetchAssignedTrips, deleteAssignedTrip, type AssignedTrip } from "@/services/api";
 import TripDetailModal from "./TripDetailModal";
 import {
   STATUS_LABELS,
@@ -30,9 +30,13 @@ interface Props {
   emptySubtitle: string;
   /** Si se provee, el detalle del viaje muestra "Ver viaje" para abrirlo en el mapa. */
   onViewTrip?: (trip: AssignedTrip) => void;
+  /** Muestra el filtro "Tipo" (Empresa/Personal). Default true. */
+  showSourceFilter?: boolean;
+  /** Permite eliminar viajes desde el detalle. Default false. */
+  allowDelete?: boolean;
 }
 
-export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, onViewTrip }: Props) {
+export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, onViewTrip, showSourceFilter = true, allowDelete = false }: Props) {
   const [trips, setTrips]     = useState<AssignedTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
@@ -60,6 +64,19 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
   useEffect(() => { void loadTrips(); }, [loadTrips]);
 
   const reset = () => { setFilterDriver(""); setFilterStatus(""); setFilterSource(""); setFrom(""); setTo(""); };
+
+  // Elimina un viaje (con confirmación). Lo saca de la lista y cierra el detalle.
+  const handleDelete = async (trip: AssignedTrip) => {
+    const ruta = `${trip.origin_label ?? "—"} → ${trip.destination_label ?? "—"}`;
+    if (!window.confirm(`¿Eliminar este viaje?\n\n${ruta}\n\nEsta acción no se puede deshacer.`)) return;
+    try {
+      await deleteAssignedTrip(trip.id);
+      setTrips((prev) => prev.filter((t) => t.id !== trip.id));
+      setSelected(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "No se pudo eliminar el viaje.");
+    }
+  };
 
   // Exporta a CSV exactamente lo que está filtrado en pantalla.
   const exportCSV = () => {
@@ -157,19 +174,21 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
                 ))}
             </select>
           </div>
-          <div className="st-filter" style={{ minWidth: 140 }}>
-            <label className="st-label" style={flushPad}>Tipo</label>
-            <select
-              className={`st-select${!filterSource ? " placeholder" : ""}`}
-              style={flushPad}
-              value={filterSource}
-              onChange={(e) => setFilterSource(e.target.value)}
-            >
-              <option value="">Todos</option>
-              <option value="company">Empresa</option>
-              <option value="personal">Personal</option>
-            </select>
-          </div>
+          {showSourceFilter && (
+            <div className="st-filter" style={{ minWidth: 140 }}>
+              <label className="st-label" style={flushPad}>Tipo</label>
+              <select
+                className={`st-select${!filterSource ? " placeholder" : ""}`}
+                style={flushPad}
+                value={filterSource}
+                onChange={(e) => setFilterSource(e.target.value)}
+              >
+                <option value="">Todos</option>
+                <option value="company">Empresa</option>
+                <option value="personal">Personal</option>
+              </select>
+            </div>
+          )}
           <div className="st-filter" style={{ minWidth: 140 }}>
             <label className="st-label" style={flushPad}>Desde</label>
             {/* "Desde" no puede ser posterior a "Hasta" (y viceversa abajo). */}
@@ -375,7 +394,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
       )}
 
       {selected && (
-        <TripDetailModal trip={selected} onClose={() => setSelected(null)} onViewOnMap={onViewTrip} />
+        <TripDetailModal trip={selected} onClose={() => setSelected(null)} onViewOnMap={onViewTrip} onDelete={allowDelete ? handleDelete : undefined} />
       )}
     </div>
   );

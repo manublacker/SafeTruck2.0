@@ -380,6 +380,16 @@ export async function createAssignedTrip(data: {
   return handleResponse<AssignedTrip>(res);
 }
 
+export async function deleteAssignedTrip(id: number | string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/assigned-trips/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok && res.status !== 204) {
+    await handleResponse(res); // lanza con el mensaje del backend
+  }
+}
+
 // ── Driver Locations ───────────────────────────────────────────────────────────
 
 export interface DriverLocation {
