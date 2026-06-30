@@ -1668,7 +1668,7 @@ export default function MapScreen() {
 
       {/* Tarjeta de ruta */}
       {showInfo && currentRoute && !navMode && (
-        <View style={[s.routeCard, { paddingBottom: 18 }]}>
+        <View style={[s.routeCard, { paddingBottom: 28 }]}>
           <View style={s.routeCardHeader}>
             <View>
               <Text style={s.routeCardTitle}>Ruta calculada</Text>
@@ -2110,7 +2110,10 @@ function makeStyles(t: Theme) {
     loadingText: { color: t.text, fontSize: 14, fontWeight: '500' },
 
     routeCard: {
-      position: 'absolute', bottom: 0, left: 0, right: 0,
+      // bottom:-10 (en vez de 0) para tapar el hairline de mapa que quedaba
+      // entre la card y la barra de tabs. El padding inline compensa para que el
+      // contenido no se mueva.
+      position: 'absolute', bottom: -10, left: 0, right: 0,
       backgroundColor: t.card,
       borderTopLeftRadius: 20, borderTopRightRadius: 20,
       borderTopWidth: 1, borderColor: t.border,
