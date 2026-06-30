@@ -146,25 +146,38 @@ describe('GET /api/drivers/me/truck', () => {
   })
 })
 
-describe('PATCH /api/drivers/me (⚠️ ruta tapada por PATCH /:id)', () => {
-  // HALLAZGO: en drivers.ts, `PATCH /:id` se declara ANTES que `PATCH /me`.
-  // Express matchea por orden, así que un `PATCH /me` entra al handler de `/:id`
-  // con `id = "me"`, `Number("me")` = NaN → corta en 400 ("id inválido") y NUNCA
-  // llega al handler de /me. Es un bug latente del router (no lo tocamos: el
-  // pedido es no cambiar funcionamiento). Estos tests fijan el comportamiento
-  // REAL de hoy, así si alguien reordena las rutas y "arregla" /me, el cambio
-  // se ve acá y es una decisión consciente.
-  it('hoy responde 400 porque lo captura PATCH /:id (id="me" → NaN)', async () => {
-    const res = await request(app, 'PATCH', '/me', { body: { nombre: 'Nuevo' } })
+describe('PATCH /api/drivers/me', () => {
+  // Antes esta ruta estaba "tapada" por PATCH /:id (id="me" → NaN → 400). Se
+  // reordenó drivers.ts para declarar las rutas literales /me ANTES que /:id,
+  // así que ahora el handler propio del conductor sí se ejecuta.
+  it('400 si no manda campos permitidos (estado no se puede editar acá)', async () => {
+    const res = await request(app, 'PATCH', '/me', { body: { estado: 'Activo' } })
     expect(res.status).toBe(400)
-    expect(res.body.error).toMatch(/id de conductor/)
-    // Ni siquiera consulta la DB: corta en la validación del id.
+    expect(res.body.error).toMatch(/Sin campos/)
     expect(query).not.toHaveBeenCalled()
   })
 
-  it('mismo 400 aunque el body sea válido (la ruta /me es inalcanzable)', async () => {
-    const res = await request(app, 'PATCH', '/me', { body: { nombre: 'Nuevo', telefono: '999' } })
-    expect(res.status).toBe(400)
-    expect(query).not.toHaveBeenCalled()
+  it('404 si el usuario no está vinculado a un conductor', async () => {
+    query.mockResolvedValueOnce({ rows: [], rowCount: 0 })
+    const res = await request(app, 'PATCH', '/me', {
+      body: { nombre: 'Nuevo' },
+      headers: asUser({ id: 'driver-1', email: 'd@t.com', user_metadata: {} }),
+    })
+    expect(res.status).toBe(404)
+    expect(res.body.error).toMatch(/No estás vinculado/)
+  })
+
+  it('actualiza nombre/telefono propios (200)', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 3 }], rowCount: 1 })                                  // existing
+      .mockResolvedValueOnce({ rows: [{ id: 3, nombre: 'Nuevo', telefono: '999', estado: 'Activo' }], rowCount: 1 })
+    const res = await request(app, 'PATCH', '/me', {
+      body: { nombre: 'Nuevo', telefono: '999' },
+      headers: asUser({ id: 'driver-1', email: 'd@t.com', user_metadata: {} }),
+    })
+    expect(res.status).toBe(200)
+    expect(res.body.nombre).toBe('Nuevo')
+    // Filtra por el conductor vinculado (app_user_id), no por admin user_id.
+    expect(query.mock.calls[0][1]).toEqual(['driver-1'])
   })
 })

@@ -112,92 +112,9 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// PATCH /api/drivers/:id — Actualiza un driver
-// ---------------------------------------------------------------------------
-router.patch("/:id", async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const driverId = Number(req.params.id);
-
-  if (!Number.isFinite(driverId)) {
-    res.status(400).json({ error: "id de conductor inválido." });
-    return;
-  }
-
-  const updates = pickUpdates(req.body ?? {});
-  const fields = Object.keys(updates) as UpdatableField[];
-
-  if (fields.length === 0) {
-    res.status(400).json({ error: "Sin campos para actualizar." });
-    return;
-  }
-  if (
-    updates.estado !== undefined &&
-    typeof updates.estado === "string" &&
-    !ALLOWED_ESTADOS.has(updates.estado)
-  ) {
-    res.status(400).json({ error: "Estado inválido." });
-    return;
-  }
-
-  try {
-    const owner = await pool.query<{ id: number }>(
-      "SELECT id FROM drivers WHERE id = $1 AND user_id = $2",
-      [driverId, userId]
-    );
-    if (!owner.rowCount) {
-      res.status(404).json({ error: "Conductor no encontrado." });
-      return;
-    }
-
-    const setClauses = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
-    const values = fields.map((f) => updates[f] ?? null);
-    values.push(driverId, userId);
-
-    const result = await pool.query<DriverRow>(
-      `UPDATE drivers SET ${setClauses}, updated_at = NOW()
-       WHERE id = $${fields.length + 1} AND user_id = $${fields.length + 2}
-       RETURNING ${DRIVER_COLUMNS}`,
-      values
-    );
-
-    if ("telefono" in updates) await syncPhoneToProfile(driverId, updates.telefono);
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error("Error en PATCH /api/drivers/:id:", err);
-    res.status(500).json({ error: "Error interno del servidor." });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// DELETE /api/drivers/:id — Soft delete
-// ---------------------------------------------------------------------------
-router.delete("/:id", async (req: Request, res: Response) => {
-  const userId = req.user!.id;
-  const driverId = Number(req.params.id);
-
-  if (!Number.isFinite(driverId)) {
-    res.status(400).json({ error: "id de conductor inválido." });
-    return;
-  }
-
-  try {
-    const result = await pool.query(
-      `UPDATE drivers SET is_active = false, updated_at = NOW()
-       WHERE id = $1 AND user_id = $2 AND is_active = true`,
-      [driverId, userId]
-    );
-    if (!result.rowCount) {
-      res.status(404).json({ error: "Conductor no encontrado." });
-      return;
-    }
-    res.status(204).send();
-  } catch (err) {
-    console.error("Error en DELETE /api/drivers/:id:", err);
-    res.status(500).json({ error: "Error interno del servidor." });
-  }
-});
+// ⚠️ IMPORTANTE: las rutas literales "/me*" van ANTES que las paramétricas
+// "/:id" / "/:driver_id". Si no, Express matchea "/me" contra "/:id" (id="me"),
+// y el handler corta en 400 ("id inválido") sin llegar nunca al de /me.
 
 // ---------------------------------------------------------------------------
 // GET /api/drivers/me — Conductor obtiene su propio perfil (por app_user_id)
@@ -281,6 +198,93 @@ router.patch("/me", async (req: Request, res: Response) => {
     res.json(result.rows[0]);
   } catch (err) {
     console.error("Error en PATCH /api/drivers/me:", err);
+    res.status(500).json({ error: "Error interno del servidor." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/drivers/:id — Actualiza un driver
+// ---------------------------------------------------------------------------
+router.patch("/:id", async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const driverId = Number(req.params.id);
+
+  if (!Number.isFinite(driverId)) {
+    res.status(400).json({ error: "id de conductor inválido." });
+    return;
+  }
+
+  const updates = pickUpdates(req.body ?? {});
+  const fields = Object.keys(updates) as UpdatableField[];
+
+  if (fields.length === 0) {
+    res.status(400).json({ error: "Sin campos para actualizar." });
+    return;
+  }
+  if (
+    updates.estado !== undefined &&
+    typeof updates.estado === "string" &&
+    !ALLOWED_ESTADOS.has(updates.estado)
+  ) {
+    res.status(400).json({ error: "Estado inválido." });
+    return;
+  }
+
+  try {
+    const owner = await pool.query<{ id: number }>(
+      "SELECT id FROM drivers WHERE id = $1 AND user_id = $2",
+      [driverId, userId]
+    );
+    if (!owner.rowCount) {
+      res.status(404).json({ error: "Conductor no encontrado." });
+      return;
+    }
+
+    const setClauses = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
+    const values = fields.map((f) => updates[f] ?? null);
+    values.push(driverId, userId);
+
+    const result = await pool.query<DriverRow>(
+      `UPDATE drivers SET ${setClauses}, updated_at = NOW()
+       WHERE id = $${fields.length + 1} AND user_id = $${fields.length + 2}
+       RETURNING ${DRIVER_COLUMNS}`,
+      values
+    );
+
+    if ("telefono" in updates) await syncPhoneToProfile(driverId, updates.telefono);
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Error en PATCH /api/drivers/:id:", err);
+    res.status(500).json({ error: "Error interno del servidor." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/drivers/:id — Soft delete
+// ---------------------------------------------------------------------------
+router.delete("/:id", async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const driverId = Number(req.params.id);
+
+  if (!Number.isFinite(driverId)) {
+    res.status(400).json({ error: "id de conductor inválido." });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE drivers SET is_active = false, updated_at = NOW()
+       WHERE id = $1 AND user_id = $2 AND is_active = true`,
+      [driverId, userId]
+    );
+    if (!result.rowCount) {
+      res.status(404).json({ error: "Conductor no encontrado." });
+      return;
+    }
+    res.status(204).send();
+  } catch (err) {
+    console.error("Error en DELETE /api/drivers/:id:", err);
     res.status(500).json({ error: "Error interno del servidor." });
   }
 });

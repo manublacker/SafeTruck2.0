@@ -32,6 +32,14 @@ describe('POST /api/incidents', () => {
     expect(res.body.error).toMatch(/lat\/lon/)
   })
 
+  it('acepta coordenadas en 0 (consistente con el resto del backend)', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 1 }], rowCount: 1 }) // snap
+      .mockResolvedValueOnce({ rows: [{ id: 2 }], rowCount: 1 }) // reportar_incidente
+    const res = await request(app, 'POST', '/', { body: { incident_type: 'obra', lat: 0, lon: 0 } })
+    expect(res.status).toBe(201)
+  })
+
   it('404 si no hay calle cercana al punto', async () => {
     query.mockResolvedValueOnce({ rows: [], rowCount: 0 })
     const res = await request(app, 'POST', '/', { body: { incident_type: 'obra', lat: -34.6, lon: -58.4 } })
