@@ -273,7 +273,12 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
         scheduled_at:        a.scheduledAt,
       });
       showToast(`Viaje asignado a ${a.driverName}`, "success");
+      // Limpiamos el dibujo de preview (ruta + pines): ya se asignó, el mapa
+      // vuelve a mostrar solo los viajes en curso.
       setPendingAssign(null);
+      setRouteResult(null);
+      setOriginPin(null);
+      setDestinationPin(null);
       void refreshTrips();
     } catch (err) {
       if (err instanceof SubscriptionRequiredError) {
@@ -335,10 +340,13 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
     >
       {/* Columna mapa (ahora a pleno: sin formulario encima) */}
       <div className="live-map-mapcol" style={{ position: "relative", padding: 20, background: "#fff", minHeight: 0 }}>
+        {/* Mientras se previsualiza un viaje a asignar (pendingAssign), el mapa
+            muestra SOLO esa ruta: ocultamos los viajes en curso (posiciones +
+            recorridos). Al asignar o cancelar, vuelven a aparecer. */}
         <MapDisplay
           routeResponse={routeResult}
-          driverLocations={driverLocations}
-          driverRoutes={driverRoutes}
+          driverLocations={pendingAssign ? [] : driverLocations}
+          driverRoutes={pendingAssign ? {} : driverRoutes}
           originPin={originPin}
           destinationPin={destinationPin}
         />
