@@ -123,27 +123,32 @@ export default function MapScreen() {
   const profile = useStore(st => st.profile)
 
   // Cargar camión asignado al montar el mapa (por si el conductor no pasó por Perfil)
-  useEffect(() => {
-    // Solo seteamos si hay camión: una respuesta vacía (o un fallo de red) NO
-    // debe pisar el vehículo que ya pudo haber cargado la pantalla de Perfil,
-    // porque eso dispararía el banner "sin camión" y bloquearía el ruteo.
-    fetchMyAssignedTruck().then(truck => {
-      if (!truck) return
-      setActiveVehicle({
-        id:         String(truck.id),
-        user_id:    '',
-        plate:      truck.patente ?? '',
-        name:       truck.name,
-        weight_kg:  truck.max_weight_kg,
-        height_m:   truck.max_height_m,
-        width_m:    truck.max_width_m,
-        length_m:   truck.max_length_m,
-        axles:      0,
-        is_default: true,
-        created_at: '',
-      })
-    }).catch(() => null)
-  }, [])
+  // Refrescamos el camión asignado CADA VEZ que se entra al mapa (no solo al
+  // montar), así si la empresa cambió las características del camión, la próxima
+  // ruta que calcule el conductor usa las specs actualizadas.
+  // Solo seteamos si hay camión: una respuesta vacía (o un fallo de red) NO debe
+  // pisar el vehículo que ya pudo haber cargado la pantalla de Perfil, porque eso
+  // dispararía el banner "sin camión" y bloquearía el ruteo.
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyAssignedTruck().then(truck => {
+        if (!truck) return
+        setActiveVehicle({
+          id:         String(truck.id),
+          user_id:    '',
+          plate:      truck.patente ?? '',
+          name:       truck.name,
+          weight_kg:  truck.max_weight_kg,
+          height_m:   truck.max_height_m,
+          width_m:    truck.max_width_m,
+          length_m:   truck.max_length_m,
+          axles:      0,
+          is_default: true,
+          created_at: '',
+        })
+      }).catch(() => null)
+    }, [setActiveVehicle])
+  )
 
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [destMarker, setDestMarker] = useState<{ lat: number; lng: number } | null>(null)
