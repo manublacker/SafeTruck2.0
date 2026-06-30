@@ -4,9 +4,11 @@ import {
   ScrollView, ActivityIndicator, RefreshControl, Alert,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useFocusEffect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
+import { useRealtime } from '../../src/services/realtime'
 import { getTheme, Theme } from '../../src/theme'
 import {
   fetchMyAssignedTruck,
@@ -122,8 +124,10 @@ export default function ProfileScreen() {
     }
   }
 
-  const load = useCallback(async () => {
-    setProfileLoading(true)
+  // silent=true: refresco en segundo plano (foco / tiempo real) sin mostrar el
+  // spinner de carga; false (default): carga inicial con spinner.
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setProfileLoading(true)
     const [dp, at] = await Promise.allSettled([
       fetchMyDriverProfile(),
       fetchMyAssignedTruck(),
@@ -153,6 +157,16 @@ export default function ProfileScreen() {
   }, [setActiveVehicle])
 
   useEffect(() => { void load() }, [load])
+
+  // Al volver a la pantalla de Perfil, refrescamos (silencioso): así un cambio
+  // de camión hecho en la web se ve sin reiniciar la app.
+  useFocusEffect(useCallback(() => { void load({ silent: true }) }, [load]))
+
+  // Tiempo real: si la empresa cambió/quitó el camión, el backend emite
+  // 'truck_update' y refrescamos al instante, igual que en el mapa.
+  useRealtime(useCallback((e) => {
+    if (e.type === 'truck_update') void load({ silent: true })
+  }, [load]))
 
   const comingSoon = (feature: string) =>
     Alert.alert(feature, 'Esta función estará disponible próximamente.')
