@@ -3,14 +3,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAvailability, type Trip } from "./useAvailability";
 import MapDisplay, { type DriverLocation, type MapPin } from "./MapDisplay";
 import EmptyStateManager from "./EmptyStateManager";
-import TripCreator from "./TripCreator";
+import TripCreator, { type ReadyAssignment } from "./TripCreator";
 import UpcomingTripsPanel from "./UpcomingTripsPanel";
 import type { AdminPage } from "./AdminSidebar";
 import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
-import { fetchDriverLocations, fetchAssignedTrips, fetchTrucks, fetchDrivers, type AssignedTrip } from "@/services/api";
+import { fetchDriverLocations, fetchAssignedTrips, fetchTrucks, fetchDrivers, calculateRoute, createAssignedTrip, SubscriptionRequiredError, type AssignedTrip } from "@/services/api";
 import { useRealtime, type RoutePathSegment } from "@/hooks/useRealtime";
-import { Icons } from "./DashboardIcons";
+import { useToast } from "@/components/Toast";
 
 const PANEL_PADDING = 12;
 const PANEL_GAP = 16;
@@ -28,10 +28,29 @@ let cachedTrips: AssignedTrip[] = [];
 
 interface Props {
   onNavigate: (page: AdminPage) => void;
+  /** Viaje que se pidió "Ver viaje" desde otra sección: se dibuja su ruta en el mapa. */
+  tripToShow?: AssignedTrip | null;
+  onTripShown?: () => void;
 }
 
-export default function LiveMapContainer({ onNavigate }: Props) {
+// Extrae el RouteResponse guardado en assigned_trips.path. Puede venir como objeto
+// (columna JSONB) o como string (columna TEXT). null si no hay ruta válida.
+function parseTripRoute(path: AssignedTrip["path"]): RouteResponse | null {
+  if (!path) return null;
+  try {
+    const obj = typeof path === "string" ? JSON.parse(path) : path;
+    if (obj && Array.isArray((obj as RouteResponse).path)) return obj as RouteResponse;
+  } catch { /* ruta inválida → null */ }
+  return null;
+}
+
+function coordsToPin(lat: number | null | undefined, lon: number | null | undefined, label: string): MapPin | null {
+  return lat != null && lon != null ? { lat, lon, label } : null;
+}
+
+export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }: Props) {
   const { user } = useAuth();
+  const { showToast } = useToast();
 
   const [trucks, setTrucks]   = useState<import("@/types/auth").Truck[]>([]);
   const [drivers, setDrivers] = useState<import("@/types/auth").Driver[]>([]);
@@ -45,18 +64,21 @@ export default function LiveMapContainer({ onNavigate }: Props) {
   const [originPin, setOriginPin]               = useState<MapPin | null>(null);
   const [destinationPin, setDestinationPin]     = useState<MapPin | null>(null);
   const [driverLocations, setDriverLocations]   = useState<DriverLocation[]>(() => cachedLocations);
-  // Mostramos el cartel "sin unidades" sólo si la lista quedó vacía de verdad
-  // (no ante vacíos momentáneos por la carrera entre el polling y el WebSocket,
-  // que hacían parpadear el cartel durante un viaje).
-  const [showEmptyOverlay, setShowEmptyOverlay] = useState(false);
   // Recorrido (ruta) por chofer, sólo de WS (no del polling) → no titila al pollear.
   const [driverRoutes, setDriverRoutes]         = useState<Record<string, RoutePathSegment[]>>(() => cachedRoutes);
   const [assignedTrips, setAssignedTrips]       = useState<AssignedTrip[]>(() => cachedTrips);
   const [tripsLoading, setTripsLoading]         = useState(cachedTrips.length === 0);
   const [creatorOpen, setCreatorOpen]           = useState(false);
+  // Ruta calculada y lista para asignar: con esto mostramos la barra flotante
+  // sobre el mapa (resumen + Asignar viaje + Cancelar) y cerramos el modal.
+  const [pendingAssign, setPendingAssign]       = useState<ReadyAssignment | null>(null);
+  const [assigning, setAssigning]               = useState(false);
 
   const locationPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tripsPollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Contador para ignorar recálculos viejos: si el usuario abre otro "Ver viaje"
+  // mientras uno está en vuelo, el resultado tardío del anterior se descarta.
+  const viewReqRef      = useRef(0);
 
   // Carga directa de trucks y drivers (no depende del auth context que arranca vacío)
   useEffect(() => {
@@ -85,18 +107,6 @@ export default function LiveMapContainer({ onNavigate }: Props) {
     locationPollRef.current = setInterval(() => void pollLocations(), 30_000);
     return () => { if (locationPollRef.current) clearInterval(locationPollRef.current); };
   }, []);
-
-  // El cartel "sin unidades" aparece sólo si la lista quedó vacía ~2s seguidos.
-  // Si hay choferes, se oculta al instante. Así un vacío transitorio (carrera
-  // polling/WS) no hace parpadear el cartel mientras hay un viaje en curso.
-  useEffect(() => {
-    if (driverLocations.length > 0) {
-      setShowEmptyOverlay(false);
-      return;
-    }
-    const t = setTimeout(() => setShowEmptyOverlay(true), 2000);
-    return () => clearTimeout(t);
-  }, [driverLocations.length]);
 
   // Mantenemos el cache a nivel módulo al día, para que al volver a la pestaña
   // del mapa se vea al instante lo último conocido (ver comentario arriba).
@@ -177,6 +187,103 @@ export default function LiveMapContainer({ onNavigate }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [creatorOpen]);
 
+  // "Ver viaje": cuando llega un viaje desde otra sección, RECALCULAMOS la ruta en
+  // el momento con las características ACTUALES del camión del viaje (así refleja
+  // cualquier cambio de peso/altura/etc. hecho después de asignarlo). Mientras llega
+  // el recálculo, mostramos al instante la ruta guardada (o, si no hay, los pines)
+  // como base. Si el recálculo falla (sin permiso, sin ruta), queda la base.
+  useEffect(() => {
+    if (!tripToShow) return;
+    // Esperamos a que cargue la flota: si no, `trucks` está vacío y no podríamos
+    // recalcular con las specs del camión. Al terminar la carga el efecto re-corre.
+    if (fleetLoading) return;
+    const trip = tripToShow;
+    onTripShown?.();                       // limpiamos el parent; ya capturamos `trip`
+    const myReq = ++viewReqRef.current;
+
+    // 1) Base inmediata: ruta guardada o, en su defecto, los extremos.
+    const saved = parseTripRoute(trip.path);
+    if (saved?.found && saved.path.length >= 2) {
+      setRouteResult(saved);
+      setOriginPin(null);
+      setDestinationPin(null);
+    } else {
+      setRouteResult(null);
+      setOriginPin(coordsToPin(trip.origin_lat, trip.origin_lon, trip.origin_label ?? "Origen"));
+      setDestinationPin(coordsToPin(trip.destination_lat, trip.destination_lon, trip.destination_label ?? "Destino"));
+    }
+
+    // 2) Recálculo en vivo con las specs actuales del camión del viaje.
+    const truck = trucks.find((t) => t.id === trip.truck_id);
+    const hasCoords =
+      trip.origin_lat != null && trip.origin_lon != null &&
+      trip.destination_lat != null && trip.destination_lon != null;
+    if (!truck || !hasCoords) return;
+
+    void calculateRoute({
+      originLabel:      trip.origin_label ?? "",
+      destinationLabel: trip.destination_label ?? "",
+      origin:      { lat: trip.origin_lat, lon: trip.origin_lon },
+      destination: { lat: trip.destination_lat, lon: trip.destination_lon },
+      vehicle: {
+        maxWeightKg: truck.max_weight_kg,
+        maxHeightM:  truck.max_height_m,
+        maxWidthM:   truck.max_width_m,
+        maxLengthM:  truck.max_length_m,
+      },
+      routingOptions: { avoidTolls: true, preferHighways: true },
+    })
+      .then((fresh) => {
+        if (viewReqRef.current !== myReq) return;          // llegó otro "Ver viaje"
+        if (fresh.found && fresh.path.length >= 2) {
+          setRouteResult(fresh);
+          setOriginPin(null);
+          setDestinationPin(null);
+        }
+      })
+      .catch(() => { /* sin permiso o sin ruta: dejamos la base ya mostrada */ });
+  }, [tripToShow, onTripShown, fleetLoading, trucks]);
+
+  // Confirma la asignación del viaje cuya ruta ya está calculada y dibujada.
+  async function handleAssignPending() {
+    if (!pendingAssign || assigning) return;
+    const a = pendingAssign;
+    setAssigning(true);
+    try {
+      await createAssignedTrip({
+        driver_id:           a.driverId,
+        truck_id:            a.truckId,
+        origin_address:      a.result.originLabel,
+        destination_address: a.result.destinationLabel,
+        origin_lat:          a.result.originLat,
+        origin_lng:          a.result.originLon,
+        destination_lat:     a.result.destinationLat,
+        destination_lng:     a.result.destinationLon,
+        route:               a.result.route,
+        scheduled_at:        a.scheduledAt,
+      });
+      showToast(`Viaje asignado a ${a.driverName}`, "success");
+      setPendingAssign(null);
+      void refreshTrips();
+    } catch (err) {
+      if (err instanceof SubscriptionRequiredError) {
+        onNavigate("plans");
+      } else {
+        showToast(err instanceof Error ? err.message : "No se pudo asignar el viaje", "error");
+      }
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  // Descarta la ruta calculada sin asignar: limpia la barra y borra el dibujo.
+  function handleCancelPending() {
+    setPendingAssign(null);
+    setRouteResult(null);
+    setOriginPin(null);
+    setDestinationPin(null);
+  }
+
   const assignedTruck = trucks.find((t) => t.driver?.id === selectedDriverId) ?? null;
   const hasTrucks           = trucks.length > 0;
   const hasAvailableTrucks  = availableTrucks.length > 0;
@@ -244,41 +351,45 @@ export default function LiveMapContainer({ onNavigate }: Props) {
           En vivo
         </div>
 
-        {/* Overlay "sin unidades": aparece cuando ningún chofer manda GPS.
-            pointer-events:none → no bloquea el arrastre del mapa de fondo. */}
-        {showEmptyOverlay && (
+        {/* Barra flotante de asignación: aparece cuando se calculó una ruta. La
+            ruta ya está dibujada en el mapa; acá se confirma o se cancela. */}
+        {pendingAssign && (
           <div
             style={{
-              position: "absolute", inset: 20, zIndex: 400,
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              gap: 18, pointerEvents: "none",
+              position: "absolute", left: 20, right: 20, bottom: 24, zIndex: 600,
+              display: "flex", justifyContent: "center", pointerEvents: "none",
             }}
           >
-            {/* Ícono flotante: círculo blanco limpio con un pulso muy suave */}
-            <div style={{ position: "relative", width: 100, height: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ position: "absolute", inset: 6, borderRadius: "50%", background: "rgba(229,57,53,0.12)", animation: "st-mappulse 2.6s ease-out infinite" }} />
-              <span style={{ position: "relative", width: 84, height: 84, borderRadius: "50%", background: "#fff", color: "#e53935", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(16,24,40,0.12)" }}>
-                <Icons.Truck size={30} />
-              </span>
-            </div>
-
-            {/* Card de texto translúcida (frosted): se ve el mapa a través, poco invasiva */}
             <div
               style={{
-                display: "flex", flexDirection: "column", alignItems: "center", gap: 4, textAlign: "center",
-                background: "rgba(255,255,255,0.74)",
-                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                border: "1px solid rgba(255,255,255,0.6)", borderRadius: 16,
-                padding: "18px 44px", maxWidth: 560,
-                boxShadow: "0 10px 30px rgba(16,24,40,0.08)",
+                pointerEvents: "auto",
+                display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
+                background: "#fff", border: "1px solid var(--c-border)", borderRadius: 14,
+                boxShadow: "0 10px 30px rgba(16,24,40,0.16)", padding: "12px 16px",
+                width: "100%", maxWidth: 680,
               }}
             >
-              <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--c-ink)" }}>
-                Sin unidades en circulación
-              </p>
-              <p style={{ margin: 0, fontSize: "0.9rem", lineHeight: 1.5, color: "var(--c-ink-2)" }}>
-                Agregá camiones y conductores para verlos acá en tiempo real.
-              </p>
+              <div style={{ flex: 1, minWidth: 200, lineHeight: 1.4 }}>
+                <div style={{ fontWeight: 700, color: "var(--c-ink)", fontSize: "0.9rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {pendingAssign.result.originLabel} → {pendingAssign.result.destinationLabel}
+                </div>
+                <div style={{ color: "var(--c-ink-2)", fontSize: "0.82rem" }}>
+                  {pendingAssign.driverName} · {(pendingAssign.result.route.distanceM / 1000).toFixed(1)} km · ~{pendingAssign.result.route.estimatedDurationMin} min
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="st-btn-ghost" onClick={handleCancelPending} disabled={assigning}>
+                  Cancelar
+                </button>
+                <button
+                  className="st-btn-cta"
+                  style={{ minWidth: 140 }}
+                  onClick={() => void handleAssignPending()}
+                  disabled={assigning}
+                >
+                  {assigning ? "Asignando…" : "Asignar viaje"}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -327,7 +438,7 @@ export default function LiveMapContainer({ onNavigate }: Props) {
                 <button
                   className="st-btn-cta"
                   style={{ width: "100%", marginBottom: 20 }}
-                  onClick={() => setCreatorOpen(true)}
+                  onClick={() => { handleCancelPending(); setCreatorOpen(true); }}
                   disabled={!canCreate}
                   title={!canCreate ? "Activá un conductor con camión para asignar viajes" : undefined}
                 >
@@ -369,13 +480,12 @@ export default function LiveMapContainer({ onNavigate }: Props) {
               ×
             </button>
             <TripCreator
-              routeResult={routeResult}
               availableDrivers={availableDrivers}
               assignedTruck={assignedTruck}
               selectedDriverId={selectedDriverId}
               onSelectDriver={setSelectedDriverId}
               onRouteCalculated={(r) => { setRouteResult(r); setOriginPin(null); setDestinationPin(null); }}
-              onTripCreated={() => { void refreshTrips(); setCreatorOpen(false); }}
+              onReadyToAssign={(a) => { setPendingAssign(a); setCreatorOpen(false); }}
               onOriginPinned={(p) => setOriginPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
               onDestinationPinned={(p) => setDestinationPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
               onSubscriptionRequired={() => onNavigate("plans")}
