@@ -372,8 +372,9 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
         {viewingTrip && !pendingAssign && !creatorOpen && (
           <div
             style={{
-              position: "absolute", top: 32, left: 32, right: 32, zIndex: 510,
-              maxWidth: 460, display: "flex", alignItems: "center", gap: 12,
+              // left:72 para no taparse con los controles de zoom (+/−) del mapa.
+              position: "absolute", top: 32, left: 72, right: 32, zIndex: 510,
+              maxWidth: 440, display: "flex", alignItems: "center", gap: 12,
               background: "rgba(255,255,255,0.98)", border: "1px solid var(--c-border)",
               borderRadius: 14, padding: "10px 12px 10px 14px",
               boxShadow: "0 8px 24px -8px rgba(16,24,40,0.22), 0 1px 3px rgba(16,24,40,0.08)",
