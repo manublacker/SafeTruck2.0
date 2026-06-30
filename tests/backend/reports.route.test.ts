@@ -88,14 +88,28 @@ describe('POST /api/reports (legacy)', () => {
     it('404 si no encuentra calle cercana al punto', async () => {
       query.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // snap sin resultados
 
-      // Ojo: coords no-cero a propósito. La ruta usa `!lat || !lon`, así que
-      // lat/lon = 0 lo toma como "faltante" y cortaría en 400 antes de snapear.
       const res = await request(app, 'POST', '/', {
         body: { report_type: 'multa', lat: -34.6, lon: -58.4 },
       })
 
       expect(res.status).toBe(404)
       expect(res.body.error).toMatch(/calle cercana/)
+    })
+
+    it('acepta coordenadas en 0 (no las trata como faltantes)', async () => {
+      // Fix: la validación usa `== null`, así que lat/lon = 0 son válidas y la
+      // ruta llega a snapear (antes cortaba en 400 por `!lat`).
+      query
+        .mockResolvedValueOnce({ rows: [{ id: 3 }], rowCount: 1 }) // snap
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })          // INSERT
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })          // registrar_reporte
+
+      const res = await request(app, 'POST', '/', {
+        body: { report_type: 'multa', lat: 0, lon: 0 },
+      })
+
+      expect(res.status).toBe(201)
+      expect(res.body.arista_id).toBe(3)
     })
 
     it('500 si la DB falla', async () => {
