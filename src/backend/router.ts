@@ -20,12 +20,32 @@ function getPool(): Pool {
   return pool
 }
 
+// Distancia en km entre dos puntos (haversine). Para el guard de "fuera de zona".
+function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371
+  const dLat = (bLat - aLat) * Math.PI / 180
+  const dLng = (bLng - aLng) * Math.PI / 180
+  const s = Math.sin(dLat / 2) ** 2 +
+    Math.cos(aLat * Math.PI / 180) * Math.cos(bLat * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)))
+}
+
 export async function calculateRoute(
   origin: Coordinates,
   destination: Coordinates,
   vehicle: Vehicle
 ): Promise<Route> {
   console.log(`[Router] (${origin.lat},${origin.lng}) → (${destination.lat},${destination.lng})`)
+
+  // Guard de distancia: el AMBA tiene ~70km de diámetro. Si origen y destino
+  // están a >80km, casi siempre es un geocode equivocado (un NOMBRE de lugar
+  // que Nominatim ubicó lejos). En ese caso pgr_route_truck arma un bounding box
+  // gigante y tarda 10-45s. Cortamos al instante con un error claro. (Medido:
+  // trips del AMBA tardan 1-2s; CABA→La Plata ~9s; CABA→Córdoba ~11s.)
+  const separationKm = haversineKm(origin.lat, origin.lng, destination.lat, destination.lng)
+  if (separationKm > 80) {
+    throw new Error('fuera de zona')
+  }
 
   const client = await getPool().connect()
   try {

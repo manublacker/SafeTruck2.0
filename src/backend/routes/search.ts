@@ -16,7 +16,6 @@ const aivenPool = new Pool({
 });
 
 const router = Router();
-const SIMILARITY_THRESHOLD = 0.2;
 const MAX_RESULTS = 10;
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 
@@ -79,13 +78,16 @@ router.get("/", async (req: Request, res: Response) => {
       WHERE street_name IS NOT NULL
         AND (
           unaccent_immutable(lower(street_name)) ILIKE '%' || unaccent_immutable(lower($1)) || '%'
-          OR similarity(unaccent_immutable(lower(street_name)), unaccent_immutable(lower($1))) > $2
+          -- Operador % de pg_trgm (no la FUNCIÓN similarity()>x): ESTE sí usa el
+          -- índice GIN idx_pgr_edges_street_trgm. Con similarity()>0.2 el planner
+          -- hacía Seq Scan de las 539k aristas → 6-14s POR TECLA. Con % es <2s.
+          OR unaccent_immutable(lower(street_name)) % unaccent_immutable(lower($1))
         )
       GROUP BY street_name
       ORDER BY score DESC
-      LIMIT $3
+      LIMIT $2
       `,
-      [q, SIMILARITY_THRESHOLD, MAX_RESULTS]
+      [q, MAX_RESULTS]
     );
 
     localResults = result.rows.map((row) => ({
