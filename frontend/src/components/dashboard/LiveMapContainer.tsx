@@ -73,6 +73,9 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
   // sobre el mapa (resumen + Asignar viaje + Cancelar) y cerramos el modal.
   const [pendingAssign, setPendingAssign]       = useState<ReadyAssignment | null>(null);
   const [assigning, setAssigning]               = useState(false);
+  // Viaje que se está MIRANDO en el mapa (vía "Ver viaje"), para mostrar el
+  // cartelito "estás viendo este viaje" con una X que vuelve a la vista en vivo.
+  const [viewingTrip, setViewingTrip]           = useState<AssignedTrip | null>(null);
 
   const locationPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tripsPollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -85,6 +88,15 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
   // (que es de tracking en vivo), conviviendo con el overlay "sin unidades".
   const closeCreator = useCallback(() => {
     setCreatorOpen(false);
+    setRouteResult(null);
+    setOriginPin(null);
+    setDestinationPin(null);
+    setViewingTrip(null);
+  }, []);
+
+  // Vuelve a la vista en vivo: saca del mapa el viaje que se estaba mirando.
+  const clearViewing = useCallback(() => {
+    setViewingTrip(null);
     setRouteResult(null);
     setOriginPin(null);
     setDestinationPin(null);
@@ -209,6 +221,8 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
     if (fleetLoading) return;
     const trip = tripToShow;
     onTripShown?.();                       // limpiamos el parent; ya capturamos `trip`
+    setViewingTrip(trip);                  // mostramos el cartel "estás viendo…"
+    setPendingAssign(null);                // mirar un viaje cancela cualquier preview de asignación
     const myReq = ++viewReqRef.current;
 
     // 1) Base inmediata: ruta guardada o, en su defecto, los extremos.
@@ -279,6 +293,7 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
       setRouteResult(null);
       setOriginPin(null);
       setDestinationPin(null);
+      setViewingTrip(null);
       void refreshTrips();
     } catch (err) {
       if (err instanceof SubscriptionRequiredError) {
@@ -297,6 +312,7 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
     setRouteResult(null);
     setOriginPin(null);
     setDestinationPin(null);
+    setViewingTrip(null);
   }
 
   const assignedTruck = trucks.find((t) => t.driver?.id === selectedDriverId) ?? null;
@@ -351,7 +367,66 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
           destinationPin={destinationPin}
         />
 
-        {/* Badge "En vivo": el mapa refleja las posiciones GPS en tiempo real */}
+        {/* Cartel "estás viendo este viaje": aparece al usar "Ver viaje". La X
+            (o "Volver a en vivo") lo saca del mapa sin cambiar de pestaña. */}
+        {viewingTrip && !pendingAssign && !creatorOpen && (
+          <div
+            style={{
+              position: "absolute", top: 32, left: 32, right: 32, zIndex: 510,
+              maxWidth: 460, display: "flex", alignItems: "center", gap: 12,
+              background: "rgba(255,255,255,0.98)", border: "1px solid var(--c-border)",
+              borderRadius: 14, padding: "10px 12px 10px 14px",
+              boxShadow: "0 8px 24px -8px rgba(16,24,40,0.22), 0 1px 3px rgba(16,24,40,0.08)",
+            }}
+          >
+            <span style={{
+              flexShrink: 0, width: 36, height: 36, borderRadius: 10,
+              background: "var(--c-accent-soft)", color: "var(--c-accent)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <svg width={19} height={19} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </span>
+            <div style={{ minWidth: 0, lineHeight: 1.25 }}>
+              <div style={{ fontSize: "0.66rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-ink-3)" }}>
+                Estás viendo un viaje
+              </div>
+              <div
+                title={`${viewingTrip.origin_label ?? "Origen"} → ${viewingTrip.destination_label ?? "Destino"}`}
+                style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--c-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+              >
+                {viewingTrip.origin_label ?? "Origen"}
+                <span style={{ color: "var(--c-ink-3)", margin: "0 5px" }}>→</span>
+                {viewingTrip.destination_label ?? "Destino"}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={clearViewing}
+              title="Volver a la vista en vivo"
+              aria-label="Volver a la vista en vivo"
+              style={{
+                flexShrink: 0, marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
+                height: 30, padding: "0 10px", borderRadius: 8,
+                border: "1px solid var(--c-border)", background: "var(--c-bg)",
+                color: "var(--c-ink-2)", fontSize: "0.8rem", fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+              En vivo
+            </button>
+          </div>
+        )}
+
+        {/* Badge "En vivo": el mapa refleja las posiciones GPS en tiempo real.
+            Se oculta mientras se mira un viaje (ahí no es "en vivo"; muestra el
+            cartel de arriba) para no encimarse con él. */}
+        {!(viewingTrip && !pendingAssign && !creatorOpen) && (
         <div
           style={{
             position: "absolute", top: 32, right: 32, zIndex: 500,
@@ -368,6 +443,7 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
           </span>
           En vivo
         </div>
+        )}
 
         {/* Barra flotante de asignación: aparece cuando se calculó una ruta. La
             ruta ya está dibujada en el mapa; acá se confirma o se cancela. */}
@@ -502,7 +578,7 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
               assignedTruck={assignedTruck}
               selectedDriverId={selectedDriverId}
               onSelectDriver={setSelectedDriverId}
-              onRouteCalculated={(r) => { setRouteResult(r); setOriginPin(null); setDestinationPin(null); }}
+              onRouteCalculated={(r) => { setRouteResult(r); setOriginPin(null); setDestinationPin(null); setViewingTrip(null); }}
               onReadyToAssign={(a) => { setPendingAssign(a); setCreatorOpen(false); }}
               onOriginPinned={(p) => setOriginPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
               onDestinationPinned={(p) => setDestinationPin(p ? { lat: p.lat, lon: p.lon, label: p.label } : null)}
