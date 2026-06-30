@@ -130,6 +130,10 @@ export default function MapScreen() {
   //    (la empresa le quitó el camión) -> mostramos el banner "sin camión".
   // En AMBOS casos, si falla la red, `fetchMyAssignedTruck` lanza y el .catch
   // deja el vehículo actual intacto (no lo borramos por un error de conexión).
+  // true una vez que terminó el PRIMER chequeo del camión. Sirve para no mostrar
+  // el banner "sin camión" durante el ~1s inicial (cuando activeVehicle todavía
+  // es null porque la consulta no respondió): evita el flash al abrir la app.
+  const [truckChecked, setTruckChecked] = useState(false)
   const refreshAssignedTruck = useCallback((allowClear: boolean) => {
     fetchMyAssignedTruck()
       .then(truck => {
@@ -150,6 +154,9 @@ export default function MapScreen() {
         } else if (allowClear) {
           setActiveVehicle(null)
         }
+        // Recién acá sabemos si hay camión o no (consulta OK). En error (catch)
+        // no lo marcamos: seguimos sin afirmar "sin camión".
+        setTruckChecked(true)
       })
       .catch(() => null)
   }, [setActiveVehicle])
@@ -1549,7 +1556,7 @@ export default function MapScreen() {
           <Ionicons name="information-circle-outline" size={15} color={t.warning} />
           <Text style={s.bannerText}>Esta cuenta es de empresa. Para manejar, entrá con tu cuenta de conductor.</Text>
         </View>
-      ) : (!activeVehicle && (
+      ) : (truckChecked && !activeVehicle && (
         <View style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}>
           <Ionicons name="warning-outline" size={15} color={t.warning} />
           <Text style={s.bannerText}>Tu empresa aún no te asignó un camión</Text>
