@@ -36,14 +36,16 @@ export default function TabLayout() {
         borderTopWidth: 0,
         elevation: 0,
         shadowOpacity: 0,
-        height: 58 + insets.bottom,
-        paddingTop: 8,
+        height: 62 + insets.bottom,
+        paddingTop: 0,
         paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
       },
       tabBarActiveTintColor: '#FFFFFF',
       tabBarInactiveTintColor: t.navyText,
       tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-      tabBarItemStyle: { paddingTop: 2 },
+      // Centra verticalmente el ícono + label dentro de la barra (antes quedaban
+      // pegados al borde de abajo).
+      tabBarItemStyle: { justifyContent: 'center', paddingVertical: 6 },
     }}>
       <Tabs.Screen name="index"       options={{ title: 'Mapa',   tabBarIcon: renderIcon('index') }} />
       <Tabs.Screen name="trips"       options={{ title: 'Viajes', tabBarIcon: renderIcon('trips') }} />
