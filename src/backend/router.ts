@@ -55,8 +55,12 @@ export async function calculateRoute(
     // que colgar 2 minutos. El handler de /api/routes traduce el timeout a un
     // "no encontramos ruta" (no a un 500).
     await client.query("SET statement_timeout = '45s'")
+    // pgr_route_truck_wp: snapea a la ARISTA más cercana (no al nodo/esquina) y
+    // rutea con pgr_withPoints, así el viaje arranca y termina a MITAD DE CUADRA,
+    // en la dirección real, en vez de saltar a la esquina. Misma forma de columnas
+    // que la vieja pgr_route_truck. Para volver atrás: cambiar el nombre acá.
     const result = await client.query(
-      'SELECT * FROM pgr_route_truck($1, $2, $3, $4)',
+      'SELECT * FROM pgr_route_truck_wp($1, $2, $3, $4)',
       [origin.lat, origin.lng, destination.lat, destination.lng]
     )
     const data = result.rows
