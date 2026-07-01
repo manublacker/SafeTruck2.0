@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icons } from "./DashboardIcons";
 import { fetchAssignedTrips, deleteAssignedTrip, type AssignedTrip } from "@/services/api";
 import TripDetailModal from "./TripDetailModal";
+import ConfirmDialog from "./ConfirmDialog";
 import { useToast } from "@/components/Toast";
 import {
   STATUS_LABELS,
@@ -39,6 +40,7 @@ interface Props {
 
 export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, onViewTrip, showSourceFilter = true, allowDelete = false }: Props) {
   const { showToast } = useToast();
+  const [confirmDelete, setConfirmDelete] = useState<AssignedTrip | null>(null);
   const [trips, setTrips]     = useState<AssignedTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
@@ -67,10 +69,14 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
 
   const reset = () => { setFilterDriver(""); setFilterStatus(""); setFilterSource(""); setFrom(""); setTo(""); };
 
-  // Elimina un viaje (con confirmación). Lo saca de la lista y cierra el detalle.
-  const handleDelete = async (trip: AssignedTrip) => {
-    const ruta = `${trip.origin_label ?? "—"} → ${trip.destination_label ?? "—"}`;
-    if (!window.confirm(`¿Eliminar este viaje?\n\n${ruta}\n\nEsta acción no se puede deshacer.`)) return;
+  // Pide confirmación (modal lindo) antes de borrar.
+  const handleDelete = (trip: AssignedTrip) => setConfirmDelete(trip);
+
+  // Borra de verdad el viaje ya confirmado: lo saca de la lista y cierra el detalle.
+  const doDelete = async () => {
+    const trip = confirmDelete;
+    if (!trip) return;
+    setConfirmDelete(null);
     try {
       await deleteAssignedTrip(trip.id);
       setTrips((prev) => prev.filter((t) => t.id !== trip.id));
@@ -143,6 +149,17 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
 
   return (
     <div className="st-view-root" style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
+      {confirmDelete && (
+        <ConfirmDialog
+          title="¿Eliminar este viaje?"
+          message={`${confirmDelete.origin_label ?? "—"} → ${confirmDelete.destination_label ?? "—"}\n\nEsta acción no se puede deshacer.`}
+          confirmLabel="Eliminar"
+          cancelLabel="Cancelar"
+          destructive
+          onConfirm={doDelete}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
       {/* Filtros */}
       <div className="st-filters-bar" style={{ display: "flex", alignItems: "flex-end", gap: 9, flexWrap: "wrap", marginBottom: 16, background: "#fff", border: "1px solid var(--c-border)", borderRadius: "var(--r-lg)", padding: 18 }}>
         {/* En desktop este wrapper es transparente (display:contents); en mobile
