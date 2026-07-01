@@ -2001,11 +2001,11 @@ function makeStyles(t: Theme) {
     },
 
     navHUD: {
-      position: 'absolute', bottom: -10, left: 0, right: 0,
+      position: 'absolute', bottom: -10, left: -10, right: -10,
       backgroundColor: t.card,
       borderTopLeftRadius: 0, borderTopRightRadius: 0,
       borderTopWidth: 1, borderColor: t.border,
-      padding: 20, paddingBottom: 32,
+      paddingTop: 20, paddingHorizontal: 30, paddingBottom: 32,
       flexDirection: 'row', alignItems: 'center',
     },
     navDest: { color: t.textMuted, fontSize: 12, marginBottom: 4 },
@@ -2113,13 +2113,13 @@ function makeStyles(t: Theme) {
       // bottom:-10 (en vez de 0) para tapar el hairline de mapa que quedaba
       // entre la card y la barra de tabs. El padding inline compensa para que el
       // contenido no se mueva.
-      position: 'absolute', bottom: -10, left: 0, right: 0,
+      // bottom/left/right en -10 (overscan) para tapar los hairlines de mapa que
+      // se colaban en los bordes; el padding compensa para no mover el contenido.
+      position: 'absolute', bottom: -10, left: -10, right: -10,
       backgroundColor: t.card,
-      // Esquinas planas (full-bleed): con esquinas redondeadas pegadas al borde
-      // de la pantalla siempre se asomaba un triangulito de mapa en los costados.
       borderTopLeftRadius: 0, borderTopRightRadius: 0,
       borderTopWidth: 1, borderColor: t.border,
-      padding: 20,
+      paddingTop: 20, paddingHorizontal: 30,
     },
     routeCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     routeCardTitle: { color: t.text, fontSize: 16, fontWeight: '700' },
@@ -2145,11 +2145,11 @@ function makeStyles(t: Theme) {
     warnBadgeText: { color: t.warning, fontSize: 11, fontWeight: '600' },
 
     tripSheet: {
-      position: 'absolute', bottom: -10, left: 0, right: 0,
+      position: 'absolute', bottom: -10, left: -10, right: -10,
       backgroundColor: t.card,
       borderTopLeftRadius: 0, borderTopRightRadius: 0,
       borderTopWidth: 1, borderTopColor: t.border,
-      padding: 20, paddingBottom: 36,
+      paddingTop: 20, paddingHorizontal: 30, paddingBottom: 36,
       shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16,
       shadowOffset: { width: 0, height: -4 }, elevation: 12,
     },
