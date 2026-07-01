@@ -712,6 +712,11 @@ export default function MapScreen() {
   useEffect(() => { locationRef.current = location }, [location])
   useEffect(() => { routeRef.current = currentRoute }, [currentRoute])
   useEffect(() => { simPositionRef.current = simPosition ? { lat: simPosition.lat, lng: simPosition.lng } : null }, [simPosition])
+  // Espejos frescos para leer el estado dentro de callbacks async/interval sin
+  // stale-closure (los usan el envío de la sim y el saneo de viajes personales).
+  const navModeRef = useRef(navMode); useEffect(() => { navModeRef.current = navMode }, [navMode])
+  const simRunningRef = useRef(simRunning); useEffect(() => { simRunningRef.current = simRunning }, [simRunning])
+  const tripSheetRef = useRef(tripSheet); useEffect(() => { tripSheetRef.current = tripSheet }, [tripSheet])
 
   // GPS tracking en NAVEGACIÓN LIBRE: si el chofer navega una ruta que buscó él
   // (sin un viaje asignado en curso), igual mandamos su ubicación para que el
@@ -757,10 +762,14 @@ export default function MapScreen() {
     const send = async () => {
       const p = simPositionRef.current
       if (!p || cancelled) return
+      // Si estás simulando un viaje ASIGNADO en curso, la posición va con SU trip_id
+      // (antes iba null y la web no la asociaba al viaje). Si es una ruta propia, null.
+      const ts = tripSheetRef.current
+      const tripIdForSend = ts && ts.status === 'in_progress' ? String(ts.id) : null
       try {
         await sendLocation(
           p.lat, p.lng,
-          null, profile?.full_name ?? 'Conductor', activeVehicle?.plate,
+          tripIdForSend, profile?.full_name ?? 'Conductor', activeVehicle?.plate,
           routeRef.current?.segments ?? null,
         )
       } catch { /* ignorar ticks fallidos de red */ }
@@ -798,7 +807,21 @@ export default function MapScreen() {
         destination_lng: destMarker?.lng ?? null,
         route: routeRef.current,
       })
-        .then((trip) => { personalTripIdRef.current = trip?.id ?? null })
+        .then((trip) => {
+          const id = trip?.id ?? null
+          personalTripIdRef.current = id
+          // Carrera: si el chofer frenó MIENTRAS se creaba, cuando el POST vuelve ya
+          // no está activo y el efecto no se re-dispara. Lo completamos acá mismo,
+          // así el viaje personal no queda colgado 'in_progress' hasta reabrir la app.
+          const stillActive =
+            (navModeRef.current || simRunningRef.current) &&
+            tripSheetRef.current?.status !== 'in_progress' &&
+            !!routeRef.current?.segments?.length
+          if (id != null && !stillActive) {
+            personalTripIdRef.current = null
+            void updateTripStatus(String(id), 'completed').catch(() => null)
+          }
+        })
         .catch(() => null)
         .finally(() => { personalBusyRef.current = false })
     } else if (!selfActive && personalTripIdRef.current != null && !personalBusyRef.current) {
@@ -809,7 +832,10 @@ export default function MapScreen() {
         .catch(() => null)
         .finally(() => { personalBusyRef.current = false })
     }
-  }, [navMode, simRunning, tripSheet?.status, searchText, originOverride, destMarker])
+    // currentRoute en deps: si se limpia la ruta propia (sin cambiar navMode), el
+    // efecto igual re-evalúa y completa el viaje personal (antes leía routeRef y
+    // no re-corría).
+  }, [navMode, simRunning, tripSheet?.status, searchText, originOverride, destMarker, currentRoute])
 
   // Al abrir la app: completamos cualquier viaje PERSONAL que haya quedado
   // "in_progress" colgado de una sesión anterior (la app se cerró o quedó mucho
