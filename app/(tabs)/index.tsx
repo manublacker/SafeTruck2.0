@@ -552,13 +552,26 @@ export default function MapScreen() {
     return []
   }
 
-  // Detiene el timer sin tocar el resto del estado (uso interno, para cuando
-  // la simulación termina sola al llegar al final del recorrido).
-  const stopSimulationInternal = () => {
+  // Limpieza COMPLETA de la simulación (timer + estado visual + cámara). Es la
+  // ÚNICA limpieza; antes había tres caminos (stopSimulation / stopSimulationInternal
+  // / clearRoute) que limpiaban conjuntos distintos y dejaban marcador congelado,
+  // timer huérfano o cámara inclinada. No toca el estado del viaje (eso lo deciden
+  // los handlers). Usa locationRef (fresco) para poder llamarse desde el simTick.
+  const stopSimulationCore = useCallback(() => {
     if (simIntervalRef.current) { clearInterval(simIntervalRef.current); simIntervalRef.current = null }
     setSimRunning(false)
     setSimPaused(false)
-  }
+    setSimPosition(null)
+    setSimProgress(null)
+    simDataRef.current = null
+    const loc = locationRef.current
+    if (loc && mapRef.current) {
+      mapRef.current.animateCamera(
+        { center: { latitude: loc.lat, longitude: loc.lng }, pitch: 0, heading: 0 },
+        { duration: 500 }
+      )
+    }
+  }, [])
 
   // Un paso de la simulación: avanza la distancia recorrida en SIM_TICK_MS
   // según la velocidad actual, interpolando entre los puntos del path.
@@ -573,7 +586,7 @@ export default function MapScreen() {
     if (!s || simPausedRef.current) return
     const path = s.path
     if (s.idx >= path.length - 1) {
-      stopSimulationInternal()
+      stopSimulationCore()
       return
     }
     let meters = simSpeedRef.current * 1000 / 3600 * (SIM_TICK_MS / 1000)
@@ -586,10 +599,7 @@ export default function MapScreen() {
       else { meters -= distLeft; s.idx++; s.frac = 0 }
     }
     if (s.idx >= path.length - 1) {
-      const last = path[path.length - 1], prev = path[path.length - 2]
-      setSimPosition({ lat: last[0], lng: last[1], heading: simBearing(prev, last) })
-      setSimProgress({ idx: s.idx, frac: 0 })
-      stopSimulationInternal()
+      stopSimulationCore()
       return
     }
     const a2 = path[s.idx], b2 = path[s.idx + 1]
@@ -625,24 +635,11 @@ export default function MapScreen() {
     simIntervalRef.current = setInterval(simTick, SIM_TICK_MS)
   }
 
+  // Limpieza INTERNA de la simulación (la usan loadTripById / background). Solo
+  // limpia la sim y, si era una ruta PROPIA (sin viaje asignado), vuelve al mapa
+  // limpio. NO revierte el estado del viaje asignado (eso lo decide onStopSimPressed).
   const stopSimulation = () => {
-    if (simIntervalRef.current) { clearInterval(simIntervalRef.current); simIntervalRef.current = null }
-    setSimRunning(false)
-    setSimPaused(false)
-    setSimPosition(null)
-    setSimProgress(null)
-    simDataRef.current = null
-    // Restaurar vista normal (sin inclinación de simulación)
-    if (location && mapRef.current) {
-      mapRef.current.animateCamera(
-        { center: { latitude: location.lat, longitude: location.lng }, pitch: 0, heading: 0 },
-        { duration: 500 }
-      )
-    }
-    // Si era una simulación de una ruta PROPIA (búsqueda, sin viaje asignado),
-    // al frenar volvemos al mapa limpio (se borra el recorrido y el panel de
-    // origen/destino, que antes quedaban colgados). En un viaje asignado no
-    // tocamos nada: seguís en ese viaje.
+    stopSimulationCore()
     if (!tripSheet) clearRoute()
   }
 
@@ -1229,6 +1226,7 @@ export default function MapScreen() {
 
   const clearRoute = () => {
     stopNavigation()
+    stopSimulationCore()  // la ✕ también frena la simulación (antes quedaba corriendo)
     routeAbortRef.current?.abort()
     routeAbortRef.current = null
     setLoading(false)
@@ -1294,6 +1292,21 @@ export default function MapScreen() {
     clearRoute()
   }
 
+  // Botón ■ de la barra de simulación (cancelar). Frena la simulación y, si estaba
+  // simulando un viaje asignado EN CURSO, lo vuelve a 'accepted' (deja de figurar
+  // "en curso"), consistente con la ✕. Si era una ruta propia, limpia el mapa.
+  // Es un handler fresco (JSX), así lee el tripSheet actual sin staleness.
+  const onStopSimPressed = () => {
+    const active = tripSheet
+    stopSimulationCore()
+    if (active && active.status === 'in_progress' && active.trip_source !== 'personal') {
+      void stopAssignedTrip(active.id)
+      setTripSheet(prev => (prev ? { ...prev, status: 'accepted' } : null))
+    } else if (!active) {
+      clearRoute()
+    }
+  }
+
   const startNavigation = async () => {
     if (!location) return
     // Si ya había un watcher corriendo (doble-tap accidental), lo limpiamos
@@ -1335,10 +1348,12 @@ export default function MapScreen() {
   // stop. Pendiente: revisar con mapRef.current.getCamera() antes/después
   // de cada animateCamera para confirmar el zoom real vs el pedido.
   const stopNavigation = () => {
-    if (!watchRef.current) return
-    setNavMode(false)
-    watchRef.current.remove()
+    // Siempre reseteamos navMode/HUD; el watcher se saca solo si existe (antes un
+    // return temprano dejaba navMode trabado si el watcher no había arrancado).
+    watchRef.current?.remove()
     watchRef.current = null
+    if (!navMode) return
+    setNavMode(false)
     setShowInfo(true)
     // Salida de modo navegación: vuelve a norte arriba (heading 0), zoom normal.
     // Usamos location lo más fresco posible (el callback de arriba lo actualiza
@@ -1756,7 +1771,7 @@ export default function MapScreen() {
             <Ionicons name="speedometer-outline" size={14} color={t.text} />
             <Text style={s.simSpeedText}>{simSpeed}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.simStopBtn} onPress={stopSimulation} activeOpacity={0.8}>
+          <TouchableOpacity style={s.simStopBtn} onPress={onStopSimPressed} activeOpacity={0.8}>
             <Ionicons name="stop" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
