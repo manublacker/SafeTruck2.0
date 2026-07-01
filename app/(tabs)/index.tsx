@@ -71,6 +71,13 @@ const INCIDENT_ICONS: Record<string, string> = {
 
 // Parsea la ubicación de un incidente que puede venir como string PostGIS
 // "POINT(lng lat)" o como GeoJSON {coordinates: [lng, lat]}.
+function formatDuration(mins: number): string {
+  if (mins < 60) return `${mins} min`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m === 0 ? `${h}h` : `${h}h ${m}min`
+}
+
 function parseIncidentLocation(location: any): { lat: number; lng: number } | null {
   if (!location) return null
   if (typeof location === 'string') {
@@ -1734,7 +1741,7 @@ export default function MapScreen() {
             </View>
             <View style={s.statDiv} />
             <View style={s.stat}>
-              <Text style={s.statVal}>{currentRoute.total_duration_min} min</Text>
+              <Text style={s.statVal}>{formatDuration(currentRoute.total_duration_min)}</Text>
               <Text style={s.statLbl}>TIEMPO EST.</Text>
             </View>
           </View>
@@ -1767,7 +1774,7 @@ export default function MapScreen() {
             <View style={s.navStats}>
               <Text style={s.navStat}>{currentRoute.total_distance_km} km</Text>
               <Text style={s.navStatDot}>·</Text>
-              <Text style={s.navStat}>{currentRoute.total_duration_min} min</Text>
+              <Text style={s.navStat}>{formatDuration(currentRoute.total_duration_min)}</Text>
             </View>
           </View>
           <TouchableOpacity style={s.navStopBtn} onPress={stopNavigation}>
