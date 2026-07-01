@@ -158,6 +158,78 @@ router.get('/me/truck', async (req: Request, res: Response) => {
 })
 
 // ---------------------------------------------------------------------------
+// GET /api/drivers/me/maintenance — El conductor consulta el estado de
+// mantenimiento de SU camión asignado + el vencimiento de SU licencia.
+// Read-only. Resuelve la identidad por app_user_id (JWT del mobile), igual que
+// /me y /me/truck. days_left = días hasta el vencimiento (negativo = vencido).
+// ---------------------------------------------------------------------------
+router.get('/me/maintenance', async (req: Request, res: Response) => {
+  const appUserId = req.user!.id
+  try {
+    const driverRes = await pool.query<{
+      id: number
+      categoria_licencia: string | null
+      vencimiento_licencia: string | null
+      license_days_left: number | null
+    }>(
+      `SELECT id, categoria_licencia, vencimiento_licencia,
+              CASE WHEN vencimiento_licencia IS NULL THEN NULL
+                   ELSE (vencimiento_licencia::date - CURRENT_DATE) END AS license_days_left
+       FROM drivers WHERE app_user_id = $1 AND is_active = true LIMIT 1`,
+      [appUserId]
+    )
+    if (!driverRes.rowCount) { res.json(null); return }
+    const driver = driverRes.rows[0]
+
+    const truckRes = await pool.query<{
+      id: number
+      name: string
+      patente: string | null
+      km_actual: number | null
+      fecha_service: string | null
+      proximo_service: string | null
+      days_left: number | null
+    }>(
+      `SELECT t.id, t.name, t.patente, t.km_actual, t.fecha_service, t.proximo_service,
+              CASE WHEN t.proximo_service IS NULL THEN NULL
+                   ELSE (t.proximo_service::date - CURRENT_DATE) END AS days_left
+       FROM truck_drivers td
+       JOIN trucks t ON t.id = td.truck_id AND t.is_active = true
+       WHERE td.driver_id = $1
+       LIMIT 1`,
+      [driver.id]
+    )
+    const truck = truckRes.rows[0] ?? null
+
+    let last_maintenance = null
+    if (truck) {
+      const m = await pool.query(
+        `SELECT tipo, fecha, km_al_service, costo, taller, notas, proximo_fecha, proximo_km
+         FROM maintenance_records
+         WHERE truck_id = $1 AND is_active = true
+         ORDER BY fecha DESC, id DESC
+         LIMIT 1`,
+        [truck.id]
+      )
+      last_maintenance = m.rows[0] ?? null
+    }
+
+    res.json({
+      truck,
+      last_maintenance,
+      license: {
+        categoria_licencia: driver.categoria_licencia,
+        vencimiento_licencia: driver.vencimiento_licencia,
+        days_left: driver.license_days_left,
+      },
+    })
+  } catch (err: any) {
+    console.error('Error en GET /api/drivers/me/maintenance:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ---------------------------------------------------------------------------
 // PATCH /api/drivers/me — Conductor actualiza sus propios datos desde el mobile
 // (usa app_user_id del JWT en lugar de admin user_id)
 // ---------------------------------------------------------------------------
