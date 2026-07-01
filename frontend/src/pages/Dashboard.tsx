@@ -106,6 +106,8 @@ export default function Dashboard() {
               emptyTitle="No hay viajes pendientes ni en curso"
               emptySubtitle="Los viajes que asignes o que estén en camino van a aparecer acá."
               onViewTrip={handleViewTrip}
+              showSourceFilter={false}
+              allowDelete
             />
           )}
           {page === "trips" && (

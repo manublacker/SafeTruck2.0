@@ -219,3 +219,24 @@ describe('PATCH /api/assigned-trips/:id/status', () => {
     expect(broadcast).toHaveBeenCalled()
   })
 })
+
+describe('DELETE /api/assigned-trips/:id', () => {
+  it('elimina un viaje de la empresa (204)', async () => {
+    query.mockResolvedValue({ rows: [], rowCount: 1 }) // null driver_locations + DELETE
+    const res = await request(app, 'DELETE', '/10')
+    expect(res.status).toBe(204)
+    // El DELETE filtra por empresa (no se puede borrar ajeno).
+    const del = query.mock.calls.find((c) => /DELETE FROM assigned_trips/.test(c[0] as string))
+    expect(del?.[1]).toEqual(['10', 'admin-1'])
+  })
+
+  it('404 si el viaje no es de la empresa', async () => {
+    query.mockImplementation((sql: string) =>
+      /DELETE FROM assigned_trips/.test(sql)
+        ? Promise.resolve({ rows: [], rowCount: 0 })
+        : Promise.resolve({ rows: [], rowCount: 1 })
+    )
+    const res = await request(app, 'DELETE', '/10')
+    expect(res.status).toBe(404)
+  })
+})

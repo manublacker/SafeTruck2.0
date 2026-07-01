@@ -1683,7 +1683,7 @@ export default function MapScreen() {
 
       {/* Tarjeta de ruta */}
       {showInfo && currentRoute && !navMode && (
-        <View style={[s.routeCard, { paddingBottom: 18 }]}>
+        <View style={[s.routeCard, { paddingBottom: 28 }]}>
           <View style={s.routeCardHeader}>
             <View>
               <Text style={s.routeCardTitle}>Ruta calculada</Text>
@@ -1735,7 +1735,7 @@ export default function MapScreen() {
 
       {/* HUD de navegación */}
       {navMode && currentRoute && (
-        <View style={[s.navHUD, { paddingBottom: 18 }]}>
+        <View style={[s.navHUD, { paddingBottom: 28 }]}>
           <View style={{ flex: 1, marginRight: 16 }}>
             <Text style={s.navDest} numberOfLines={1}>{searchText || 'Destino'}</Text>
             <View style={s.navStats}>
@@ -1879,7 +1879,7 @@ export default function MapScreen() {
 
       {/* ── Trip Sheet ─────────────────────────────────────────────────── */}
       {tripSheet && !navMode && !showInfo && (
-        <View style={[s.tripSheet, { paddingBottom: 20 }]}>
+        <View style={[s.tripSheet, { paddingBottom: 30 }]}>
           <View style={s.tripSheetHandle} />
 
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -2016,11 +2016,11 @@ function makeStyles(t: Theme) {
     },
 
     navHUD: {
-      position: 'absolute', bottom: 0, left: 0, right: 0,
+      position: 'absolute', bottom: -10, left: -10, right: -10,
       backgroundColor: t.card,
-      borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      borderTopLeftRadius: 0, borderTopRightRadius: 0,
       borderTopWidth: 1, borderColor: t.border,
-      padding: 20, paddingBottom: 32,
+      paddingTop: 20, paddingHorizontal: 30, paddingBottom: 32,
       flexDirection: 'row', alignItems: 'center',
     },
     navDest: { color: t.textMuted, fontSize: 12, marginBottom: 4 },
@@ -2125,11 +2125,16 @@ function makeStyles(t: Theme) {
     loadingText: { color: t.text, fontSize: 14, fontWeight: '500' },
 
     routeCard: {
-      position: 'absolute', bottom: 0, left: 0, right: 0,
+      // bottom:-10 (en vez de 0) para tapar el hairline de mapa que quedaba
+      // entre la card y la barra de tabs. El padding inline compensa para que el
+      // contenido no se mueva.
+      // bottom/left/right en -10 (overscan) para tapar los hairlines de mapa que
+      // se colaban en los bordes; el padding compensa para no mover el contenido.
+      position: 'absolute', bottom: -10, left: -10, right: -10,
       backgroundColor: t.card,
-      borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      borderTopLeftRadius: 0, borderTopRightRadius: 0,
       borderTopWidth: 1, borderColor: t.border,
-      padding: 20,
+      paddingTop: 20, paddingHorizontal: 30,
     },
     routeCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     routeCardTitle: { color: t.text, fontSize: 16, fontWeight: '700' },
@@ -2155,11 +2160,11 @@ function makeStyles(t: Theme) {
     warnBadgeText: { color: t.warning, fontSize: 11, fontWeight: '600' },
 
     tripSheet: {
-      position: 'absolute', bottom: 0, left: 0, right: 0,
+      position: 'absolute', bottom: -10, left: -10, right: -10,
       backgroundColor: t.card,
-      borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      borderTopLeftRadius: 0, borderTopRightRadius: 0,
       borderTopWidth: 1, borderTopColor: t.border,
-      padding: 20, paddingBottom: 36,
+      paddingTop: 20, paddingHorizontal: 30, paddingBottom: 36,
       shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16,
       shadowOffset: { width: 0, height: -4 }, elevation: 12,
     },
