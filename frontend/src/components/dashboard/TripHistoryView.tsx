@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icons } from "./DashboardIcons";
 import { fetchAssignedTrips, deleteAssignedTrip, type AssignedTrip } from "@/services/api";
 import TripDetailModal from "./TripDetailModal";
+import { useToast } from "@/components/Toast";
 import {
   STATUS_LABELS,
   SOURCE_LABELS,
@@ -37,6 +38,7 @@ interface Props {
 }
 
 export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, onViewTrip, showSourceFilter = true, allowDelete = false }: Props) {
+  const { showToast } = useToast();
   const [trips, setTrips]     = useState<AssignedTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
@@ -74,7 +76,7 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
       setTrips((prev) => prev.filter((t) => t.id !== trip.id));
       setSelected(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "No se pudo eliminar el viaje.");
+      showToast(err instanceof Error ? err.message : "No se pudo eliminar el viaje.", "error");
     }
   };
 

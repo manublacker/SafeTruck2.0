@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native'
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native'
+import { Alert } from '../../components/AppAlert'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'

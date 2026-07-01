@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator,
+  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
   Modal, ScrollView, TextInput, Keyboard, Platform, AppState,
 } from 'react-native'
+import { Alert } from '../../components/AppAlert'
 import MapView, { Marker, Polyline, Region } from 'react-native-maps'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location'
