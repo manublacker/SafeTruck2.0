@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Image,
 } from 'react-native'
+import { Alert } from '../../components/AppAlert'
 import { Ionicons, AntDesign } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../src/services/supabase'

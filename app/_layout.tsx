@@ -6,6 +6,7 @@ import { Platform, View, Text, TextInput, TouchableOpacity, StyleSheet, Activity
 import { supabase } from '../src/services/supabase'
 import { useStore } from '../src/store/useStore'
 import { registerForPushNotifications } from '../src/services/push'
+import { AppAlertHost } from '../components/AppAlert'
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -148,6 +149,7 @@ export default function RootLayout() {
         <Stack.Screen name="auth/reset-password" />
         <Stack.Screen name="landing" />
       </Stack>
+      <AppAlertHost />
     </>
   )
 }
