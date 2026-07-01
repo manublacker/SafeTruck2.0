@@ -7,9 +7,10 @@ import { getTheme } from '../../src/theme'
 type IoniconName = keyof typeof Ionicons.glyphMap
 
 const ICONS: Record<string, [IoniconName, IoniconName]> = {
-  index:   ['map-outline', 'map'],
-  trips:   ['list-outline', 'list'],
-  profile: ['person-outline', 'person'],
+  index:       ['map-outline', 'map'],
+  trips:       ['list-outline', 'list'],
+  maintenance: ['construct-outline', 'construct'],
+  profile:     ['person-outline', 'person'],
 }
 
 export default function TabLayout() {
@@ -44,9 +45,10 @@ export default function TabLayout() {
       tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       tabBarItemStyle: { paddingTop: 2 },
     }}>
-      <Tabs.Screen name="index"     options={{ title: 'Mapa',   tabBarIcon: renderIcon('index') }} />
-      <Tabs.Screen name="trips"     options={{ title: 'Viajes', tabBarIcon: renderIcon('trips') }} />
-      <Tabs.Screen name="profile"   options={{ title: 'Perfil', tabBarIcon: renderIcon('profile') }} />
+      <Tabs.Screen name="index"       options={{ title: 'Mapa',   tabBarIcon: renderIcon('index') }} />
+      <Tabs.Screen name="trips"       options={{ title: 'Viajes', tabBarIcon: renderIcon('trips') }} />
+      <Tabs.Screen name="maintenance" options={{ title: 'Manten.', tabBarIcon: renderIcon('maintenance') }} />
+      <Tabs.Screen name="profile"     options={{ title: 'Perfil', tabBarIcon: renderIcon('profile') }} />
       <Tabs.Screen name="incidents" options={{ href: null }} />
     </Tabs>
   )

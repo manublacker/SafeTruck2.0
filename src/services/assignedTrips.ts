@@ -70,6 +70,42 @@ export async function fetchAllMyTrips(): Promise<AssignedTrip[]> {
   return Array.isArray(data) ? data : []
 }
 
+// ── Mantenimiento del conductor (read-only) ─────────────────────────────────
+
+export interface MyMaintenance {
+  truck: {
+    id: number
+    name: string
+    patente: string | null
+    km_actual: number | null
+    fecha_service: string | null
+    proximo_service: string | null
+    /** Días hasta el próximo service. Negativo = vencido. null = sin fecha. */
+    days_left: number | null
+  } | null
+  last_maintenance: {
+    tipo: string
+    fecha: string
+    km_al_service: number | null
+    costo: number | null
+    taller: string | null
+    notas: string | null
+    proximo_fecha: string | null
+    proximo_km: number | null
+  } | null
+  license: {
+    categoria_licencia: string | null
+    vencimiento_licencia: string | null
+    /** Días hasta el vencimiento de la licencia. Negativo = vencida. */
+    days_left: number | null
+  }
+}
+
+/** Estado de mantenimiento del camión asignado + vencimiento de la licencia. */
+export async function fetchMyMaintenance(): Promise<MyMaintenance | null> {
+  return apiRequest<MyMaintenance | null>('/api/drivers/me/maintenance')
+}
+
 export async function updateTripStatus(
   tripId: string,
   status: AssignedTrip['status']
