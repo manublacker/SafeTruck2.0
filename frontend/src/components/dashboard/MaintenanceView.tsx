@@ -193,6 +193,17 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
             <StatCard label="Licencias por vencer" value={alerts.licencias.vencidas.length + alerts.licencias.por_vencer.length} tone="warn" icon={<Icons.People size={18} />} />
           </div>
 
+          {/* Gasto total en mantenimiento (suma el costo de todos los registros) */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", background: "var(--c-surface-2)", border: "1px solid var(--c-border)", borderRadius: 12, padding: "14px 18px", marginBottom: 24 }}>
+            <span style={{ fontSize: "0.85rem", color: "var(--c-ink-2)", fontWeight: 600 }}>Gasto total en mantenimiento</span>
+            <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--c-ink)" }}>
+              ${records.reduce((sum, m) => sum + (m.costo ?? 0), 0).toLocaleString("es-AR")}
+              <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--c-ink-3)", marginLeft: 8 }}>
+                · {records.length} registro{records.length === 1 ? "" : "s"}
+              </span>
+            </span>
+          </div>
+
           {/* Camiones que requieren atención */}
           {(alerts.trucks.vencidos.length > 0 || alerts.trucks.proximos.length > 0) && (
             <Section title="Camiones que requieren atención">
