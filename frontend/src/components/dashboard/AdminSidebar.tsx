@@ -3,7 +3,7 @@ import { Icons } from "./DashboardIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import safeTruckLogo from "@/assets/logo_safetruck.png";
 
-export type AdminPage = "map" | "fleet" | "fleet-trucks" | "fleet-drivers" | "active-trips" | "trips" | "account" | "plans";
+export type AdminPage = "map" | "fleet" | "fleet-trucks" | "fleet-drivers" | "maintenance" | "active-trips" | "trips" | "account" | "plans";
 
 interface Props {
   page: AdminPage;
@@ -14,6 +14,7 @@ interface Props {
 const NAV_ITEMS: { key: AdminPage; label: string; icon: React.ReactNode }[] = [
   { key: "map",          label: "Live Map",  icon: <Icons.Map /> },
   { key: "fleet",        label: "Flota",     icon: <Icons.Truck /> },
+  { key: "maintenance",  label: "Mantenimiento", icon: <Icons.Wrench /> },
   { key: "active-trips", label: "Viajes",    icon: <Icons.Arrow /> },
   { key: "trips",        label: "Historial", icon: <Icons.Clock /> },
 ];

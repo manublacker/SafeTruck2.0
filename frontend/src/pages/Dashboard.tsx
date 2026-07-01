@@ -6,6 +6,7 @@ import AdminTopBar from "@/components/dashboard/AdminTopBar";
 import AdminBottomNav from "@/components/dashboard/AdminBottomNav";
 import LiveMapContainer from "@/components/dashboard/LiveMapContainer";
 import FleetView from "@/components/dashboard/FleetView";
+import MaintenanceView from "@/components/dashboard/MaintenanceView";
 import TripHistoryView from "@/components/dashboard/TripHistoryView";
 import AccountView from "@/components/dashboard/AccountView";
 import PlansView from "@/components/dashboard/PlansView";
@@ -13,13 +14,14 @@ import type { AssignedTrip } from "@/services/api";
 
 import "@/styles/admin.css";
 
-const VALID_PAGES: AdminPage[] = ["map", "fleet", "active-trips", "trips", "account"];
+const VALID_PAGES: AdminPage[] = ["map", "fleet", "maintenance", "active-trips", "trips", "account"];
 
 const TITLE: Record<AdminPage, string> = {
   map:            "Live Map",
   fleet:          "Flota",
   "fleet-trucks": "Flota",
   "fleet-drivers":"Flota",
+  maintenance:    "Mantenimiento",
   "active-trips": "Viajes pendientes y en curso",
   trips:          "Historial de viajes",
   account:        "Mi cuenta",
@@ -100,6 +102,7 @@ export default function Dashboard() {
           {page === "fleet"          && <FleetView onNavigate={handleSetPage} />}
           {page === "fleet-trucks"   && <FleetView onNavigate={handleSetPage} initialTab="trucks" />}
           {page === "fleet-drivers"  && <FleetView onNavigate={handleSetPage} initialTab="drivers" />}
+          {page === "maintenance"    && <MaintenanceView onNavigate={handleSetPage} />}
           {page === "active-trips" && (
             <TripHistoryView
               statuses={["pending", "accepted", "in_progress"]}

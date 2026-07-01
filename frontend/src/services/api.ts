@@ -407,3 +407,122 @@ export async function fetchDriverLocations(): Promise<DriverLocation[]> {
   });
   return handleResponse<DriverLocation[]>(res);
 }
+
+// ── Mantenimiento y Vencimientos ────────────────────────────────────────────
+
+/** Tipos de intervención permitidos (deben coincidir con ALLOWED_TIPOS del backend). */
+export type MaintenanceTipo =
+  | "service"
+  | "reparacion"
+  | "neumaticos"
+  | "vtv"
+  | "seguro"
+  | "otro";
+
+export interface MaintenanceRecord {
+  id: number;
+  truck_id: number;
+  tipo: MaintenanceTipo;
+  fecha: string;
+  km_al_service: number | null;
+  costo: number | null;
+  taller: string | null;
+  notas: string | null;
+  proximo_km: number | null;
+  proximo_fecha: string | null;
+  created_at: string;
+  truck: { name: string | null; patente: string | null };
+}
+
+export type MaintenanceCreate = {
+  truck_id: number;
+  tipo?: MaintenanceTipo;
+  fecha: string;
+  km_al_service?: number | null;
+  costo?: number | null;
+  taller?: string | null;
+  notas?: string | null;
+  proximo_km?: number | null;
+  proximo_fecha?: string | null;
+};
+
+export type MaintenanceUpdate = Partial<Omit<MaintenanceCreate, "truck_id">>;
+
+/** Camión en el semáforo de alertas (con días hasta el próximo service). */
+export interface MaintenanceTruckAlert {
+  id: number;
+  name: string;
+  patente: string | null;
+  km_actual: number | null;
+  fecha_service: string | null;
+  proximo_service: string | null;
+  days_left: number | null;
+}
+
+/** Chofer con licencia por vencer / vencida. */
+export interface MaintenanceLicenseAlert {
+  id: number;
+  nombre: string;
+  categoria_licencia: string | null;
+  vencimiento_licencia: string | null;
+  days_left: number | null;
+}
+
+export interface MaintenanceAlerts {
+  trucks: {
+    vencidos: MaintenanceTruckAlert[];
+    proximos: MaintenanceTruckAlert[];
+    al_dia: MaintenanceTruckAlert[];
+    total: number;
+  };
+  licencias: {
+    vencidas: MaintenanceLicenseAlert[];
+    por_vencer: MaintenanceLicenseAlert[];
+  };
+}
+
+export async function fetchMaintenance(): Promise<MaintenanceRecord[]> {
+  const res = await fetch(`${BASE_URL}/api/maintenance`, { headers: authHeaders() });
+  return handleResponse<MaintenanceRecord[]>(res);
+}
+
+export async function fetchMaintenanceByTruck(truckId: number): Promise<MaintenanceRecord[]> {
+  const res = await fetch(`${BASE_URL}/api/maintenance/truck/${truckId}`, {
+    headers: authHeaders(),
+  });
+  return handleResponse<MaintenanceRecord[]>(res);
+}
+
+export async function fetchMaintenanceAlerts(): Promise<MaintenanceAlerts> {
+  const res = await fetch(`${BASE_URL}/api/maintenance/alerts`, { headers: authHeaders() });
+  return handleResponse<MaintenanceAlerts>(res);
+}
+
+export async function createMaintenance(data: MaintenanceCreate): Promise<MaintenanceRecord> {
+  const res = await fetch(`${BASE_URL}/api/maintenance`, {
+    method:  "POST",
+    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    body:    JSON.stringify(data),
+  });
+  return handleResponse<MaintenanceRecord>(res);
+}
+
+export async function updateMaintenance(id: number, data: MaintenanceUpdate): Promise<MaintenanceRecord> {
+  const res = await fetch(`${BASE_URL}/api/maintenance/${id}`, {
+    method:  "PATCH",
+    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    body:    JSON.stringify(data),
+  });
+  return handleResponse<MaintenanceRecord>(res);
+}
+
+export async function deleteMaintenance(id: number): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/maintenance/${id}`, {
+    method:  "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok && res.status !== 204) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+  }
+}

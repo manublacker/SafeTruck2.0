@@ -9,6 +9,7 @@ import type { AdminPage } from "./AdminSidebar";
 const TABS: { key: AdminPage; label: string; icon: React.ReactNode }[] = [
   { key: "map",          label: "Live Map",  icon: <Icons.Map /> },
   { key: "fleet",        label: "Flota",     icon: <Icons.Truck /> },
+  { key: "maintenance",  label: "Manten.",   icon: <Icons.Wrench /> },
   { key: "active-trips", label: "Viajes",    icon: <Icons.Arrow /> },
   { key: "trips",        label: "Historial", icon: <Icons.Clock /> },
 ];

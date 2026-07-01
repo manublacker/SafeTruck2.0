@@ -26,6 +26,11 @@ export interface Driver {
   is_active: boolean;
   created_at: string;
   app_user_id: string | null;
+  // Datos de licencia (opcionales: el listado clásico puede no traerlos; el
+  // módulo de Mantenimiento los usa para el semáforo de vencimientos).
+  licencia?: string | null;
+  categoria_licencia?: string | null;
+  vencimiento_licencia?: string | null;
 }
 
 export interface AuthUser {
