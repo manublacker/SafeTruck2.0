@@ -1720,7 +1720,7 @@ export default function MapScreen() {
 
       {/* HUD de navegación */}
       {navMode && currentRoute && (
-        <View style={[s.navHUD, { paddingBottom: 18 }]}>
+        <View style={[s.navHUD, { paddingBottom: 28 }]}>
           <View style={{ flex: 1, marginRight: 16 }}>
             <Text style={s.navDest} numberOfLines={1}>{searchText || 'Destino'}</Text>
             <View style={s.navStats}>
@@ -1864,7 +1864,7 @@ export default function MapScreen() {
 
       {/* ── Trip Sheet ─────────────────────────────────────────────────── */}
       {tripSheet && !navMode && !showInfo && (
-        <View style={[s.tripSheet, { paddingBottom: 20 }]}>
+        <View style={[s.tripSheet, { paddingBottom: 30 }]}>
           <View style={s.tripSheetHandle} />
 
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -2001,9 +2001,9 @@ function makeStyles(t: Theme) {
     },
 
     navHUD: {
-      position: 'absolute', bottom: 0, left: 0, right: 0,
+      position: 'absolute', bottom: -10, left: 0, right: 0,
       backgroundColor: t.card,
-      borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      borderTopLeftRadius: 0, borderTopRightRadius: 0,
       borderTopWidth: 1, borderColor: t.border,
       padding: 20, paddingBottom: 32,
       flexDirection: 'row', alignItems: 'center',
@@ -2115,7 +2115,9 @@ function makeStyles(t: Theme) {
       // contenido no se mueva.
       position: 'absolute', bottom: -10, left: 0, right: 0,
       backgroundColor: t.card,
-      borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      // Esquinas planas (full-bleed): con esquinas redondeadas pegadas al borde
+      // de la pantalla siempre se asomaba un triangulito de mapa en los costados.
+      borderTopLeftRadius: 0, borderTopRightRadius: 0,
       borderTopWidth: 1, borderColor: t.border,
       padding: 20,
     },
@@ -2143,9 +2145,9 @@ function makeStyles(t: Theme) {
     warnBadgeText: { color: t.warning, fontSize: 11, fontWeight: '600' },
 
     tripSheet: {
-      position: 'absolute', bottom: 0, left: 0, right: 0,
+      position: 'absolute', bottom: -10, left: 0, right: 0,
       backgroundColor: t.card,
-      borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      borderTopLeftRadius: 0, borderTopRightRadius: 0,
       borderTopWidth: 1, borderTopColor: t.border,
       padding: 20, paddingBottom: 36,
       shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16,
