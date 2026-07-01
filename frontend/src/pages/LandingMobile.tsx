@@ -71,6 +71,8 @@ function PlanFeat({ text }: { text: string }) {
 
 export default function LandingMobile() {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Plan seleccionado: al tocar una card se resalta como la elegida (PRO por defecto).
+  const [selectedPlan, setSelectedPlan] = useState("PRO");
 
   return (
     <div style={{ width: "100%", maxWidth: 540, margin: "0 auto", overflowX: "hidden", position: "relative", fontFamily: "'Poppins', system-ui, sans-serif", color: INK, background: "#fff" }}>
@@ -168,7 +170,7 @@ export default function LandingMobile() {
         <p style={{ ...secSub, marginBottom: 32 }}>Sin contratos anuales. Cancelás cuando quieras.</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           {plans.map((p) => (
-            <div key={p.name} style={{ background: "#fff", border: p.featured ? `2px solid ${ACCENT}` : "1px solid #ECEEF1", borderRadius: 18, padding: "28px 24px", position: "relative", boxShadow: p.featured ? "0 18px 40px -22px rgba(240,71,43,0.55)" : "none" }}>
+            <div key={p.name} onClick={() => setSelectedPlan(p.name)} style={{ background: "#fff", border: p.name === selectedPlan ? `2px solid ${ACCENT}` : "1px solid #ECEEF1", borderRadius: 18, padding: "28px 24px", position: "relative", cursor: "pointer", transition: "border-color .18s ease, box-shadow .18s ease", boxShadow: p.name === selectedPlan ? "0 18px 40px -22px rgba(240,71,43,0.55)" : "none" }}>
               {p.featured && (
                 <span style={{ position: "absolute", top: -13, left: "50%", transform: "translateX(-50%)", background: ACCENT, color: "#fff", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", padding: "6px 14px", borderRadius: 20 }}>MÁS ELEGIDO</span>
               )}
@@ -177,7 +179,7 @@ export default function LandingMobile() {
               <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 22 }}>
                 {p.feats.map((f) => <PlanFeat key={f} text={f} />)}
               </div>
-              <a href="/register" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 50, marginTop: 24, borderRadius: 28, fontWeight: 700, fontSize: 15, textDecoration: "none", ...(p.featured ? { background: ACCENT, color: "#fff" } : { border: "1.5px solid #D7DBDF", color: INK }) }}>{p.cta}</a>
+              <a href="/register" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 50, marginTop: 24, borderRadius: 28, fontWeight: 700, fontSize: 15, textDecoration: "none", ...(p.name === selectedPlan ? { background: ACCENT, color: "#fff" } : { border: "1.5px solid #D7DBDF", color: INK }) }}>{p.cta}</a>
             </div>
           ))}
         </div>
