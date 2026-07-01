@@ -265,8 +265,8 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
   }
 
   try {
-    const existing = await pool.query<{ empresa_user_id: string; driver_app_user_id: string | null; driver_id: number }>(
-      'SELECT empresa_user_id, driver_app_user_id, driver_id FROM assigned_trips WHERE id = $1',
+    const existing = await pool.query<{ empresa_user_id: string; driver_app_user_id: string | null; driver_id: number; status: string; truck_id: number | null; distance_m: number | null }>(
+      'SELECT empresa_user_id, driver_app_user_id, driver_id, status, truck_id, distance_m FROM assigned_trips WHERE id = $1',
       [req.params.id]
     )
     if (!existing.rowCount) return res.status(404).json({ error: 'Viaje no encontrado' })
@@ -304,6 +304,25 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
         'DELETE FROM driver_locations WHERE driver_app_user_id = $1',
         [trip.driver_app_user_id]
       )
+    }
+
+    // Al COMPLETAR un viaje, sumamos su distancia al km_actual del camión, para
+    // que las alertas de "próximo service por km" reflejen el uso real. Suma
+    // round(distance_m / 1000) km. Idempotente: sólo cuando el viaje NO estaba
+    // ya 'completed' (evita doble conteo si el PATCH se reintenta). Best-effort:
+    // nunca rompe el cambio de estado del viaje.
+    if (status === 'completed' && trip.status !== 'completed' && trip.truck_id && trip.distance_m) {
+      try {
+        await pool.query(
+          `UPDATE trucks
+             SET km_actual  = COALESCE(km_actual, 0) + GREATEST(ROUND($1::numeric / 1000)::int, 0),
+                 updated_at = NOW()
+           WHERE id = $2 AND user_id = $3`,
+          [trip.distance_m, trip.truck_id, trip.empresa_user_id]
+        )
+      } catch (e: any) {
+        console.error('[km_actual] no se pudo actualizar:', e.message)
+      }
     }
 
     const updated = await getTripById(Number(req.params.id))
