@@ -1,0 +1,14 @@
+// Stub in-memory de expo-secure-store para el entorno de test.
+const store = new Map<string, string>()
+export function getItemAsync(key: string): Promise<string | null> {
+  return Promise.resolve(store.has(key) ? (store.get(key) as string) : null)
+}
+export function setItemAsync(key: string, value: string): Promise<void> {
+  store.set(key, value)
+  return Promise.resolve()
+}
+export function deleteItemAsync(key: string): Promise<void> {
+  store.delete(key)
+  return Promise.resolve()
+}
+export default { getItemAsync, setItemAsync, deleteItemAsync }
