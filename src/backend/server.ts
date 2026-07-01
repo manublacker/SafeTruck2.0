@@ -7,6 +7,7 @@ import authRouter from './routes/auth'
 import trucksRouter from './routes/trucks'
 import driversRouter from './routes/drivers'
 import truckDriversRouter from './routes/truck-drivers'
+import maintenanceRouter from './routes/maintenance'
 import searchRouter from './routes/search'
 import routeRouter from './routes/route'
 import incidentsRouter from './routes/incidents'
@@ -37,6 +38,7 @@ app.use('/api/users', usersRouter)
 app.use('/api/trucks', authMiddleware, requireActiveSubscription, trucksRouter)
 app.use('/api/drivers', authMiddleware, requireActiveSubscription, driversRouter)
 app.use('/api/truck-drivers', authMiddleware, requireActiveSubscription, truckDriversRouter)
+app.use('/api/maintenance', authMiddleware, requireActiveSubscription, maintenanceRouter)
 app.use('/api/assigned-trips', assignedTripsRouter)
 app.use('/api/invitations', invitationsRouter)
 app.use('/api/locations', locationsRouter)
