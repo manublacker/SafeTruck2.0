@@ -589,12 +589,20 @@ export default function MapScreen() {
   const simPausedRef = useRef(false)
   useEffect(() => { simPausedRef.current = simPaused }, [simPaused])
 
+  // Fin natural de la simulación (llegó al destino). Para una ruta PROPIA (sin
+  // viaje asignado) restauramos la card "Ruta calculada" para poder re-simular;
+  // si es un viaje asignado no hay card que mostrar.
+  const finishSimulation = useCallback(() => {
+    stopSimulationCore()
+    if (!tripSheetRef.current && routeRef.current) setShowInfo(true)
+  }, [stopSimulationCore])
+
   const simTick = useCallback(() => {
     const s = simDataRef.current
     if (!s || simPausedRef.current) return
     const path = s.path
     if (s.idx >= path.length - 1) {
-      stopSimulationCore()
+      finishSimulation()
       return
     }
     let meters = simSpeedRef.current * 1000 / 3600 * (SIM_TICK_MS / 1000)
@@ -607,7 +615,7 @@ export default function MapScreen() {
       else { meters -= distLeft; s.idx++; s.frac = 0 }
     }
     if (s.idx >= path.length - 1) {
-      stopSimulationCore()
+      finishSimulation()
       return
     }
     const a2 = path[s.idx], b2 = path[s.idx + 1]
