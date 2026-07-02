@@ -61,7 +61,10 @@ export default function TripCreator({
   const hasDrivers  = availableDrivers.length > 0;
   const hasTruck    = Boolean(assignedTruck);
   const formDisabled = !hasDrivers || !hasTruck || calculating || !hasSubscription;
-  const today = new Date().toISOString().slice(0, 10);
+  // Fecha local (no UTC): con toISOString(), pasadas las 21:00 de Argentina ya es
+  // "mañana" en UTC y el date-picker bloqueaba agendar viajes para hoy.
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   return (
     <div>
@@ -182,6 +185,16 @@ export default function TripCreator({
       setFlash({ msg: "Completá fecha y hora.", ok: false });
       return;
     }
+    // `new Date("YYYY-MM-DDTHH:mm")` se interpreta en hora LOCAL del admin.
+    const scheduled = new Date(`${draft.date}T${draft.time}`);
+    if (isNaN(scheduled.getTime())) {
+      setFlash({ msg: "Fecha u hora inválida.", ok: false });
+      return;
+    }
+    if (scheduled.getTime() < Date.now() - 60_000) {
+      setFlash({ msg: "La fecha y hora del viaje ya pasaron.", ok: false });
+      return;
+    }
 
     setCalculating(true);
     setFlash({ msg: "", ok: true });
@@ -193,7 +206,9 @@ export default function TripCreator({
         driverId:   selectedDriverId,
         truckId:    assignedTruck.id,
         driverName: driver.nombre,
-        scheduledAt: `${draft.date}T${draft.time}:00`,
+        // ISO con zona horaria (UTC): antes iba el string "naive" local y el
+        // server (en UTC) lo guardaba corrido ~3 h para Argentina.
+        scheduledAt: scheduled.toISOString(),
       });
     } finally {
       setCalculating(false);
