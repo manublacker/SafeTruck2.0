@@ -8,7 +8,7 @@ import UpcomingTripsPanel from "./UpcomingTripsPanel";
 import type { AdminPage } from "./AdminSidebar";
 import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
-import { fetchDriverLocations, fetchAssignedTrips, fetchTrucks, fetchDrivers, calculateRoute, createAssignedTrip, SubscriptionRequiredError, type AssignedTrip } from "@/services/api";
+import { fetchDriverLocations, fetchAssignedTrips, calculateRoute, createAssignedTrip, SubscriptionRequiredError, type AssignedTrip } from "@/services/api";
 import { useRealtime, type RoutePathSegment } from "@/hooks/useRealtime";
 import { useToast } from "@/components/Toast";
 
@@ -49,12 +49,14 @@ function coordsToPin(lat: number | null | undefined, lon: number | null | undefi
 }
 
 export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }: Props) {
-  const { user } = useAuth();
+  const { user, drivers } = useAuth();
   const { showToast } = useToast();
 
-  const [trucks, setTrucks]   = useState<import("@/types/auth").Truck[]>([]);
-  const [drivers, setDrivers] = useState<import("@/types/auth").Driver[]>([]);
-  const [fleetLoading, setFleetLoading] = useState(true);
+  // ProtectedRoute no monta el Dashboard hasta que el AuthContext termina de
+  // cargar el perfil (con trucks/drivers incluidos) → reusamos ese chunk en
+  // vez de refetchear acá.
+  const trucks = user?.trucks ?? [];
+  const fleetLoading = user === null;
 
   const trips: Trip[] = [];
   const { availableTrucks, availableDrivers } = useAvailability(trucks, drivers, trips);
@@ -100,14 +102,6 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
     setRouteResult(null);
     setOriginPin(null);
     setDestinationPin(null);
-  }, []);
-
-  // Carga directa de trucks y drivers (no depende del auth context que arranca vacío)
-  useEffect(() => {
-    Promise.all([fetchTrucks(), fetchDrivers()])
-      .then(([t, d]) => { setTrucks(t); setDrivers(d); })
-      .catch(() => {})
-      .finally(() => setFleetLoading(false));
   }, []);
 
   useEffect(() => {

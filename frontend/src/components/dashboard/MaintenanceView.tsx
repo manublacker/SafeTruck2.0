@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/Toast";
 import type { Truck } from "@/types/auth";
 import {
-  fetchTrucks,
   fetchMaintenance,
   fetchMaintenanceByTruck,
   fetchMaintenanceAlerts,
@@ -83,8 +83,9 @@ function urgencyColor(days: number | null): string {
 
 export default function MaintenanceView({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
   const { showToast } = useToast();
+  const { user, refreshTrucks } = useAuth();
+  const trucks = user?.trucks ?? [];
   const [alerts, setAlerts]   = useState<MaintenanceAlerts | null>(null);
-  const [trucks, setTrucks]   = useState<Truck[]>([]);
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
@@ -98,13 +99,11 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
     setError("");
     setSubscriptionError(false);
     try {
-      const [a, t, r] = await Promise.all([
+      const [a, r] = await Promise.all([
         fetchMaintenanceAlerts(),
-        fetchTrucks(),
         fetchMaintenance(),
       ]);
       setAlerts(a);
-      setTrucks(t);
       setRecords(r);
     } catch (err) {
       if (err instanceof SubscriptionRequiredError) setSubscriptionError(true);
@@ -125,6 +124,9 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
     setCreating(false);
     setPresetTruck(null);
     void load();
+    // Crear un registro pisa fecha_service/proximo_service/km_actual en trucks
+    // (ver POST /api/maintenance) → hay que refrescar el chunk del AuthContext.
+    void refreshTrucks();
   }
 
   function exportCsv() {
