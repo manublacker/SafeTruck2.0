@@ -656,7 +656,10 @@ export default function MapScreen() {
   // limpio. NO revierte el estado del viaje asignado (eso lo decide onStopSimPressed).
   const stopSimulation = () => {
     stopSimulationCore()
-    if (!tripSheet) clearRoute()
+    // Leemos el ref (valor vivo), no el estado del closure: loadTripById y el
+    // handler de AppState llaman a la versión "congelada" del primer render, donde
+    // tripSheet siempre era null y limpiaba de más.
+    if (!tripSheetRef.current) clearRoute()
   }
 
   const toggleSimPause = () => {
@@ -1320,10 +1323,12 @@ export default function MapScreen() {
     // si el usuario abandona el tab y vuelve.
     if (tripId) router.replace('/(tabs)/')
     // Vuelve la cámara a "donde estoy parado ahora": solo queda el marcador de
-    // ubicación. Las <Polyline> se borran solas (dependen de los estados de arriba).
-    if (location) {
+    // ubicación. Usamos locationRef (valor vivo) porque el handler de AppState y
+    // loadTripById llaman a la copia congelada del primer render (location=null).
+    const loc = locationRef.current
+    if (loc) {
       mapRef.current?.animateToRegion(
-        { latitude: location.lat, longitude: location.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        { latitude: loc.lat, longitude: loc.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
         500
       )
     }
@@ -1421,7 +1426,10 @@ export default function MapScreen() {
     // return temprano dejaba navMode trabado si el watcher no había arrancado).
     watchRef.current?.remove()
     watchRef.current = null
-    if (!navMode) return
+    // Ref (valor vivo) en vez del closure: loadTripById y el handler de AppState
+    // invocan la copia congelada del primer render (navMode=false), donde este
+    // early-return dejaba navMode TRABADO en true → pantalla colgada sin salida.
+    if (!navModeRef.current) return
     setNavMode(false)
     setShowInfo(true)
     // Salida de modo navegación: vuelve a norte arriba (heading 0), zoom normal.
