@@ -261,6 +261,16 @@ const Register = () => {
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError, setCheckoutError]     = useState<string | null>(null);
 
+  // Al volver del checkout con Atrás, bfcache restaura los botones en
+  // "Redirigiendo…"; los rehabilitamos.
+  useEffect(() => {
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted) setCheckoutLoading(null);
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   const choosePlan = async (plan: string) => {
     update("plan", plan);
     setCheckoutError(null);

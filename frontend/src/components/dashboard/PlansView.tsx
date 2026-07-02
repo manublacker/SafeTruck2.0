@@ -76,6 +76,16 @@ export default function PlansView() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Al volver del checkout con el botón Atrás, el navegador restaura la página
+  // desde bfcache con los botones aún en "Redirigiendo…"; los rehabilitamos.
+  useEffect(() => {
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted) setUpgrading(null);
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   async function handleUpgrade(plan: string) {
     setError(null);
     setUpgrading(plan);
