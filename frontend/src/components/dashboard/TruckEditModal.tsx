@@ -62,19 +62,15 @@ function parseNumberOrNull(value: string): number | null {
 
 function sanitizePatente(raw: string): string {
   const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7);
-  let out = "";
-  for (let i = 0; i < clean.length; i++) {
-    const ch = clean[i];
-    const isLetter = /[A-Z]/.test(ch);
-    const isDigit = /[0-9]/.test(ch);
-    if (i < 2 && !isLetter) break;
-    if (i >= 2 && i < 5 && !isDigit) break;
-    if (i >= 5 && !isLetter) break;
-    out += ch;
+  // Formato viejo argentino: 3 letras + 3 números (LLL-NNN).
+  // Se detecta por las 3 letras iniciales (el Mercosur solo tiene 2).
+  if (/^[A-Z]{3}[0-9]{0,3}$/.test(clean)) {
+    return clean.length > 3 ? `${clean.slice(0, 3)}-${clean.slice(3)}` : clean;
   }
-  if (out.length > 5) return `${out.slice(0, 2)}-${out.slice(2, 5)}-${out.slice(5)}`;
-  if (out.length > 2) return `${out.slice(0, 2)}-${out.slice(2)}`;
-  return out;
+  // Formato Mercosur: 2 letras + 3 números + 2 letras (LL-NNN-LL).
+  if (clean.length > 5) return `${clean.slice(0, 2)}-${clean.slice(2, 5)}-${clean.slice(5)}`;
+  if (clean.length > 2) return `${clean.slice(0, 2)}-${clean.slice(2)}`;
+  return clean;
 }
 
 const onlyDigits = (s: string, max?: number) => {
