@@ -119,6 +119,7 @@ const Register = () => {
   const [data, setData] = useState<FormData>(initialData);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [resendIn, setResendIn] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const { user, login } = useAuth();
 
@@ -167,7 +168,12 @@ const Register = () => {
   };
 
   const next = async () => {
+    // Guard anti doble-submit: sin esto, un doble click en "Continuar" del paso 2
+    // dispara dos signUpStart (dos emails OTP) y el paso 3 puede verificar dos veces.
+    if (submitting) return;
     if (step === 1 && !validateStep1()) return;
+    setSubmitting(true);
+    try {
     if (step === 2) {
       if (!validateStep2()) return;
       try {
@@ -229,6 +235,9 @@ const Register = () => {
       setResendIn(0);
     }
     setStep(step + 1);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleCodeChange = (i: number, v: string) => {
@@ -358,7 +367,7 @@ const Register = () => {
                     </div>
                   </div>
 
-                  <button onClick={next} className="auth-btn">Continuar</button>
+                  <button onClick={next} className="auth-btn" disabled={submitting}>Continuar</button>
                   <p className="auth-footer-text">
                     ¿Ya tenés cuenta?{" "}
                     <Link to="/login" className="auth-link">Iniciá sesión</Link>
@@ -447,7 +456,9 @@ const Register = () => {
                   </div>
 
                   {errors.general && <p className="auth-error">{errors.general}</p>}
-                  <button onClick={next} className="auth-btn">Continuar</button>
+                  <button onClick={next} className="auth-btn" disabled={submitting}>
+                    {submitting ? "Enviando código…" : "Continuar"}
+                  </button>
                 </div>
               )}
 
@@ -488,7 +499,9 @@ const Register = () => {
                   </div>
                   {errors.code && <p className="auth-error" style={{ textAlign: "center" }}>{errors.code}</p>}
 
-                  <button onClick={next} className="auth-btn">Verificar código</button>
+                  <button onClick={next} className="auth-btn" disabled={submitting}>
+                    {submitting ? "Verificando…" : "Verificar código"}
+                  </button>
                   <p className="auth-footer-text">
                     ¿No recibiste el código?{" "}
                     {resendIn > 0 ? (
