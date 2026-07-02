@@ -973,11 +973,9 @@ export default function MapScreen() {
   }, [])
 
   useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') return
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
-      const coords = { lat: loc.coords.latitude, lng: loc.coords.longitude }
+    let cancelled = false
+    const applyCoords = (coords: { lat: number; lng: number }) => {
+      if (cancelled) return
       setLocation(coords)
       setOrigin(coords)
       mapRef.current?.animateToRegion({
@@ -986,8 +984,26 @@ export default function MapScreen() {
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       }, 500)
+    }
+    ;(async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync()
+      if (status !== 'granted' || cancelled) return
+      // getCurrentPositionAsync lanza si los servicios de ubicación están apagados;
+      // sin try/catch quedaba una promesa rechazada y `location` en null para siempre.
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+        applyCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude })
+      } catch {
+        // Fallback: última posición conocida (si el GPS está apagado ahora pero
+        // hubo un fix reciente) para no dejar la pantalla sin ubicación.
+        try {
+          const last = await Location.getLastKnownPositionAsync()
+          if (last) applyCoords({ lat: last.coords.latitude, lng: last.coords.longitude })
+        } catch {}
+      }
     })()
     void loadIncidents()
+    return () => { cancelled = true }
   }, [loadIncidents, setOrigin])
 
   const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
