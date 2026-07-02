@@ -909,7 +909,16 @@ export default function MapScreen() {
         tripPathRef.current = []
       }
       if (newStatus === 'in_progress') {
-        redrawTrip()
+        // Al "Reiniciar" un viaje recién completado, los refs de la ruta se
+        // vaciaron en la rama de 'completed'; si están vacíos re-descargamos la
+        // ruta en vez de redibujar desde refs vacíos (dejaba el mapa sin polyline).
+        if (tripSegmentsRef.current || tripPathRef.current.length > 0) {
+          redrawTrip()
+        } else {
+          const gen = ++tripDrawRef.current
+          const ok = await drawColoredTripRoute(tripSheet, gen)
+          if (!ok && tripDrawRef.current === gen) drawStoredTripPath(tripSheet, gen)
+        }
         const path = simPathLatLng()
         if (path.length >= 2 && mapRef.current) {
           mapRef.current.animateToRegion({
