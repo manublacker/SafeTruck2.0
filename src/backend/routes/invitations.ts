@@ -1,15 +1,18 @@
 import { Router, Request, Response } from 'express'
+import { randomInt } from 'crypto'
 import { authMiddleware } from '../middleware/authMiddleware'
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription'
-import pool from '../db'
+import pool, { withTransaction } from '../db'
 import { supabase } from '../supabaseClient'
 
 const router = Router()
 
+// Código de invitación con `crypto.randomInt` (no `Math.random`, que es
+// predecible). El alfabeto excluye caracteres ambiguos (0/O, 1/I).
 function generateCode(length = 8): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let code = ''
-  for (let i = 0; i < length; i++) code += chars[Math.floor(Math.random() * chars.length)]
+  for (let i = 0; i < length; i++) code += chars[randomInt(chars.length)]
   return code
 }
 
@@ -87,20 +90,19 @@ router.post('/redeem', authMiddleware, async (req: Request, res: Response) => {
       return res.status(409).json({ error: 'Ya estás vinculado a esta empresa' })
     }
 
-    await pool.query('BEGIN')
-    try {
+    await withTransaction(async (client) => {
       let driverId: number
 
       if (invitation.driver_id) {
         // Invitación ligada a un conductor existente → solo linkeamos
-        await pool.query(
+        await client.query(
           'UPDATE drivers SET app_user_id = $1, updated_at = NOW() WHERE id = $2',
           [driverUserId, invitation.driver_id]
         )
         driverId = invitation.driver_id
       } else {
         // Invitación abierta → crear nuevo conductor con datos del registro
-        const insertRes = await pool.query<{ id: number }>(
+        const insertRes = await client.query<{ id: number }>(
           `INSERT INTO drivers (user_id, nombre, estado, is_active, app_user_id)
            VALUES ($1, $2, 'Activo', true, $3)
            RETURNING id`,
@@ -109,32 +111,27 @@ router.post('/redeem', authMiddleware, async (req: Request, res: Response) => {
         driverId = insertRes.rows[0].id
 
         // Actualizar la invitación con el driver_id recién creado
-        await pool.query(
+        await client.query(
           'UPDATE driver_invitations SET driver_id = $1 WHERE id = $2',
           [driverId, invitation.id]
         )
       }
 
       // Marcar invitación como canjeada
-      await pool.query(
+      await client.query(
         'UPDATE driver_invitations SET redeemed_at = NOW(), redeemed_by = $1 WHERE id = $2',
         [driverUserId, invitation.id]
       )
 
       // Backfill viajes pendientes si los hay
-      await pool.query(
+      await client.query(
         `UPDATE assigned_trips SET driver_app_user_id = $1
          WHERE driver_id = $2 AND driver_app_user_id IS NULL
            AND status IN ('pending', 'accepted')`,
         [driverUserId, driverId]
       )
-
-      await pool.query('COMMIT')
-      res.json({ success: true, driver_name: driverName })
-    } catch (e) {
-      await pool.query('ROLLBACK')
-      throw e
-    }
+    })
+    res.json({ success: true, driver_name: driverName })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -188,46 +185,44 @@ router.post('/register', async (req: Request, res: Response) => {
       [driverUserId, email.trim().toLowerCase(), full_name.trim()]
     )
 
-    await pool.query('BEGIN')
     try {
-      let driverId: number
+      await withTransaction(async (client) => {
+        let driverId: number
 
-      if (invitation.driver_id) {
-        await pool.query(
-          'UPDATE drivers SET app_user_id = $1, updated_at = NOW() WHERE id = $2',
-          [driverUserId, invitation.driver_id]
+        if (invitation.driver_id) {
+          await client.query(
+            'UPDATE drivers SET app_user_id = $1, updated_at = NOW() WHERE id = $2',
+            [driverUserId, invitation.driver_id]
+          )
+          driverId = invitation.driver_id
+        } else {
+          const insertRes = await client.query<{ id: number }>(
+            `INSERT INTO drivers (user_id, nombre, estado, is_active, app_user_id)
+             VALUES ($1, $2, 'Activo', true, $3)
+             RETURNING id`,
+            [adminId, full_name.trim(), driverUserId]
+          )
+          driverId = insertRes.rows[0].id
+          await client.query(
+            'UPDATE driver_invitations SET driver_id = $1 WHERE id = $2',
+            [driverId, invitation.id]
+          )
+        }
+
+        await client.query(
+          'UPDATE driver_invitations SET redeemed_at = NOW(), redeemed_by = $1 WHERE id = $2',
+          [driverUserId, invitation.id]
         )
-        driverId = invitation.driver_id
-      } else {
-        const insertRes = await pool.query<{ id: number }>(
-          `INSERT INTO drivers (user_id, nombre, estado, is_active, app_user_id)
-           VALUES ($1, $2, 'Activo', true, $3)
-           RETURNING id`,
-          [adminId, full_name.trim(), driverUserId]
+
+        await client.query(
+          `UPDATE assigned_trips SET driver_app_user_id = $1
+           WHERE driver_id = $2 AND driver_app_user_id IS NULL
+             AND status IN ('pending', 'accepted')`,
+          [driverUserId, driverId]
         )
-        driverId = insertRes.rows[0].id
-        await pool.query(
-          'UPDATE driver_invitations SET driver_id = $1 WHERE id = $2',
-          [driverId, invitation.id]
-        )
-      }
-
-      await pool.query(
-        'UPDATE driver_invitations SET redeemed_at = NOW(), redeemed_by = $1 WHERE id = $2',
-        [driverUserId, invitation.id]
-      )
-
-      await pool.query(
-        `UPDATE assigned_trips SET driver_app_user_id = $1
-         WHERE driver_id = $2 AND driver_app_user_id IS NULL
-           AND status IN ('pending', 'accepted')`,
-        [driverUserId, driverId]
-      )
-
-      await pool.query('COMMIT')
+      })
       res.json({ success: true, email: authData.user.email })
     } catch (e) {
-      await pool.query('ROLLBACK')
       // Si falla la DB, borramos el usuario de Supabase para no dejar huérfanos
       await supabase.auth.admin.deleteUser(driverUserId).catch(() => {})
       throw e
