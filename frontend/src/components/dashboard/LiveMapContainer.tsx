@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAvailability, type Trip } from "./useAvailability";
 import MapDisplay, { type DriverLocation, type MapPin } from "./MapDisplay";
@@ -57,7 +57,7 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
   const [fleetLoading, setFleetLoading] = useState(true);
 
   const trips: Trip[] = [];
-  const { availableTrucks, availableDrivers } = useAvailability(trucks, drivers, trips);
+  const { availableTrucks, availableDrivers: activeDrivers } = useAvailability(trucks, drivers, trips);
 
   const [routeResult, setRouteResult]           = useState<RouteResponse | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
@@ -68,6 +68,15 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
   const [driverRoutes, setDriverRoutes]         = useState<Record<string, RoutePathSegment[]>>(() => cachedRoutes);
   const [assignedTrips, setAssignedTrips]       = useState<AssignedTrip[]>(() => cachedTrips);
   const [tripsLoading, setTripsLoading]         = useState(cachedTrips.length === 0);
+
+  // Un conductor con un viaje EN CURSO no está disponible para asignarle otro:
+  // sin esto, el creador de viajes lo ofrecía igual y se lo podía doble-asignar.
+  const availableDrivers = useMemo(() => {
+    const busyIds = new Set(
+      assignedTrips.filter((t) => t.status === "in_progress").map((t) => t.driver_id),
+    );
+    return activeDrivers.filter((d) => !busyIds.has(d.id));
+  }, [activeDrivers, assignedTrips]);
   const [creatorOpen, setCreatorOpen]           = useState(false);
   // Ruta calculada y lista para asignar: con esto mostramos la barra flotante
   // sobre el mapa (resumen + Asignar viaje + Cancelar) y cerramos el modal.
