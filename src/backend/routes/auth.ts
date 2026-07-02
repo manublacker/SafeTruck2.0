@@ -34,9 +34,15 @@ router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
   const company = (req.body?.company ?? meta["company"] ?? null) as string | null;
   const role = (meta["role"] as string | undefined) ?? "admin";
 
-  // Sincronizar usuario en Supabase public.users (FK requerida por trucks y drivers).
-  try {
-    await pool.query(
+  // Estas 3 operaciones son independientes entre sí, así que las corremos EN
+  // PARALELO en vez de en serie: antes cada una era un round-trip a la base uno
+  // atrás del otro (login lento); ahora el endpoint tarda ~lo de la más lenta.
+  //
+  //  1. Sync del usuario en public.users (FK requerida por trucks y drivers).
+  //  2. Upsert silencioso en profiles (no sobreescribe plan ni otros campos).
+  //  3. Lectura del plan: subscriptions (fuente de verdad) con fallback a profiles.
+  const syncUser = pool
+    .query(
       `INSERT INTO users (id, email, full_name, company, role)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (id) DO UPDATE
@@ -45,46 +51,42 @@ router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
              company   = COALESCE(EXCLUDED.company,   users.company),
              role      = EXCLUDED.role`,
       [user.id, user.email, full_name, company, role]
-    );
-  } catch (err) {
-    console.error("[auth/profile] Error sincronizando usuario:", err);
-  }
+    )
+    .catch((err) => console.error("[auth/profile] Error sincronizando usuario:", err));
 
-  // Garantizar que existe una fila en profiles para este usuario.
-  // Upsert silencioso: si ya existe, no sobreescribe el plan ni otros campos.
-  try {
-    await supabase.from("profiles").upsert(
+  const ensureProfile = Promise.resolve(
+    supabase.from("profiles").upsert(
       { id: user.id, full_name: full_name ?? user.email },
       { onConflict: "id", ignoreDuplicates: true }
-    );
-  } catch { /* no bloqueante */ }
+    )
+  ).then(() => {}, () => { /* no bloqueante */ });
 
-  // Leer el plan: primero desde subscriptions (fuente de verdad de billing),
-  // luego fallback a profiles (usuarios mobile), luego null.
-  let plan: string | null = null;
-  try {
-    const { data: sub } = await supabase
-      .from("subscriptions")
-      .select("plan, status")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  const readPlan = (async (): Promise<string | null> => {
+    try {
+      const { data: sub } = await supabase
+        .from("subscriptions")
+        .select("plan, status")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (sub?.plan) {
-      plan = sub.plan;
-    } else {
+      if (sub?.plan) return sub.plan;
+
       const { data: profile } = await supabase
         .from("profiles")
         .select("plan")
         .eq("id", user.id)
         .maybeSingle();
-      plan = profile?.plan ?? null;
+      return profile?.plan ?? null;
+    } catch {
+      // silencioso — el frontend maneja plan null como "starter"
+      return null;
     }
-  } catch {
-    // silencioso — el frontend maneja plan null como "starter"
-  }
+  })();
+
+  const [, , plan] = await Promise.all([syncUser, ensureProfile, readPlan]);
 
   res.json({
     token,

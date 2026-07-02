@@ -23,6 +23,11 @@ interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   authReady: boolean;
+  // true una vez que el perfil se cargó de verdad desde el backend (o por login
+  // explícito). Sirve para distinguir "no tenés plan" (plan null real) de "no
+  // pudimos leer el plan" (fallback de sesión por backend caído). El paywall
+  // sólo debe bloquear en el primer caso.
+  profileFetched: boolean;
   drivers: Driver[];
   refreshDrivers: () => Promise<void>;
   refreshTrucks: () => Promise<void>;
@@ -38,6 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [drivers, setDrivers]  = useState<Driver[]>([]);
   const [authReady, setAuthReady] = useState(false);
+  // Estado (no ref) para que ProtectedRoute reaccione: el perfil se cargó desde
+  // el backend, así que el `plan` es confiable (null real = sin suscripción).
+  const [profileFetched, setProfileFetched] = useState(false);
   // Holds the in-flight ensureProfile promise so concurrent callers (the
   // IIFE and onAuthStateChange's INITIAL_SESSION event) await the same fetch
   // instead of one returning early and letting setAuthReady(true) fire before
@@ -112,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser({ ...res.user, trucks: trucksList, drivers: driversList });
         setDrivers(driversList);
         profileLoaded.current = true;
+        setProfileFetched(true);
       } catch (err) {
         console.error("Error al obtener el perfil:", err);
         // Fallback: keep the user logged in with whatever the session gives us.
@@ -167,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setDrivers([]);
         profileLoaded.current = false; // Reset so next login loads the profile
+        setProfileFetched(false);
       }
     });
 
@@ -188,6 +198,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokenState(newToken);
     setUser(newUser);
     setDrivers(newUser.drivers ?? []);
+    // El login explícito trae el perfil autoritativo (incluido el plan) desde
+    // /api/auth/profile, así que el gate ya puede confiar en newUser.plan.
+    profileLoaded.current = true;
+    setProfileFetched(true);
   }, []);
 
   const logout = useCallback(async () => {
@@ -196,6 +210,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokenState(null);
     setUser(null);
     setDrivers([]);
+    profileLoaded.current = false;
+    setProfileFetched(false);
   }, []);
 
   useEffect(() => {
@@ -204,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, authReady, drivers, refreshDrivers, refreshTrucks, refreshPlan, login, logout }}
+      value={{ user, token, authReady, profileFetched, drivers, refreshDrivers, refreshTrucks, refreshPlan, login, logout }}
     >
       {children}
     </AuthContext.Provider>

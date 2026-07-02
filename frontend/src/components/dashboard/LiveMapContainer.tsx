@@ -8,8 +8,10 @@ import UpcomingTripsPanel from "./UpcomingTripsPanel";
 import type { AdminPage } from "./AdminSidebar";
 import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
-import { fetchDriverLocations, fetchAssignedTrips, fetchTrucks, fetchDrivers, calculateRoute, createAssignedTrip, SubscriptionRequiredError, type AssignedTrip } from "@/services/api";
+import { fetchDriverLocations, fetchAssignedTrips, calculateRoute, createAssignedTrip, SubscriptionRequiredError, type AssignedTrip } from "@/services/api";
 import { useRealtime, type RoutePathSegment } from "@/hooks/useRealtime";
+import { sameAssignedTrip } from "@/lib/tripFormat";
+import { reconcileById } from "@/lib/reconcile";
 import { useToast } from "@/components/Toast";
 
 const PANEL_PADDING = 12;
@@ -49,12 +51,14 @@ function coordsToPin(lat: number | null | undefined, lon: number | null | undefi
 }
 
 export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }: Props) {
-  const { user } = useAuth();
+  const { user, drivers } = useAuth();
   const { showToast } = useToast();
 
-  const [trucks, setTrucks]   = useState<import("@/types/auth").Truck[]>([]);
-  const [drivers, setDrivers] = useState<import("@/types/auth").Driver[]>([]);
-  const [fleetLoading, setFleetLoading] = useState(true);
+  // ProtectedRoute no monta el Dashboard hasta que el AuthContext termina de
+  // cargar el perfil (con trucks/drivers incluidos) → reusamos ese chunk en
+  // vez de refetchear acá.
+  const trucks = user?.trucks ?? [];
+  const fleetLoading = user === null;
 
   const trips: Trip[] = [];
   const { availableTrucks, availableDrivers: activeDrivers } = useAvailability(trucks, drivers, trips);
@@ -111,14 +115,6 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
     setDestinationPin(null);
   }, []);
 
-  // Carga directa de trucks y drivers (no depende del auth context que arranca vacío)
-  useEffect(() => {
-    Promise.all([fetchTrucks(), fetchDrivers()])
-      .then(([t, d]) => { setTrucks(t); setDrivers(d); })
-      .catch(() => {})
-      .finally(() => setFleetLoading(false));
-  }, []);
-
   useEffect(() => {
     if (selectedDriverId !== null && availableDrivers.some((d) => d.id === selectedDriverId)) return;
     setSelectedDriverId(availableDrivers[0]?.id ?? null);
@@ -164,7 +160,9 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
   const refreshTrips = useCallback(async () => {
     try {
       const data = await fetchAssignedTrips();
-      setAssignedTrips(data);
+      // El polling (cada 30s) trae la lista completa; reconciliamos para no
+      // recrear todo el array cuando nada cambió (evita re-render del panel).
+      setAssignedTrips((prev) => reconcileById(prev, data, sameAssignedTrip));
     } catch { /* silencioso */ } finally {
       setTripsLoading(false);
     }
