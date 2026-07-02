@@ -6,8 +6,8 @@ import AdminTopBar from "@/components/dashboard/AdminTopBar";
 import AdminBottomNav from "@/components/dashboard/AdminBottomNav";
 import LiveMapContainer from "@/components/dashboard/LiveMapContainer";
 import FleetView from "@/components/dashboard/FleetView";
-import MaintenanceView from "@/components/dashboard/MaintenanceView";
-import TripHistoryView from "@/components/dashboard/TripHistoryView";
+import MaintenanceView, { prefetchMaintenance } from "@/components/dashboard/MaintenanceView";
+import TripHistoryView, { prefetchTrips } from "@/components/dashboard/TripHistoryView";
 import AccountView from "@/components/dashboard/AccountView";
 import PlansView from "@/components/dashboard/PlansView";
 import type { AssignedTrip } from "@/services/api";
@@ -51,6 +51,15 @@ export default function Dashboard() {
   // Viaje que el usuario pidió "Ver viaje" desde el detalle: lo llevamos al mapa.
   const [tripToShow, setTripToShow] = useState<AssignedTrip | null>(null);
   const { refreshPlan, refreshTrucks, refreshDrivers } = useAuth();
+
+  // Prefetch de las vistas del panel apenas se monta el Dashboard: los datos de
+  // viajes y mantenimiento quedan cacheados en memoria, así al navegar a esas
+  // pantallas ya están listos (sin el "Cargando…" de la primera vez). Deduplicado:
+  // si el usuario entra a la vista mientras el pedido está en vuelo, lo reusa.
+  useEffect(() => {
+    void prefetchTrips().catch(() => {});
+    void prefetchMaintenance().catch(() => {});
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

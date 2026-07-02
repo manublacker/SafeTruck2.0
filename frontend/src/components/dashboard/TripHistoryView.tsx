@@ -23,6 +23,22 @@ import { reconcileById } from "@/lib/reconcile";
 // el cache, al volver arrancaría con skeleton y re-pediría toda la lista. Con el
 // cache se ve al instante lo último y se revalida en segundo plano.
 let cachedTrips: AssignedTrip[] | null = null;
+let tripsInflight: Promise<AssignedTrip[]> | null = null;
+
+// Carga (o prefetch) deduplicada de la lista de viajes. Llena el cache de módulo
+// reconciliando contra lo previo. Si ya hay un pedido en vuelo lo reusa, para que
+// el prefetch del Dashboard y el fetch de la vista al montar no se dupliquen.
+// Exportada para que el Dashboard la dispare apenas entra el usuario.
+export function prefetchTrips(): Promise<AssignedTrip[]> {
+  if (tripsInflight) return tripsInflight;
+  tripsInflight = fetchAssignedTrips()
+    .then((data) => {
+      cachedTrips = reconcileById(cachedTrips ?? [], data, sameAssignedTrip);
+      return cachedTrips;
+    })
+    .finally(() => { tripsInflight = null; });
+  return tripsInflight;
+}
 
 // ── Helpers de presentación ────────────────────────────────────────────────
 
@@ -72,13 +88,10 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
     if (cachedTrips === null) setLoading(true);
     else setRefreshing(true);
     try {
-      const data = await fetchAssignedTrips();
-      // Reconciliamos contra lo que ya teníamos (el cache refleja el estado
-      // actual): conservamos los viajes sin cambios y sólo sumamos/actualizamos
-      // los distintos, en vez de reemplazar toda la lista.
-      const merged = reconcileById(cachedTrips ?? [], data, sameAssignedTrip);
-      cachedTrips = merged;
-      setTrips(merged);
+      // Reusa el prefetch en vuelo (si el Dashboard ya lo disparó) o pide ahora.
+      // La reconciliación vive dentro de prefetchTrips.
+      const data = await prefetchTrips();
+      setTrips(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar el historial.");
     } finally {

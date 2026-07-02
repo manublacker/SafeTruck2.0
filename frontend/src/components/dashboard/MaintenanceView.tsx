@@ -48,6 +48,24 @@ function sameMaintenanceRecord(a: MaintenanceRecord, b: MaintenanceRecord): bool
   );
 }
 
+interface MaintenanceData { alerts: MaintenanceAlerts; records: MaintenanceRecord[] }
+let maintInflight: Promise<MaintenanceData> | null = null;
+
+// Carga (o prefetch) deduplicada de alertas + registros. Llena los caches de
+// módulo (los registros se reconcilian; las alertas son un agregado y se
+// reemplazan). Exportada para que el Dashboard la dispare al entrar el usuario.
+export function prefetchMaintenance(): Promise<MaintenanceData> {
+  if (maintInflight) return maintInflight;
+  maintInflight = Promise.all([fetchMaintenanceAlerts(), fetchMaintenance()])
+    .then(([a, r]) => {
+      cachedAlerts = a;
+      cachedRecords = reconcileById(cachedRecords ?? [], r, sameMaintenanceRecord);
+      return { alerts: a, records: cachedRecords };
+    })
+    .finally(() => { maintInflight = null; });
+  return maintInflight;
+}
+
 // ── Catálogo de tipos de mantenimiento ──────────────────────────────────────
 
 const TIPOS: { value: MaintenanceTipo; label: string; emoji: string }[] = [
@@ -128,17 +146,10 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
     setError("");
     setSubscriptionError(false);
     try {
-      const [a, r] = await Promise.all([
-        fetchMaintenanceAlerts(),
-        fetchMaintenance(),
-      ]);
-      // Reconciliamos los registros contra el cache (conserva referencias de los
-      // que no cambiaron); los alerts son un objeto agregado → se reemplaza.
-      const mergedRecords = reconcileById(cachedRecords ?? [], r, sameMaintenanceRecord);
-      cachedAlerts = a;
-      cachedRecords = mergedRecords;
+      // Reusa el prefetch en vuelo (si el Dashboard ya lo disparó) o pide ahora.
+      const { alerts: a, records: r } = await prefetchMaintenance();
       setAlerts(a);
-      setRecords(mergedRecords);
+      setRecords(r);
     } catch (err) {
       if (err instanceof SubscriptionRequiredError) setSubscriptionError(true);
       else setError(err instanceof Error ? err.message : "Error al cargar mantenimiento.");
