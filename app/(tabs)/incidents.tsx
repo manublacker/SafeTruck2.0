@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native'
 import { Alert } from '../../components/AppAlert'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
@@ -71,8 +71,13 @@ export default function IncidentsScreen() {
     loadIncidents()
   }, [])
 
-  const loadIncidents = async () => {
-    setLoading(true)
+  // Esta pantalla es un tab oculto que queda montado tras la primera visita:
+  // sin esto, un incidente recién reportado desde el mapa no aparecía (ni
+  // desaparecían los expirados) hasta hacer pull-to-refresh manual.
+  useFocusEffect(useCallback(() => { void loadIncidents({ silent: true }) }, []))
+
+  const loadIncidents = async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true)
     try {
       const res = await fetch(`${BACKEND}/api/incidents`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -151,7 +156,10 @@ export default function IncidentsScreen() {
     return `en ${Math.floor(mins / 60)}h`
   }
 
-  const filtered = filter ? incidents.filter(i => i.incident_type === filter) : incidents
+  // Ocultamos los que ya vencieron (pueden expirar con la pantalla abierta):
+  // evita listar alertas con "⏱ Expira expirada".
+  const active = incidents.filter(i => !i.expires_at || new Date(i.expires_at).getTime() > Date.now())
+  const filtered = filter ? active.filter(i => i.incident_type === filter) : active
 
   return (
     <View style={s.container}>
@@ -168,7 +176,7 @@ export default function IncidentsScreen() {
         </TouchableOpacity>
         <Text style={s.topbarTitle}>Alertas activas</Text>
         <Text style={s.topbarSub}>
-          {incidents.length} incidente{incidents.length !== 1 ? 's' : ''} en el AMBA
+          {active.length} incidente{active.length !== 1 ? 's' : ''} en el AMBA
         </Text>
       </View>
 
