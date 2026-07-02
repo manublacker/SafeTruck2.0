@@ -4,7 +4,7 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { isValidPassword, MIN_PASSWORD_LENGTH, updatePassword } from '../../src/services/auth'
+import { isValidPassword, MIN_PASSWORD_LENGTH, updatePassword, authErrorMessage } from '../../src/services/auth'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 
@@ -29,7 +29,7 @@ export default function ResetPasswordScreen() {
     setError(null)
     setLoading(true)
     try { await updatePassword(password); setDone(true) }
-    catch (e: any) { setError(e.message ?? 'No se pudo actualizar la contraseña') }
+    catch (e: any) { setError(authErrorMessage(e)) }
     finally { setLoading(false) }
   }
 

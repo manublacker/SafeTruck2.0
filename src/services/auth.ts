@@ -16,6 +16,27 @@ const OAUTH_REDIRECT_PATH = 'auth/callback'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+/**
+ * Traduce los mensajes de error crudos (en inglés) de Supabase Auth a español.
+ * Si no reconoce el mensaje devuelve un fallback genérico en vez del texto técnico.
+ */
+export function authErrorMessage(e: unknown): string {
+  const raw = (e as { message?: string })?.message ?? ''
+  const msg = raw.toLowerCase()
+  if (msg.includes('invalid login credentials')) return 'Email o contraseña incorrectos.'
+  if (msg.includes('email not confirmed')) return 'Tenés que confirmar tu email antes de ingresar.'
+  if (msg.includes('user already registered')) return 'Ya existe una cuenta con ese email.'
+  if (msg.includes('auth session missing')) return 'El enlace expiró o no es válido. Pedí uno nuevo.'
+  if (msg.includes('token has expired') || msg.includes('otp_expired')) return 'El código expiró. Pedí uno nuevo.'
+  if (msg.includes('invalid') && msg.includes('token')) return 'El código ingresado no es válido.'
+  if (msg.includes('password should be at least')) return `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`
+  if (msg.includes('for security purposes') || msg.includes('rate limit') || msg.includes('too many')) {
+    return 'Demasiados intentos. Esperá unos segundos y probá de nuevo.'
+  }
+  if (msg.includes('network') || msg.includes('failed to fetch')) return 'Sin conexión. Revisá tu internet y reintentá.'
+  return raw || 'Ocurrió un error. Intentá de nuevo.'
+}
+
 /** Cantidad de dígitos numéricos que componen un CUIT argentino. */
 const CUIT_DIGIT_COUNT = 11
 

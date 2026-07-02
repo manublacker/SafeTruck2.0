@@ -11,7 +11,7 @@ import { registerForPushNotifications } from '../../src/services/push'
 import {
   isValidEmail, isValidPassword, resendSignupOtp,
   signUpWithEmail, verifySignupOtp,
-  MIN_PASSWORD_LENGTH, OTP_LENGTH,
+  MIN_PASSWORD_LENGTH, OTP_LENGTH, authErrorMessage,
 } from '../../src/services/auth'
 import { OTP_RESEND_COOLDOWN_SECONDS } from '../../src/constants/register'
 
@@ -74,7 +74,7 @@ export default function RegisterScreen() {
         setResendIn(OTP_RESEND_COOLDOWN_SECONDS)
         setStep(2)
       } catch (e: any) {
-        setErrors({ general: e.message ?? 'Error al crear la cuenta' })
+        setErrors({ general: authErrorMessage(e) })
       } finally {
         setLoading(false)
       }
@@ -109,7 +109,7 @@ export default function RegisterScreen() {
       void registerForPushNotifications()
       router.replace('/(tabs)/')
     } catch (e: any) {
-      setErrors({ otp: e.message ?? 'Código inválido' })
+      setErrors({ otp: authErrorMessage(e) })
     } finally {
       setLoading(false)
     }
@@ -121,7 +121,7 @@ export default function RegisterScreen() {
       await resendSignupOtp(form.email)
       setResendIn(OTP_RESEND_COOLDOWN_SECONDS)
     } catch (e: any) {
-      setErrors({ otp: e.message ?? 'No se pudo reenviar' })
+      setErrors({ otp: authErrorMessage(e) })
     }
   }
 

@@ -4,7 +4,7 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { isValidEmail, sendPasswordReset } from '../../src/services/auth'
+import { isValidEmail, sendPasswordReset, authErrorMessage } from '../../src/services/auth'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 
@@ -24,7 +24,7 @@ export default function ForgotPasswordScreen() {
     setError(null)
     setLoading(true)
     try { await sendPasswordReset(email); setSent(true) }
-    catch (e: any) { setError(e.message ?? 'No se pudo enviar el email') }
+    catch (e: any) { setError(authErrorMessage(e)) }
     finally { setLoading(false) }
   }
 

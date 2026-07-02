@@ -7,7 +7,7 @@ import { Alert } from '../../components/AppAlert'
 import { Ionicons, AntDesign } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../src/services/supabase'
-import { signInWithGoogle } from '../../src/services/auth'
+import { signInWithGoogle, authErrorMessage } from '../../src/services/auth'
 import { registerForPushNotifications } from '../../src/services/push'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
@@ -50,7 +50,7 @@ export default function LoginScreen() {
         router.replace('/(tabs)/')
       }
     } catch (e: any) {
-      Alert.alert('Error al ingresar', e.message)
+      Alert.alert('Error al ingresar', authErrorMessage(e))
     } finally {
       setLoading(false)
     }
@@ -61,7 +61,7 @@ export default function LoginScreen() {
     try {
       await signInWithGoogle()
     } catch (e: any) {
-      Alert.alert('Error con Google', e.message)
+      Alert.alert('Error con Google', authErrorMessage(e))
     } finally {
       setLoadingGoogle(false)
     }
