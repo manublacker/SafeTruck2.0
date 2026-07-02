@@ -17,6 +17,7 @@ import {
 } from "@/services/api";
 import type { AdminPage } from "./AdminSidebar";
 import { Icons } from "./DashboardIcons";
+import ConfirmDialog from "./ConfirmDialog";
 
 const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
 const SERVICE_WARN_DAYS = 30;
@@ -431,6 +432,7 @@ function TruckHistoryPanel({
   const { showToast } = useToast();
   const [records, setRecords] = useState<MaintenanceRecord[] | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -499,7 +501,7 @@ function TruckHistoryPanel({
                       className="st-btn-danger"
                       style={{ marginTop: 10, padding: "6px 12px", fontSize: "0.8rem" }}
                       disabled={deletingId === m.id}
-                      onClick={() => handleDelete(m.id)}
+                      onClick={() => setConfirmId(m.id)}
                     >
                       {deletingId === m.id ? "Eliminando…" : "Eliminar"}
                     </button>
@@ -511,6 +513,18 @@ function TruckHistoryPanel({
         </div>
       </div>
       <style>{`@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+      {confirmId !== null && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ConfirmDialog
+            title="Eliminar registro"
+            message="Se eliminará permanentemente este registro de mantenimiento (costo, taller y notas). Esta acción no se puede deshacer."
+            confirmLabel="Eliminar"
+            destructive
+            onConfirm={() => { const id = confirmId; setConfirmId(null); void handleDelete(id); }}
+            onCancel={() => setConfirmId(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }
