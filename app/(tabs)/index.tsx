@@ -1271,7 +1271,7 @@ export default function MapScreen() {
       try {
         await fetch(`${BACKEND}/reports`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { ...headers, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             lat: incidentLocation.lat,
             lng: incidentLocation.lng,

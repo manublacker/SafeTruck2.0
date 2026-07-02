@@ -72,11 +72,15 @@ app.post('/route', async (req, res) => {
 // próxima ruta. La capa VISUAL (st_incidents) va aparte, directo a Supabase.
 // Lógica SQL: migración 003_denuncia_penalty_pgr.sql.
 // ────────────────────────────────────────────────────────────────────────────
-app.post('/reports', async (req, res) => {
+app.post('/reports', authMiddleware, async (req, res) => {
   try {
     const { lat, lng, type, trip_id } = req.body
     if (lat == null || lng == null)
       return res.status(400).json({ error: 'lat y lng requeridos' })
+    // Rango válido de coordenadas: sin esto se podía denunciar cualquier punto.
+    if (typeof lat !== 'number' || typeof lng !== 'number' ||
+        lat < -90 || lat > 90 || lng < -180 || lng > 180)
+      return res.status(400).json({ error: 'coordenadas fuera de rango' })
     // El sistema de peso sólo distingue 'multa' (negativo) / 'sin_problemas'.
     // Toda denuncia del modal es negativa => 'multa'. El tipo concreto (control,
     // accidente, etc.) se guarda como nota.
