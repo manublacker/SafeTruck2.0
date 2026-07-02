@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { login as apiLogin, forgotPassword } from "@/services/authApi";
+import { login as apiLogin, forgotPassword, authErrorMessage } from "@/services/authApi";
 import safeTruckLogo from "@/assets/logo_safetruck.png";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -15,15 +15,18 @@ const Login = () => {
   const [forgotMode, setForgotMode] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     const newErrors: typeof errors = {};
     if (!email.trim()) newErrors.email = "El email es requerido";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "Email inválido";
     if (!password) newErrors.password = "La contraseña es requerida";
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
+      setLoading(true);
       try {
         const res = await apiLogin({ email, password });
         login(res.token, res.user);
@@ -31,7 +34,9 @@ const Login = () => {
         else localStorage.removeItem("safetruck_last_email");
         navigate("/dashboard");
       } catch (err) {
-        setErrors({ email: err instanceof Error ? err.message : "Error al iniciar sesión." });
+        setErrors({ email: authErrorMessage(err) });
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -44,7 +49,7 @@ const Login = () => {
       await forgotPassword(email);
       setForgotSent(true);
     } catch (err) {
-      setErrors({ email: err instanceof Error ? err.message : "Error al enviar el email." });
+      setErrors({ email: authErrorMessage(err) });
     } finally {
       setForgotLoading(false);
     }
@@ -152,8 +157,8 @@ const Login = () => {
                 <button type="button" onClick={() => setForgotMode(true)} className="auth-link" style={{ fontSize: "0.875rem", background: "none", border: "none", cursor: "pointer", font: "inherit" }}>¿Olvidaste tu contraseña?</button>
               </div>
 
-              <button type="submit" className="auth-btn" style={{ marginTop: "0.5rem" }}>
-                Iniciar sesión
+              <button type="submit" className="auth-btn" style={{ marginTop: "0.5rem" }} disabled={loading}>
+                {loading ? "Ingresando…" : "Iniciar sesión"}
               </button>
             </form>
 

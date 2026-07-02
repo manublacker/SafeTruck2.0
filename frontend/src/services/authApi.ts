@@ -3,6 +3,25 @@ import type { AuthResponse, RegisterPayload, LoginPayload } from "@/types/auth";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
+/**
+ * Traduce los mensajes crudos (en inglés) de Supabase Auth a español, para no
+ * mostrar texto técnico al usuario.
+ */
+export function authErrorMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : "";
+  const msg = raw.toLowerCase();
+  if (msg.includes("invalid login credentials")) return "Email o contraseña incorrectos.";
+  if (msg.includes("email not confirmed")) return "Tenés que confirmar tu email antes de ingresar.";
+  if (msg.includes("user already registered")) return "Ya existe una cuenta con ese email.";
+  if (msg.includes("auth session missing")) return "El enlace expiró o no es válido. Pedí uno nuevo.";
+  if (msg.includes("token has expired") || msg.includes("otp_expired")) return "El código expiró. Pedí uno nuevo.";
+  if (msg.includes("invalid") && msg.includes("token")) return "El código ingresado no es válido.";
+  if (msg.includes("for security purposes") || msg.includes("rate limit") || msg.includes("too many"))
+    return "Demasiados intentos. Esperá unos segundos y probá de nuevo.";
+  if (msg.includes("failed to fetch") || msg.includes("network")) return "Sin conexión. Revisá tu internet y reintentá.";
+  return raw || "Ocurrió un error. Intentá de nuevo.";
+}
+
 export async function fetchUserProfile(
   token: string,
   body: Record<string, unknown> = {},
