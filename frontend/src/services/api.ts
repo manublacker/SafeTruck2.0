@@ -19,6 +19,8 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
 const TOKEN_KEY = "safetruck_token";
 
+const JSON_HEADERS = { "Content-Type": "application/json" } as const;
+
 export class SubscriptionRequiredError extends Error {
   constructor() {
     super("subscription_required");
@@ -70,35 +72,61 @@ async function tryRefreshSession(): Promise<boolean> {
   }
 }
 
-async function handleResponse<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    if (res.status === 401) {
-      const refreshed = await tryRefreshSession();
-      if (!refreshed) _onUnauthorized?.();
-    }
-    if (res.status === 402) throw new SubscriptionRequiredError();
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+// Saca un mensaje legible del cuerpo { error } del backend (o cae al texto/status).
+async function errorMessage(res: Response): Promise<string> {
+  const text = await res.text().catch(() => "");
+  try {
+    const j = JSON.parse(text) as { error?: string };
+    if (j?.error) return j.error;
+  } catch { /* no era JSON */ }
+  return text || `HTTP ${res.status}: ${res.statusText}`;
+}
+
+// Fetch al backend adjuntando el token. Ante un 401, refresca la sesión UNA vez
+// y REINTENTA el request original (volver de MercadoPago o una sesión inactiva
+// puede vencer el JWT cacheado; si el refresh_token sigue vivo, la primera acción
+// no tiene por qué fallar). Reconstruye los headers en cada intento para que el
+// reintento use el token nuevo.
+async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const build = (): RequestInit => ({
+    ...init,
+    headers: { ...(init.headers ?? {}), ...authHeaders() },
+  });
+  let res = await fetch(`${BASE_URL}${path}`, build());
+  if (res.status === 401 && (await tryRefreshSession())) {
+    res = await fetch(`${BASE_URL}${path}`, build());
   }
-  return res.json() as Promise<T>;
+  return res;
+}
+
+// apiFetch + manejo uniforme de estados: 401 (tras el reintento) → logout;
+// 402 → paywall; cualquier otro !ok → Error con el mensaje humano del backend.
+// Devuelve el JSON parseado (o undefined en 204 No Content).
+async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await apiFetch(path, init);
+  if (!res.ok) {
+    if (res.status === 401) _onUnauthorized?.();
+    if (res.status === 402) throw new SubscriptionRequiredError();
+    throw new Error(await errorMessage(res));
+  }
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
 }
 
 // ── POST /api/routes ──────────────────────────────────────────
 // Calcula la ruta óptima para un camión entre dos puntos.
 export async function calculateRoute(payload: RouteRequest): Promise<RouteResponse> {
-  const res = await fetch(`${BASE_URL}/api/routes`, {
+  return apiRequest<RouteResponse>("/api/routes", {
     method:  "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
+    headers: JSON_HEADERS,
     body:    JSON.stringify(payload),
   });
-  return handleResponse<RouteResponse>(res);
 }
 
 // ── GET /api/health ───────────────────────────────────────────
 // Verifica que el backend y la base de datos estén operativos.
 export async function checkHealth(): Promise<HealthResponse> {
-  const res = await fetch(`${BASE_URL}/api/health`);
-  return handleResponse<HealthResponse>(res);
+  return apiRequest<HealthResponse>("/api/health");
 }
 
 // ── GET /api/search?q=<query> ─────────────────────────────────
@@ -106,19 +134,15 @@ export async function checkHealth(): Promise<HealthResponse> {
 // Devuelve hasta 10 resultados ordenados por score.
 export async function searchStreets(query: string): Promise<SearchResult[]> {
   if (!query || query.trim().length < 2) return [];
-  const res = await fetch(
-    `${BASE_URL}/api/search?q=${encodeURIComponent(query.trim())}`,
-    { headers: authHeaders() }
+  const data = await apiRequest<{ results: SearchResult[] }>(
+    `/api/search?q=${encodeURIComponent(query.trim())}`,
   );
-  const data = await handleResponse<{ results: SearchResult[] }>(res);
   return data.results ?? [];
 }
 
 // ─────────────────────────────────────────────────────────────
 // FLOTA — Trucks, Drivers y la asignación entre ambos
 // ─────────────────────────────────────────────────────────────
-
-const JSON_CONTENT_TYPE = { "Content-Type": "application/json" } as const;
 
 type TruckCreate = Partial<Omit<Truck, "id" | "created_at" | "driver">>;
 type TruckUpdate = Partial<Omit<Truck, "id" | "created_at">>;
@@ -128,97 +152,65 @@ type DriverUpdate = Partial<Omit<Driver, "id" | "created_at">>;
 
 // ── Trucks ────────────────────────────────────────────────────
 export async function fetchTrucks(): Promise<Truck[]> {
-  const res = await fetch(`${BASE_URL}/api/trucks`, { headers: authHeaders() });
-  return handleResponse<Truck[]>(res);
+  return apiRequest<Truck[]>("/api/trucks");
 }
 
 export async function createTruck(data: TruckCreate): Promise<Truck> {
-  const res = await fetch(`${BASE_URL}/api/trucks`, {
+  return apiRequest<Truck>("/api/trucks", {
     method:  "POST",
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    headers: JSON_HEADERS,
     body:    JSON.stringify(data),
   });
-  return handleResponse<Truck>(res);
 }
 
 export async function updateTruck(id: number, data: TruckUpdate): Promise<Truck> {
-  const res = await fetch(`${BASE_URL}/api/trucks/${id}`, {
+  return apiRequest<Truck>(`/api/trucks/${id}`, {
     method:  "PATCH",
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    headers: JSON_HEADERS,
     body:    JSON.stringify(data),
   });
-  return handleResponse<Truck>(res);
 }
 
 export async function deleteTruck(id: number): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/trucks/${id}`, {
-    method:  "DELETE",
-    headers: authHeaders(),
-  });
-  if (!res.ok) {
-    if (res.status === 401) await Promise.resolve();
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
-  }
+  await apiRequest<void>(`/api/trucks/${id}`, { method: "DELETE" });
 }
 
 // ── Drivers ───────────────────────────────────────────────────
 export async function fetchDrivers(): Promise<Driver[]> {
-  const res = await fetch(`${BASE_URL}/api/drivers`, { headers: authHeaders() });
-  return handleResponse<Driver[]>(res);
+  return apiRequest<Driver[]>("/api/drivers");
 }
 
 export async function createDriver(data: DriverCreate): Promise<Driver> {
-  const res = await fetch(`${BASE_URL}/api/drivers`, {
+  return apiRequest<Driver>("/api/drivers", {
     method:  "POST",
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    headers: JSON_HEADERS,
     body:    JSON.stringify(data),
   });
-  return handleResponse<Driver>(res);
 }
 
 export async function updateDriver(id: number, data: DriverUpdate): Promise<Driver> {
-  const res = await fetch(`${BASE_URL}/api/drivers/${id}`, {
+  return apiRequest<Driver>(`/api/drivers/${id}`, {
     method:  "PATCH",
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    headers: JSON_HEADERS,
     body:    JSON.stringify(data),
   });
-  return handleResponse<Driver>(res);
 }
 
 export async function deleteDriver(id: number): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/drivers/${id}`, {
-    method:  "DELETE",
-    headers: authHeaders(),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
-  }
+  await apiRequest<void>(`/api/drivers/${id}`, { method: "DELETE" });
 }
 
 // ── Asignación truck ↔ driver ─────────────────────────────────
 export async function assignDriver(truckId: number, driverId: number): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/truck-drivers`, {
+  await apiRequest<void>("/api/truck-drivers", {
     method:  "POST",
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    headers: JSON_HEADERS,
     body:    JSON.stringify({ truck_id: truckId, driver_id: driverId }),
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
-  }
 }
 
 export async function unassignDriver(truckId: number): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/truck-drivers/${truckId}`, {
-    method:  "DELETE",
-    headers: authHeaders(),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
-  }
+  await apiRequest<void>(`/api/truck-drivers/${truckId}`, { method: "DELETE" });
 }
 
 // ── Billing / MercadoPago ──────────────────────────────────────────
@@ -228,16 +220,14 @@ export async function unassignDriver(truckId: number): Promise<void> {
  * El llamador debe hacer window.location.href = url para redirigir al usuario.
  */
 export async function startCheckout(plan: string): Promise<string> {
-  const res = await fetch(`${BASE_URL}/api/billing/checkout`, {
+  const data = await apiRequest<{ url: string }>("/api/billing/checkout", {
     method:  "POST",
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    headers: JSON_HEADERS,
     // returnUrl tells the backend where to redirect after MercadoPago checkout,
     // so it works correctly both in local dev and in production.
     body:    JSON.stringify({ plan, returnUrl: window.location.origin }),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
-  return (data as { url: string }).url;
+  return data.url;
 }
 
 /**
@@ -248,14 +238,11 @@ export async function startCheckout(plan: string): Promise<string> {
 export async function confirmCheckout(
   plan: string | null
 ): Promise<{ subscription: any; confirmed: boolean }> {
-  const res = await fetch(`${BASE_URL}/api/billing/confirm`, {
+  return apiRequest<{ subscription: any; confirmed: boolean }>("/api/billing/confirm", {
     method:  "POST",
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    headers: JSON_HEADERS,
     body:    JSON.stringify({ plan }),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
-  return data as { subscription: any; confirmed: boolean };
 }
 
 /**
@@ -266,12 +253,8 @@ export async function fetchSubscription(): Promise<{
   status: string;
   current_period_end: string | null;
 } | null> {
-  const res = await fetch(`${BASE_URL}/api/billing/subscription`, {
-    headers: authHeaders(),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
-  return (data as { subscription: any }).subscription;
+  const data = await apiRequest<{ subscription: any }>("/api/billing/subscription");
+  return data.subscription;
 }
 
 // ── Invitations ────────────────────────────────────────────────────────────────
@@ -289,39 +272,27 @@ export interface DriverInvitation {
 }
 
 export async function createInvitation(): Promise<{ code: string; expires_at: string }> {
-  const res = await fetch(`${BASE_URL}/api/invitations`, {
-    method: 'POST',
-    headers: authHeaders(),
-  });
-  const data = await handleResponse<{ success: boolean; invitation: DriverInvitation }>(res);
+  const data = await apiRequest<{ success: boolean; invitation: DriverInvitation }>(
+    "/api/invitations",
+    { method: "POST" },
+  );
   return data.invitation;
 }
 
 export async function deleteInvitation(id: string): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/invitations/${id}`, {
-    method: "DELETE",
-    headers: authHeaders(),
-  });
-  if (!res.ok && res.status !== 204) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
-  }
+  await apiRequest<void>(`/api/invitations/${id}`, { method: "DELETE" });
 }
 
 export async function bulkCreateInvitations(quantity: number): Promise<{ code: string; expires_at: string }[]> {
-  const res = await fetch(`${BASE_URL}/api/invitations/bulk`, {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ quantity }),
+  return apiRequest<{ code: string; expires_at: string }[]>("/api/invitations/bulk", {
+    method:  "POST",
+    headers: JSON_HEADERS,
+    body:    JSON.stringify({ quantity }),
   });
-  return handleResponse<{ code: string; expires_at: string }[]>(res);
 }
 
 export async function fetchInvitations(): Promise<DriverInvitation[]> {
-  const res = await fetch(`${BASE_URL}/api/invitations`, {
-    headers: authHeaders(),
-  });
-  return handleResponse<DriverInvitation[]>(res);
+  return apiRequest<DriverInvitation[]>("/api/invitations");
 }
 
 // ── Assigned Trips ─────────────────────────────────────────────────────────────
@@ -354,10 +325,7 @@ export interface AssignedTrip {
 }
 
 export async function fetchAssignedTrips(): Promise<AssignedTrip[]> {
-  const res = await fetch(`${BASE_URL}/api/assigned-trips`, {
-    headers: authHeaders(),
-  });
-  return handleResponse<AssignedTrip[]>(res);
+  return apiRequest<AssignedTrip[]>("/api/assigned-trips");
 }
 
 export async function createAssignedTrip(data: {
@@ -372,22 +340,15 @@ export async function createAssignedTrip(data: {
   route: unknown;
   scheduled_at?: string;
 }): Promise<AssignedTrip> {
-  const res = await fetch(`${BASE_URL}/api/assigned-trips`, {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+  return apiRequest<AssignedTrip>("/api/assigned-trips", {
+    method:  "POST",
+    headers: JSON_HEADERS,
+    body:    JSON.stringify(data),
   });
-  return handleResponse<AssignedTrip>(res);
 }
 
 export async function deleteAssignedTrip(id: number | string): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/assigned-trips/${id}`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  });
-  if (!res.ok && res.status !== 204) {
-    await handleResponse(res); // lanza con el mensaje del backend
-  }
+  await apiRequest<void>(`/api/assigned-trips/${id}`, { method: "DELETE" });
 }
 
 // ── Driver Locations ───────────────────────────────────────────────────────────
@@ -402,10 +363,7 @@ export interface DriverLocation {
 }
 
 export async function fetchDriverLocations(): Promise<DriverLocation[]> {
-  const res = await fetch(`${BASE_URL}/api/locations`, {
-    headers: authHeaders(),
-  });
-  return handleResponse<DriverLocation[]>(res);
+  return apiRequest<DriverLocation[]>("/api/locations");
 }
 
 // ── Mantenimiento y Vencimientos ────────────────────────────────────────────
@@ -482,47 +440,33 @@ export interface MaintenanceAlerts {
 }
 
 export async function fetchMaintenance(): Promise<MaintenanceRecord[]> {
-  const res = await fetch(`${BASE_URL}/api/maintenance`, { headers: authHeaders() });
-  return handleResponse<MaintenanceRecord[]>(res);
+  return apiRequest<MaintenanceRecord[]>("/api/maintenance");
 }
 
 export async function fetchMaintenanceByTruck(truckId: number): Promise<MaintenanceRecord[]> {
-  const res = await fetch(`${BASE_URL}/api/maintenance/truck/${truckId}`, {
-    headers: authHeaders(),
-  });
-  return handleResponse<MaintenanceRecord[]>(res);
+  return apiRequest<MaintenanceRecord[]>(`/api/maintenance/truck/${truckId}`);
 }
 
 export async function fetchMaintenanceAlerts(): Promise<MaintenanceAlerts> {
-  const res = await fetch(`${BASE_URL}/api/maintenance/alerts`, { headers: authHeaders() });
-  return handleResponse<MaintenanceAlerts>(res);
+  return apiRequest<MaintenanceAlerts>("/api/maintenance/alerts");
 }
 
 export async function createMaintenance(data: MaintenanceCreate): Promise<MaintenanceRecord> {
-  const res = await fetch(`${BASE_URL}/api/maintenance`, {
+  return apiRequest<MaintenanceRecord>("/api/maintenance", {
     method:  "POST",
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    headers: JSON_HEADERS,
     body:    JSON.stringify(data),
   });
-  return handleResponse<MaintenanceRecord>(res);
 }
 
 export async function updateMaintenance(id: number, data: MaintenanceUpdate): Promise<MaintenanceRecord> {
-  const res = await fetch(`${BASE_URL}/api/maintenance/${id}`, {
+  return apiRequest<MaintenanceRecord>(`/api/maintenance/${id}`, {
     method:  "PATCH",
-    headers: { ...JSON_CONTENT_TYPE, ...authHeaders() },
+    headers: JSON_HEADERS,
     body:    JSON.stringify(data),
   });
-  return handleResponse<MaintenanceRecord>(res);
 }
 
 export async function deleteMaintenance(id: number): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/maintenance/${id}`, {
-    method:  "DELETE",
-    headers: authHeaders(),
-  });
-  if (!res.ok && res.status !== 204) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
-  }
+  await apiRequest<void>(`/api/maintenance/${id}`, { method: "DELETE" });
 }
