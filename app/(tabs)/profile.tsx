@@ -87,6 +87,7 @@ export default function ProfileScreen() {
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null)
   const [assignedTruck, setAssignedTruck]  = useState<AssignedTruck | null | undefined>(undefined)
   const [profileLoading, setProfileLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [editField, setEditField] = useState<null | 'name' | 'phone'>(null)
@@ -163,6 +164,14 @@ export default function ProfileScreen() {
   // de camión hecho en la web se ve sin reiniciar la app.
   useFocusEffect(useCallback(() => { void load({ silent: true }) }, [load]))
 
+  // Pull-to-refresh: recarga en segundo plano (sin blanquear el contenido) y
+  // usa su propio indicador para no confundirse con la carga inicial.
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await load({ silent: true })
+    setRefreshing(false)
+  }, [load])
+
   // Tiempo real: si la empresa cambió/quitó el camión, el backend emite
   // 'truck_update' y refrescamos al instante, igual que en el mapa.
   useRealtime(useCallback((e) => {
@@ -194,7 +203,7 @@ export default function ProfileScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: bgColor }}
       contentContainerStyle={{ padding: 18, paddingTop: insets.top + 14, paddingBottom: 60, width: '100%', maxWidth: 640, alignSelf: 'center' }}
-      refreshControl={<RefreshControl refreshing={profileLoading} onRefresh={load} tintColor={t.accent} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={t.accent} />}
     >
 
       {/* Eyebrow */}
