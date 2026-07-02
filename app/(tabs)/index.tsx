@@ -1181,6 +1181,8 @@ export default function MapScreen() {
   // (el setState aún no aplicó) y la ruta "salía de otro lado".
   const calculateRoute = async (destLat: number, destLng: number, originArg?: { lat: number; lng: number }) => {
     if (loading) return
+    // Durante una simulación no recalculamos: pisaría el recorrido en curso.
+    if (simRunning) return
     // Origen: el explícito, o la dirección elegida en "Salir desde…", o el GPS del chofer.
     const originPoint = originArg
       ?? (originOverride ? { lat: originOverride.lat, lng: originOverride.lng } : location)
@@ -1438,7 +1440,9 @@ export default function MapScreen() {
 
   // Tap en el mapa: fija destino y calcula ruta (igual que el mapClick de Leaflet)
   const handleMapPress = (e: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) => {
-    if (navMode) return
+    // No permitimos fijar un destino nuevo mientras se navega o se simula: pisaría
+    // la ruta en curso dejando el marcador "manejando" un recorrido invisible.
+    if (navMode || simRunning) return
     const { latitude, longitude } = e.nativeEvent.coordinate
     reverseGeocode(latitude, longitude).then(setSearchText)
     calculateRoute(latitude, longitude)
