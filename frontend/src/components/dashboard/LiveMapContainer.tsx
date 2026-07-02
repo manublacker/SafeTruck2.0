@@ -10,6 +10,8 @@ import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
 import { fetchDriverLocations, fetchAssignedTrips, calculateRoute, createAssignedTrip, SubscriptionRequiredError, type AssignedTrip } from "@/services/api";
 import { useRealtime, type RoutePathSegment } from "@/hooks/useRealtime";
+import { sameAssignedTrip } from "@/lib/tripFormat";
+import { reconcileById } from "@/lib/reconcile";
 import { useToast } from "@/components/Toast";
 
 const PANEL_PADDING = 12;
@@ -149,7 +151,9 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
   const refreshTrips = useCallback(async () => {
     try {
       const data = await fetchAssignedTrips();
-      setAssignedTrips(data);
+      // El polling (cada 30s) trae la lista completa; reconciliamos para no
+      // recrear todo el array cuando nada cambió (evita re-render del panel).
+      setAssignedTrips((prev) => reconcileById(prev, data, sameAssignedTrip));
     } catch { /* silencioso */ } finally {
       setTripsLoading(false);
     }

@@ -12,7 +12,17 @@ import {
   tripDate,
   formatDuration,
   csvEscape,
+  sameAssignedTrip,
 } from "@/lib/tripFormat";
+import { reconcileById } from "@/lib/reconcile";
+
+// Cache a nivel módulo (stale-while-revalidate), compartido por ambas instancias
+// de esta vista (pendientes/en curso y finalizados): `fetchAssignedTrips` trae
+// TODOS los viajes y cada instancia filtra por `statuses` en cliente. Al cambiar
+// de pestaña el componente se DESMONTA (Dashboard usa montaje condicional); sin
+// el cache, al volver arrancaría con skeleton y re-pediría toda la lista. Con el
+// cache se ve al instante lo último y se revalida en segundo plano.
+let cachedTrips: AssignedTrip[] | null = null;
 
 // ── Helpers de presentación ────────────────────────────────────────────────
 
@@ -41,8 +51,11 @@ interface Props {
 export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, onViewTrip, showSourceFilter = true, allowDelete = false }: Props) {
   const { showToast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState<AssignedTrip | null>(null);
-  const [trips, setTrips]     = useState<AssignedTrip[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [trips, setTrips]     = useState<AssignedTrip[]>(cachedTrips ?? []);
+  // `loading` = primera carga (skeleton, sin cache). `refreshing` = revalidación
+  // en segundo plano (sólo alimenta el estado del botón "Actualizar").
+  const [loading, setLoading] = useState(cachedTrips === null);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError]     = useState("");
   const [selected, setSelected] = useState<AssignedTrip | null>(null);
 
@@ -53,15 +66,24 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
   const [to,   setTo]   = useState("");
 
   const loadTrips = useCallback(async () => {
-    setLoading(true);
     setError("");
+    // Con cache mostramos lo que hay y revalidamos sin tapar la tabla; sin cache
+    // (primera carga) sí mostramos el skeleton.
+    if (cachedTrips === null) setLoading(true);
+    else setRefreshing(true);
     try {
       const data = await fetchAssignedTrips();
-      setTrips(data);
+      // Reconciliamos contra lo que ya teníamos (el cache refleja el estado
+      // actual): conservamos los viajes sin cambios y sólo sumamos/actualizamos
+      // los distintos, en vez de reemplazar toda la lista.
+      const merged = reconcileById(cachedTrips ?? [], data, sameAssignedTrip);
+      cachedTrips = merged;
+      setTrips(merged);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar el historial.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -80,6 +102,8 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
     try {
       await deleteAssignedTrip(trip.id);
       setTrips((prev) => prev.filter((t) => t.id !== trip.id));
+      // Reflejamos el borrado en el cache para que no reaparezca al remontar.
+      if (cachedTrips) cachedTrips = cachedTrips.filter((t) => t.id !== trip.id);
       setSelected(null);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "No se pudo eliminar el viaje.", "error");
@@ -237,9 +261,9 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
             className="st-btn-secondary st-btn-refresh-mobile"
             style={{ minWidth: 134 }}
             onClick={() => void loadTrips()}
-            disabled={loading}
+            disabled={loading || refreshing}
           >
-            {loading ? "Actualizando…" : "Actualizar"}
+            {(loading || refreshing) ? "Actualizando…" : "Actualizar"}
           </button>
         </div>
       </div>

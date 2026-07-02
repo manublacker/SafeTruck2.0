@@ -15,11 +15,38 @@ import {
   type MaintenanceTruckAlert,
   type MaintenanceLicenseAlert,
 } from "@/services/api";
+import { reconcileById } from "@/lib/reconcile";
 import type { AdminPage } from "./AdminSidebar";
 import { Icons } from "./DashboardIcons";
 
 const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
 const SERVICE_WARN_DAYS = 30;
+
+// Cache a nivel módulo (stale-while-revalidate). Al cambiar de pestaña este
+// componente se DESMONTA (Dashboard usa montaje condicional); sin el cache,
+// al volver arrancaría con "Cargando mantenimiento…" y re-pediría todo. Con el
+// cache se ve al instante lo último conocido y el fetch de fondo lo reconcilia.
+let cachedAlerts: MaintenanceAlerts | null = null;
+let cachedRecords: MaintenanceRecord[] | null = null;
+
+// Igualdad por los campos que muestra la vista. Permite conservar la referencia
+// de un registro que no cambió al reconciliar (ver `reconcileById`).
+function sameMaintenanceRecord(a: MaintenanceRecord, b: MaintenanceRecord): boolean {
+  return (
+    a.truck_id === b.truck_id &&
+    a.tipo === b.tipo &&
+    a.fecha === b.fecha &&
+    a.km_al_service === b.km_al_service &&
+    a.costo === b.costo &&
+    a.taller === b.taller &&
+    a.notas === b.notas &&
+    a.proximo_km === b.proximo_km &&
+    a.proximo_fecha === b.proximo_fecha &&
+    a.created_at === b.created_at &&
+    a.truck.name === b.truck.name &&
+    a.truck.patente === b.truck.patente
+  );
+}
 
 // ── Catálogo de tipos de mantenimiento ──────────────────────────────────────
 
@@ -85,9 +112,11 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
   const { showToast } = useToast();
   const { user, refreshTrucks } = useAuth();
   const trucks = user?.trucks ?? [];
-  const [alerts, setAlerts]   = useState<MaintenanceAlerts | null>(null);
-  const [records, setRecords] = useState<MaintenanceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [alerts, setAlerts]   = useState<MaintenanceAlerts | null>(cachedAlerts);
+  const [records, setRecords] = useState<MaintenanceRecord[]>(cachedRecords ?? []);
+  // Sólo bloqueamos con el spinner en la PRIMERA carga (sin cache). Al volver a
+  // la pestaña ya hay datos cacheados → se muestran y se revalida en segundo plano.
+  const [loading, setLoading] = useState(cachedRecords === null);
   const [error, setError]     = useState("");
   const [subscriptionError, setSubscriptionError] = useState(false);
 
@@ -103,8 +132,13 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
         fetchMaintenanceAlerts(),
         fetchMaintenance(),
       ]);
+      // Reconciliamos los registros contra el cache (conserva referencias de los
+      // que no cambiaron); los alerts son un objeto agregado → se reemplaza.
+      const mergedRecords = reconcileById(cachedRecords ?? [], r, sameMaintenanceRecord);
+      cachedAlerts = a;
+      cachedRecords = mergedRecords;
       setAlerts(a);
-      setRecords(r);
+      setRecords(mergedRecords);
     } catch (err) {
       if (err instanceof SubscriptionRequiredError) setSubscriptionError(true);
       else setError(err instanceof Error ? err.message : "Error al cargar mantenimiento.");

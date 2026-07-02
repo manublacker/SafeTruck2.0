@@ -3,6 +3,8 @@
 // historial (`TripHistoryView`) y el modal de detalle (`TripDetailModal`) — antes
 // estaban duplicados — y para poder testearlos en aislamiento.
 
+import type { AssignedTrip } from '@/services/api'
+
 export type TripStatus =
   | 'pending'
   | 'accepted'
@@ -120,4 +122,33 @@ export function tripDate(t: DateInput): Date | null {
   if (!iso) return null
   const d = new Date(iso)
   return isNaN(d.getTime()) ? null : d
+}
+
+/**
+ * Igualdad de dos viajes por los campos que las vistas observan. Se usa con
+ * `reconcileById` para conservar la referencia de un viaje que no cambió. `path`
+ * queda fuera: se fija al crear el viaje y no interviene en la tabla ni en el
+ * panel de próximos.
+ */
+export function sameAssignedTrip(a: AssignedTrip, b: AssignedTrip): boolean {
+  return (
+    a.status === b.status &&
+    a.driver_id === b.driver_id &&
+    a.driver_nombre === b.driver_nombre &&
+    a.truck_id === b.truck_id &&
+    a.truck_patente === b.truck_patente &&
+    a.origin_label === b.origin_label &&
+    a.destination_label === b.destination_label &&
+    a.origin_lat === b.origin_lat &&
+    a.origin_lon === b.origin_lon &&
+    a.destination_lat === b.destination_lat &&
+    a.destination_lon === b.destination_lon &&
+    a.distance_m === b.distance_m &&
+    a.duration_min === b.duration_min &&
+    a.scheduled_at === b.scheduled_at &&
+    a.started_at === b.started_at &&
+    a.completed_at === b.completed_at &&
+    a.trip_source === b.trip_source &&
+    a.created_at === b.created_at
+  )
 }
