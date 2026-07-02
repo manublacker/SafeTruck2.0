@@ -24,7 +24,7 @@ function fmtDateTime(iso: string | null | undefined): string {
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleString("es-AR", {
     day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit", hour12: true,
+    hour: "2-digit", minute: "2-digit", hour12: false,
   });
 }
 
