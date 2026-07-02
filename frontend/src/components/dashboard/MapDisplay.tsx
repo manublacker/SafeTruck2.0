@@ -68,6 +68,18 @@ interface Props {
   destinationPin?: MapPin | null;
 }
 
+// Escapa texto antes de meterlo en el HTML de Leaflet (divIcon/popup). Sin esto,
+// el nombre del conductor o la patente (que el propio conductor controla) podían
+// inyectar <script>/onerror y ejecutar código en la sesión del admin (XSS).
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildDestinationIcon(): L.DivIcon {
   return L.divIcon({
     className: "",
@@ -83,7 +95,7 @@ function buildDriverIcon(label: string): L.DivIcon {
     html: `<div style="background:#0d47a1;color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid white;box-shadow:0 1px 4px rgba(16,24,40,0.18);white-space:nowrap;position:relative;">
       🚛
       <div style="position:absolute;top:-21px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,0.96);color:#0f1b2d;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;white-space:nowrap;pointer-events:none;border:1px solid rgba(15,27,45,0.14);">
-        ${label}
+        ${escapeHtml(label)}
       </div>
     </div>`,
     iconSize: [36, 36],
@@ -219,7 +231,7 @@ export default function MapDisplay({ routeResponse, driverLocations = [], driver
           zIndexOffset: 1000,
         })
           .addTo(map)
-          .bindPopup(`<strong>${loc.driver_name ?? "Conductor"}</strong><br/>${loc.truck_plate ?? ""}`);
+          .bindPopup(`<strong>${escapeHtml(loc.driver_name ?? "Conductor")}</strong><br/>${escapeHtml(loc.truck_plate ?? "")}`);
         driverMarkersRef.current.set(loc.driver_app_user_id, marker);
       }
     });
@@ -329,7 +341,7 @@ export default function MapDisplay({ routeResponse, driverLocations = [], driver
     originPinRef.current = L.marker([originPin.lat, originPin.lon], {
       icon: buildOriginIcon(),
       title: originPin.label,
-    }).addTo(map).bindPopup(`<strong>Origen</strong><br/>${originPin.label}`);
+    }).addTo(map).bindPopup(`<strong>Origen</strong><br/>${escapeHtml(originPin.label)}`);
     map.flyTo([originPin.lat, originPin.lon], 14, { duration: 0.8 });
   }, [originPin]);
 
@@ -343,7 +355,7 @@ export default function MapDisplay({ routeResponse, driverLocations = [], driver
     destPinRef.current = L.marker([destinationPin.lat, destinationPin.lon], {
       icon: buildDestinationIcon(),
       title: destinationPin.label,
-    }).addTo(map).bindPopup(`<strong>Destino</strong><br/>${destinationPin.label}`);
+    }).addTo(map).bindPopup(`<strong>Destino</strong><br/>${escapeHtml(destinationPin.label)}`);
     // Si ya hay origen, hacer fitBounds entre los dos puntos
     if (originPin) {
       map.flyToBounds(
@@ -397,14 +409,14 @@ export default function MapDisplay({ routeResponse, driverLocations = [], driver
       title: origin.label,
     })
       .addTo(map)
-      .bindPopup(`<strong>Origen</strong><br/>${origin.label}`);
+      .bindPopup(`<strong>Origen</strong><br/>${escapeHtml(origin.label)}`);
 
     markerRef.current = L.marker([destination.lat, destination.lon], {
       icon: buildDestinationIcon(),
       title: destination.label,
     })
       .addTo(map)
-      .bindPopup(`<strong>Destino</strong><br/>${destination.label}`);
+      .bindPopup(`<strong>Destino</strong><br/>${escapeHtml(destination.label)}`);
 
     if (allPoints.length > 0) {
       map.fitBounds(L.latLngBounds(allPoints), {
