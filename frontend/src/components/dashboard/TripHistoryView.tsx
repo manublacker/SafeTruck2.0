@@ -52,20 +52,27 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
   const [from, setFrom] = useState("");
   const [to,   setTo]   = useState("");
 
-  const loadTrips = useCallback(async () => {
-    setLoading(true);
+  const loadTrips = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setError("");
     try {
       const data = await fetchAssignedTrips();
       setTrips(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al cargar el historial.");
+      if (!opts?.silent) setError(err instanceof Error ? err.message : "Error al cargar el historial.");
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => { void loadTrips(); }, [loadTrips]);
+
+  // Refresco periódico en segundo plano: sin esto, un viaje que el conductor
+  // inicia/completa seguía mostrándose con su estado viejo hasta refrescar a mano.
+  useEffect(() => {
+    const id = window.setInterval(() => { void loadTrips({ silent: true }); }, 30_000);
+    return () => window.clearInterval(id);
+  }, [loadTrips]);
 
   const reset = () => { setFilterDriver(""); setFilterStatus(""); setFilterSource(""); setFrom(""); setTo(""); };
 
