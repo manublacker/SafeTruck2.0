@@ -21,6 +21,18 @@ const PLAN_CONFIG: Record<string, { amount: number; title: string }> = {
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://safetruck20.vercel.app'
 
+// Devuelve returnUrl solo si comparte origen con nuestro frontend; si no, el default.
+function safeReturnUrl(returnUrl?: string): string {
+  if (!returnUrl) return FRONTEND_URL
+  try {
+    const u = new URL(returnUrl)
+    if (u.origin === new URL(FRONTEND_URL).origin) return returnUrl
+    // Permitimos localhost para el flujo de desarrollo.
+    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return returnUrl
+  } catch { /* URL inválida → default */ }
+  return FRONTEND_URL
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/billing/checkout
 // Crea una preferencia de pago en MercadoPago y devuelve la URL de pago.
@@ -36,7 +48,9 @@ router.post('/checkout', authMiddleware, async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'Plan inválido. Debe ser starter, pro o enterprise.' })
     }
 
-    const baseUrl = (returnUrl || FRONTEND_URL).replace(/\/$/, '')
+    // Solo aceptamos returnUrl si apunta a nuestro propio frontend; si no, caemos
+    // al default. Evita un open-redirect post-pago a un dominio arbitrario.
+    const baseUrl = safeReturnUrl(returnUrl).replace(/\/$/, '')
 
     const result = await preferenceClient.create({
       body: {
@@ -159,7 +173,13 @@ router.post('/webhook', async (req: Request, res: Response) => {
   const requestId = req.headers['x-request-id'] as string | undefined
   const secret    = process.env.MP_WEBHOOK_SECRET
 
-  if (secret && signature) {
+  // Si hay un secret configurado, la firma es OBLIGATORIA: antes, omitir el header
+  // x-signature salteaba toda la verificación HMAC y el body se procesaba igual.
+  if (secret) {
+    if (!signature) {
+      console.error('[webhook] Falta la firma x-signature')
+      return res.status(401).json({ error: 'Firma requerida' })
+    }
     const parts  = Object.fromEntries(signature.split(',').map(p => p.trim().split('=')))
     const ts     = parts['ts']
     const v1     = parts['v1']
