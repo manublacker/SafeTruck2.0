@@ -207,11 +207,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
     removeToken();
-    setTokenState(null);
-    setUser(null);
-    setDrivers([]);
-    profileLoaded.current = false;
-    setProfileFetched(false);
+    // Navegación DURA a /login (no SPA): además de ir al login, descarta TODO el
+    // estado en memoria — incluidos los caches a nivel módulo del dashboard
+    // (posiciones, viajes, mantenimiento). Con el logout SPA esos caches
+    // sobrevivían y, si un segundo usuario iniciaba sesión en la misma pestaña,
+    // podía ver por un instante datos de la empresa anterior.
+    window.location.href = "/login";
   }, []);
 
   useEffect(() => {

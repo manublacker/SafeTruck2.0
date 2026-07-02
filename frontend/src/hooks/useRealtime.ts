@@ -63,6 +63,10 @@ export function useRealtime(onEvent: (e: RealtimeEvent) => void): void {
     async function connect() {
       if (disposed) return;
       const { data } = await supabase.auth.getSession();
+      // El componente pudo desmontarse DURANTE el await (ej: cambio rápido de
+      // pestaña): sin este segundo chequeo se creaba un WebSocket que ya nadie
+      // cerraba (socket zombi haciendo setState sobre un componente muerto).
+      if (disposed) return;
       const token = data.session?.access_token;
       if (!token) { scheduleReconnect(); return; }
 
