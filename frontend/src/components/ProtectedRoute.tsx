@@ -1,9 +1,10 @@
 import { type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import Paywall from "@/components/Paywall";
 
 export default function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, authReady, logout } = useAuth();
+  const { user, authReady, profileFetched, logout } = useAuth();
 
   if (!authReady) {
     return (
@@ -30,6 +31,18 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
         </div>
       </div>
     );
+  }
+
+  // Gate de suscripción: sin plan activo no se entra al panel (paywall).
+  // - profileFetched: sólo bloqueamos si el perfil se leyó de verdad del backend
+  //   (si falló la carga, plan queda null pero NO bloqueamos, para no dejar afuera
+  //   a alguien que sí pagó cuando el backend está caído/lento).
+  // - Excepción: si volvés de un checkout exitoso (?billing=success), dejamos
+  //   montar el Dashboard para que confirme el pago y refresque el plan.
+  const returningFromCheckout =
+    new URLSearchParams(window.location.search).get("billing") === "success";
+  if (profileFetched && !user.plan && !returningFromCheckout) {
+    return <Paywall />;
   }
 
   return <>{children}</>;
