@@ -561,12 +561,12 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
         )}
       </div>
 
-      {/* Modal de creación: aísla la carga de datos del mapa interactivo */}
+      {/* Modal de creación: aísla la carga de datos del mapa interactivo.
+          No se cierra al tocar el backdrop: un click afuera (a veces sin
+          querer, al mover el mouse) borraba toda la ruta ya cargada. Se
+          cierra solo con la X o con Escape. */}
       {creatorOpen && (
-        <div
-          className="st-modal-backdrop"
-          onClick={(e) => { if (e.target === e.currentTarget) closeCreator(); }}
-        >
+        <div className="st-modal-backdrop">
           <div
             className="st-modal"
             style={{ maxWidth: 480, maxHeight: "88vh", overflowY: "auto", position: "relative" }}
