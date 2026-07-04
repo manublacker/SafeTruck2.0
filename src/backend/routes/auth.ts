@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { authMiddleware } from "../middleware/authMiddleware";
 import { supabase } from "../supabaseClient";
-import pool from "../db";
+import pool, { withTransaction } from "../db";
 
 const router = Router();
 
@@ -100,6 +100,96 @@ router.post("/profile", authMiddleware, async (req: Request, res: Response) => {
       trucks: [],
     },
   });
+});
+
+// POST /api/auth/independent-setup — Convierte la cuenta en camionero
+// independiente ("empresa de uno"): crea la fila de drivers con
+// user_id = app_user_id = el propio usuario. Con ese auto-vínculo el resto del
+// sistema funciona sin cambios: los viajes personales encuentran su fila de
+// drivers, la suscripción propia pasa el gate, la sala de WebSocket es la suya
+// y el camión activo sale de truck_drivers como siempre.
+// Idempotente: repetir la llamada reactiva el vínculo si estaba desactivado.
+router.post("/independent-setup", authMiddleware, async (req: Request, res: Response) => {
+  const user = req.user!;
+  const meta = user.user_metadata ?? {};
+  const fullName = ((req.body?.full_name ?? meta["full_name"]) as string | undefined)?.trim() || user.email;
+  const telefono = ((req.body?.telefono as string | undefined) ?? null)?.trim() || null;
+
+  try {
+    // Si ya está vinculado a una empresa ajena, no puede volverse independiente
+    // sin desvincularse antes (decisión explícita, no silenciosa).
+    const companyLink = await pool.query(
+      `SELECT id FROM drivers
+       WHERE app_user_id = $1 AND user_id <> $1 AND is_active = true
+       LIMIT 1`,
+      [user.id]
+    );
+    if (companyLink.rowCount) {
+      res.status(409).json({
+        error: "Tu cuenta ya está vinculada a una empresa. Pedile al administrador que te desvincule para usar SafeTruck como independiente.",
+      });
+      return;
+    }
+
+    // FK: drivers.user_id referencia a users(id).
+    await pool.query(
+      `INSERT INTO users (id, email, full_name, role)
+       VALUES ($1, $2, $3, 'independent')
+       ON CONFLICT (id) DO UPDATE
+         SET role      = 'independent',
+             full_name = COALESCE(users.full_name, EXCLUDED.full_name)`,
+      [user.id, user.email, fullName]
+    );
+
+    const driverId = await withTransaction(async (client) => {
+      const existing = await client.query<{ id: number }>(
+        "SELECT id FROM drivers WHERE user_id = $1 AND app_user_id = $1 LIMIT 1",
+        [user.id]
+      );
+      if (existing.rowCount) {
+        await client.query(
+          `UPDATE drivers
+           SET is_active = true, estado = 'Activo',
+               telefono = COALESCE($2, telefono), updated_at = NOW()
+           WHERE id = $1`,
+          [existing.rows[0].id, telefono]
+        );
+        return existing.rows[0].id;
+      }
+      const inserted = await client.query<{ id: number }>(
+        `INSERT INTO drivers (user_id, nombre, telefono, estado, is_active, app_user_id)
+         VALUES ($1, $2, $3, 'Activo', true, $1)
+         RETURNING id`,
+        [user.id, fullName, telefono]
+      );
+      return inserted.rows[0].id;
+    });
+
+    // Marcador explícito en profiles y user_metadata para que web y móvil
+    // distingan la cuenta sin heurísticas. No bloqueante: el vínculo en drivers
+    // ya quedó creado, que es lo que hace funcionar al resto del sistema.
+    // profiles.role requiere la migración 004 en Supabase.
+    const [profileRes, metaRes] = await Promise.allSettled([
+      supabase
+        .from("profiles")
+        .upsert({ id: user.id, role: "independent" }, { onConflict: "id" })
+        .then(({ error }) => { if (error) throw error; }),
+      supabase.auth.admin.updateUserById(user.id, {
+        user_metadata: { ...meta, role: "independent" },
+      }).then(({ error }) => { if (error) throw error; }),
+    ]);
+    if (profileRes.status === "rejected") {
+      console.error("[auth/independent-setup] profiles.role no actualizado:", profileRes.reason?.message ?? profileRes.reason);
+    }
+    if (metaRes.status === "rejected") {
+      console.error("[auth/independent-setup] user_metadata no actualizado:", metaRes.reason?.message ?? metaRes.reason);
+    }
+
+    res.status(201).json({ success: true, driver_id: driverId });
+  } catch (err: any) {
+    console.error("[auth/independent-setup]", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

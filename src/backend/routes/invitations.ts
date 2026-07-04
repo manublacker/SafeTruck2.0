@@ -93,6 +93,15 @@ router.post('/redeem', authMiddleware, async (req: Request, res: Response) => {
     await withTransaction(async (client) => {
       let driverId: number
 
+      // Si era independiente ("empresa de uno", drivers con user_id = app_user_id),
+      // desactivamos ese auto-vínculo: desde acá su acceso y sus viajes pasan a
+      // la empresa que lo invitó. Sus camiones y su historial quedan intactos.
+      await client.query(
+        `UPDATE drivers SET is_active = false, updated_at = NOW()
+         WHERE user_id = $1 AND app_user_id = $1 AND is_active = true`,
+        [driverUserId]
+      )
+
       if (invitation.driver_id) {
         // Invitación ligada a un conductor existente → solo linkeamos
         await client.query(

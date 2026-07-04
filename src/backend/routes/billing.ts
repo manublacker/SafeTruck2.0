@@ -14,6 +14,7 @@ const preferenceClient = new Preference(mp)
 const paymentClient    = new Payment(mp)
 
 const PLAN_CONFIG: Record<string, { amount: number; title: string }> = {
+  individual: { amount: 1, title: 'Plan Individual - SafeTruck' },
   starter:    { amount: 1, title: 'Plan Starter - SafeTruck' },
   pro:        { amount: 1, title: 'Plan Pro - SafeTruck' },
   enterprise: { amount: 1, title: 'Plan Enterprise - SafeTruck' },
@@ -45,7 +46,7 @@ router.post('/checkout', authMiddleware, async (req: Request, res: Response) => 
 
     const config = PLAN_CONFIG[plan]
     if (!config) {
-      return res.status(400).json({ error: 'Plan inválido. Debe ser starter, pro o enterprise.' })
+      return res.status(400).json({ error: 'Plan inválido. Debe ser individual, starter, pro o enterprise.' })
     }
 
     // Solo aceptamos returnUrl si apunta a nuestro propio frontend; si no, caemos

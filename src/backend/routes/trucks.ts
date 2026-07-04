@@ -10,6 +10,7 @@ import { supabase } from "../supabaseClient";
 
 /** Máximo de camiones permitidos por plan. */
 const PLAN_TRUCK_LIMITS: Record<string, number> = {
+  individual: 1,
   starter: 5,
   pro: 20,
   enterprise: Infinity,
