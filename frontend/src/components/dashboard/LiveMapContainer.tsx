@@ -13,6 +13,7 @@ import { useRealtime, type RoutePathSegment } from "@/hooks/useRealtime";
 import { sameAssignedTrip } from "@/lib/tripFormat";
 import { reconcileById } from "@/lib/reconcile";
 import { useToast } from "@/components/Toast";
+import ConfirmDialog from "./ConfirmDialog";
 
 const PANEL_PADDING = 12;
 const PANEL_GAP = 16;
@@ -89,6 +90,8 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
   // Viaje que se está MIRANDO en el mapa (vía "Ver viaje"), para mostrar el
   // cartelito "estás viendo este viaje" con una X que vuelve a la vista en vivo.
   const [viewingTrip, setViewingTrip]           = useState<AssignedTrip | null>(null);
+  // Confirmación antes de descartar una ruta ya calculada al abrir "+ Nuevo viaje".
+  const [confirmNewTrip, setConfirmNewTrip]     = useState(false);
 
   const locationPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tripsPollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -460,7 +463,9 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
         {pendingAssign && (
           <div
             style={{
-              position: "absolute", left: 20, right: 20, bottom: 24, zIndex: 600,
+              // bottom más alto: a 24px se solapaba con la atribución del mapa
+              // (el textito "Leaflet | © OpenStreetMap" en la esquina).
+              position: "absolute", left: 40, right: 40, bottom: 52, zIndex: 600,
               display: "flex", justifyContent: "center", pointerEvents: "none",
             }}
           >
@@ -470,7 +475,7 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
                 display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
                 background: "#fff", border: "1px solid var(--c-border)", borderRadius: 14,
                 boxShadow: "0 10px 30px rgba(16,24,40,0.16)", padding: "12px 16px",
-                width: "100%", maxWidth: 680,
+                width: "100%", maxWidth: 580,
               }}
             >
               <div style={{ flex: 1, minWidth: 200, lineHeight: 1.4 }}>
@@ -482,7 +487,7 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button className="st-btn-ghost" onClick={handleCancelPending} disabled={assigning}>
+                <button className="st-btn-secondary" onClick={handleCancelPending} disabled={assigning}>
                   Cancelar
                 </button>
                 <button
@@ -538,11 +543,16 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
                   </div>
                 )}
 
-                {/* Disparador: abre el formulario en un modal enfocado */}
+                {/* Disparador: abre el formulario en un modal enfocado. Si ya hay
+                    una ruta calculada esperando "Asignar viaje", pedimos
+                    confirmación antes de descartarla (antes se perdía sin avisar). */}
                 <button
                   className="st-btn-cta"
                   style={{ width: "100%", marginBottom: 20 }}
-                  onClick={() => { handleCancelPending(); setCreatorOpen(true); }}
+                  onClick={() => {
+                    if (pendingAssign) { setConfirmNewTrip(true); return; }
+                    setCreatorOpen(true);
+                  }}
                   disabled={!canCreate}
                   title={!canCreate ? "Activá un conductor con camión para asignar viajes" : undefined}
                 >
@@ -596,6 +606,17 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
             />
           </div>
         </div>
+      )}
+
+      {confirmNewTrip && (
+        <ConfirmDialog
+          title="¿Descartar el viaje calculado?"
+          message="Todavía no lo asignaste. Si abrís un viaje nuevo se pierde la ruta que ya calculaste."
+          confirmLabel="Descartar y seguir"
+          destructive
+          onConfirm={() => { setConfirmNewTrip(false); handleCancelPending(); setCreatorOpen(true); }}
+          onCancel={() => setConfirmNewTrip(false)}
+        />
       )}
     </div>
   );
