@@ -419,7 +419,8 @@
 
   .landing-plans__grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    /* auto-fit: entran los 4 planes (Individual + 3 de empresa) sin desbordar */
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 2rem;
     align-items: stretch;
   }

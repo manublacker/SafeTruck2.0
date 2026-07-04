@@ -23,7 +23,9 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
           <div style={{ fontSize: "2.5rem", textAlign: "center", marginBottom: 16 }}>🚛</div>
           <h1 style={styles.title}>Esta plataforma es para empresas</h1>
           <p style={styles.body}>
-            Tu cuenta es de conductor. Para ver tus viajes y recibir rutas, usá la app móvil de SafeTruck.
+            Tu cuenta es de conductor. Para ver tus viajes, recibir rutas o
+            usar SafeTruck como camionero independiente con tu plan individual,
+            usá la app móvil de SafeTruck.
           </p>
           <button onClick={() => void logout()} style={styles.btn}>
             Cerrar sesión

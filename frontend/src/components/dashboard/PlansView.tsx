@@ -10,6 +10,19 @@ interface Subscription {
 
 const PLANS = [
   {
+    slug: "individual",
+    name: "Individual",
+    price: "$14.900",
+    period: "ARS / mes",
+    features: [
+      "Para camioneros independientes",
+      "1 camión propio",
+      "Rutas aptas para tu vehículo",
+      "Navegación y viajes personales",
+      "Mantenimiento y alertas",
+    ],
+  },
+  {
     slug: "starter",
     name: "Starter",
     price: "$43.500",
@@ -177,7 +190,7 @@ export default function PlansView() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
           gap: 16,
         }}
       >
