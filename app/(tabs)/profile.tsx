@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { Alert } from '../../components/AppAlert'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useFocusEffect } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
@@ -18,6 +18,8 @@ import {
   type AssignedTruck,
   type DriverProfile,
 } from '../../src/services/assignedTrips'
+import { confirmSubscription, hasActivePlan, INDEPENDENT_PLAN, type SubscriptionRow } from '../../src/services/independent'
+import { startMobileCheckout, fetchMobileSubscription } from '../../src/services/billing'
 
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -84,8 +86,14 @@ export default function ProfileScreen() {
 
   const bgColor = isDark ? t.bg : '#F7F8FA'
 
+  const router = useRouter()
+
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null)
   const [assignedTruck, setAssignedTruck]  = useState<AssignedTruck | null | undefined>(undefined)
+  // 'independent' = paga su propio plan (fuente: user_metadata.role, lo setea el backend en el onboarding)
+  const [isIndependent, setIsIndependent] = useState(false)
+  const [subscription, setSubscription] = useState<SubscriptionRow | null>(null)
+  const [paying, setPaying] = useState(false)
   const [profileLoading, setProfileLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -130,6 +138,13 @@ export default function ProfileScreen() {
   // spinner de carga; false (default): carga inicial con spinner.
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setProfileLoading(true)
+
+    // El rol vive en user_metadata (lo escribe el backend en el onboarding).
+    const { data: sess } = await supabase.auth.getSession()
+    const independent = sess.session?.user?.user_metadata?.role === 'independent'
+    setIsIndependent(independent)
+    if (independent) fetchMobileSubscription().then(setSubscription).catch(() => {})
+
     const [dp, at] = await Promise.allSettled([
       fetchMyDriverProfile(),
       fetchMyAssignedTruck(),
@@ -178,6 +193,24 @@ export default function ProfileScreen() {
     if (e.type === 'truck_update') void load({ silent: true })
   }, [load]))
 
+  // Renovación/pago del plan individual: checkout de MercadoPago en el
+  // navegador y confirmación síncrona al volver (sin esperar el webhook).
+  const paySubscription = async () => {
+    setPaying(true)
+    try {
+      await startMobileCheckout(INDEPENDENT_PLAN)
+      const sub = await confirmSubscription(INDEPENDENT_PLAN)
+      setSubscription(sub)
+      if (!hasActivePlan(sub)) {
+        Alert.alert('Pago pendiente', 'Todavía no vimos el pago acreditado. Si ya pagaste, refrescá en unos minutos.')
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'No se pudo iniciar el pago.')
+    } finally {
+      setPaying(false)
+    }
+  }
+
   const comingSoon = (feature: string) =>
     Alert.alert(feature, 'Esta función estará disponible próximamente.')
 
@@ -225,7 +258,7 @@ export default function ProfileScreen() {
             <Ionicons name="create-outline" size={17} color={t.textSoft} />
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-            <Text style={{ fontSize: 12.5, color: t.textMuted }}>Conductor</Text>
+            <Text style={{ fontSize: 12.5, color: t.textMuted }}>{isIndependent ? 'Independiente' : 'Conductor'}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: t.success }} />
               <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: t.success }}>Activo</Text>
@@ -247,8 +280,28 @@ export default function ProfileScreen() {
         </View>
       ) : (
         <>
-          {/* ── Camión asignado ──────────────────────────────────────── */}
-          <SectionLabel>Camión asignado</SectionLabel>
+          {/* ── Cuenta sin vincular: elegir empresa o independiente ──── */}
+          {!driverProfile && (
+            <View style={{ marginBottom: 22 }}>
+              <SectionLabel>Configurá tu cuenta</SectionLabel>
+              <Card style={{ padding: 16 }} t={t}>
+                <Text style={{ fontSize: 13, color: t.textMuted, lineHeight: 19, marginBottom: 14 }}>
+                  Tu cuenta todavía no está vinculada a una empresa ni configurada como independiente.
+                  Elegí cómo vas a usar SafeTruck para empezar a calcular rutas.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/auth/onboarding')}
+                  activeOpacity={0.85}
+                  style={{ backgroundColor: t.accent, borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13.5 }}>Configurar ahora</Text>
+                </TouchableOpacity>
+              </Card>
+            </View>
+          )}
+
+          {/* ── Camión asignado / propio ─────────────────────────────── */}
+          <SectionLabel>{isIndependent ? 'Mi camión' : 'Camión asignado'}</SectionLabel>
           <View style={{ marginBottom: 22 }}>
             {assignedTruck ? (
               <Card style={{ padding: 14 }} t={t}>
@@ -280,10 +333,44 @@ export default function ProfileScreen() {
               </Card>
             ) : (
               <Card style={{ padding: 14 }} t={t}>
-                <Text style={{ fontSize: 13, color: t.textSoft }}>Tu empresa aún no te asignó un camión.</Text>
+                <Text style={{ fontSize: 13, color: t.textSoft }}>
+                  {isIndependent
+                    ? 'Todavía no cargaste tu camión. Configuralo para poder calcular rutas.'
+                    : driverProfile
+                      ? 'Tu empresa aún no te asignó un camión.'
+                      : 'Sin camión: primero configurá tu cuenta.'}
+                </Text>
               </Card>
             )}
           </View>
+
+          {/* ── Suscripción (solo independientes) ────────────────────── */}
+          {isIndependent && (
+            <View style={{ marginBottom: 22 }}>
+              <SectionLabel>Suscripción</SectionLabel>
+              <Card t={t}>
+                <DataRow label="Plan" value={subscription?.plan ? subscription.plan.charAt(0).toUpperCase() + subscription.plan.slice(1) : 'Sin plan'} t={t} />
+                <DataRow label="Estado" value={hasActivePlan(subscription) ? 'Activa' : 'Inactiva'} t={t} />
+                <View style={{ padding: 14 }}>
+                  <TouchableOpacity
+                    onPress={paySubscription}
+                    disabled={paying}
+                    activeOpacity={0.85}
+                    style={{
+                      backgroundColor: hasActivePlan(subscription) ? t.surface2 : t.accent,
+                      borderRadius: 10, paddingVertical: 12, alignItems: 'center', opacity: paying ? 0.6 : 1,
+                    }}
+                  >
+                    {paying
+                      ? <ActivityIndicator color={hasActivePlan(subscription) ? t.text : '#fff'} />
+                      : <Text style={{ color: hasActivePlan(subscription) ? t.text : '#fff', fontWeight: '700', fontSize: 13.5 }}>
+                          {hasActivePlan(subscription) ? 'Renovar plan' : 'Pagar plan individual'}
+                        </Text>}
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            </View>
+          )}
 
           {/* ── Datos de contacto ────────────────────────────────────── */}
           <SectionLabel>Datos de contacto</SectionLabel>

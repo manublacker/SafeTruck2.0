@@ -53,11 +53,11 @@ export function isSubscriptionError(e: unknown): boolean {
   return e instanceof ApiError && e.status === 402
 }
 
-/** Mensaje claro para el chofer cuando la empresa no tiene suscripción activa. */
+/** Mensaje claro para el chofer cuando no hay una suscripción activa. */
 export const SUBSCRIPTION_INACTIVE_MESSAGE =
-  'Tu empresa todavía no tiene un plan activo. Pedile al administrador que regularice el pago para poder usar esta función.'
+  'No hay un plan activo en tu cuenta. Si trabajás para una empresa, pedile al administrador que regularice el pago. Si sos independiente, renová tu plan desde Perfil → Suscripción.'
 
-async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
+export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = await authHeaders()
   const res = await fetch(`${API_URL}${path}`, { ...options, headers: { ...headers, ...options?.headers } })
   const data = await res.json().catch(() => ({}))

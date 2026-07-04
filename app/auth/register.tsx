@@ -107,7 +107,9 @@ export default function RegisterScreen() {
       }
 
       void registerForPushNotifications()
-      router.replace('/(tabs)/')
+      // Recién registrado: elige si se vincula a una empresa (código) o si
+      // usa SafeTruck como independiente (camión propio + plan individual).
+      router.replace('/auth/onboarding')
     } catch (e: any) {
       setErrors({ otp: authErrorMessage(e) })
     } finally {

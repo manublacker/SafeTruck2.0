@@ -1,4 +1,4 @@
-export type SubscriptionPlan = 'starter' | 'pro' | 'enterprise'
+export type SubscriptionPlan = 'individual' | 'starter' | 'pro' | 'enterprise'
 
 export interface Profile {
   id: string
@@ -6,6 +6,8 @@ export interface Profile {
   email?: string | null
   phone?: string
   license_number?: string
+  /** 'driver' (empresa) | 'independent' (paga su propio plan). Requiere migración 004 en Supabase. */
+  role?: string | null
   company_id?: string | null
   company_name?: string | null
   cuit?: string | null

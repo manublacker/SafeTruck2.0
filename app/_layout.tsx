@@ -145,6 +145,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="auth/login" />
         <Stack.Screen name="auth/register" />
+        <Stack.Screen name="auth/onboarding" />
         <Stack.Screen name="auth/forgot-password" />
         <Stack.Screen name="auth/reset-password" />
         <Stack.Screen name="landing" />

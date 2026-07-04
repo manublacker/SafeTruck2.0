@@ -175,7 +175,7 @@ export default function MaintenanceScreen() {
               </Card>
             ) : (
               <Card style={{ padding: 14 }} t={t}>
-                <Text style={{ fontSize: 13, color: t.textSoft }}>Tu empresa aún no te asignó un camión.</Text>
+                <Text style={{ fontSize: 13, color: t.textSoft }}>Todavía no tenés un camión configurado.</Text>
               </Card>
             )}
           </View>

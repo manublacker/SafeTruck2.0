@@ -1204,7 +1204,7 @@ export default function MapScreen() {
     const originPoint = originArg
       ?? (originOverride ? { lat: originOverride.lat, lng: originOverride.lng } : location)
     if (!originPoint) return Alert.alert('Error', 'Esperando GPS...')
-    if (!activeVehicle) return Alert.alert('Sin vehículo', 'Tu empresa aún no te asignó un camión')
+    if (!activeVehicle) return Alert.alert('Sin vehículo', 'No tenés un camión configurado. Si trabajás para una empresa, pedile que te asigne uno; si sos independiente, cargalo desde tu perfil.')
     setDestMarker({ lat: destLat, lng: destLng })
     setCurrentRoute(null)
     setShowInfo(false)
@@ -1755,14 +1755,18 @@ export default function MapScreen() {
 
       {/* Banner sin vehículo */}
       {accountIsDriver === false ? (
-        <View style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}>
+        <TouchableOpacity
+          onPress={() => router.push('/auth/onboarding')}
+          activeOpacity={0.8}
+          style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
+        >
           <Ionicons name="information-circle-outline" size={15} color={t.warning} />
-          <Text style={s.bannerText}>Esta cuenta es de empresa. Para manejar, entrá con tu cuenta de conductor.</Text>
-        </View>
+          <Text style={s.bannerText}>Tu cuenta no está configurada. Tocá acá para vincularte a una empresa o usar SafeTruck como independiente.</Text>
+        </TouchableOpacity>
       ) : (truckChecked && !activeVehicle && (
         <View style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}>
           <Ionicons name="warning-outline" size={15} color={t.warning} />
-          <Text style={s.bannerText}>Tu empresa aún no te asignó un camión</Text>
+          <Text style={s.bannerText}>Todavía no tenés un camión configurado</Text>
         </View>
       ))}
 
