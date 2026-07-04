@@ -1039,16 +1039,30 @@ export default function MapScreen() {
     }, [])
   )
 
+  // Label corto: calle + barrio/localidad (igual que la web). Mostrar solo la
+  // primera parte hacía que 5 resultados distintos se vieran todos iguales.
+  const shortLabel = (displayName: string) => displayName.split(',').slice(0, 2).join(',')
+
+  const dedupeByLabel = (results: any[]) => {
+    const seen = new Set<string>()
+    return results.filter((r) => {
+      const key = shortLabel(r.display_name).toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }
+
   const searchAddress = async (query: string) => {
     if (query.length < 3) { setSearchResults([]); return }
     setSearching(true)
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}&format=json&limit=5&countrycodes=ar&bounded=1&viewbox=-59.2,-35.1,-57.8,-34.2`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}&format=json&limit=8&countrycodes=ar&bounded=1&viewbox=-59.2,-35.1,-57.8,-34.2`,
         { headers: { 'User-Agent': 'SafeTruck/1.0' } }
       )
       const data = await res.json()
-      setSearchResults(data)
+      setSearchResults(dedupeByLabel(data))
     } catch (e) {
       console.log('Search error:', e)
     } finally {
@@ -1065,7 +1079,7 @@ export default function MapScreen() {
   const selectResult = (result: any) => {
     const lat = parseFloat(result.lat)
     const lng = parseFloat(result.lon)
-    setSearchText(result.display_name.split(',').slice(0, 2).join(','))
+    setSearchText(shortLabel(result.display_name))
     setSearchResults([])
     setShowSearch(false)
     Keyboard.dismiss()
@@ -1090,10 +1104,10 @@ export default function MapScreen() {
     setOriginSearching(true)
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}&format=json&limit=5&countrycodes=ar&bounded=1&viewbox=-59.2,-35.1,-57.8,-34.2`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}&format=json&limit=8&countrycodes=ar&bounded=1&viewbox=-59.2,-35.1,-57.8,-34.2`,
         { headers: { 'User-Agent': 'SafeTruck/1.0' } }
       )
-      setOriginResults(await res.json())
+      setOriginResults(dedupeByLabel(await res.json()))
     } catch (e) {
       console.log('Origin search error:', e)
     } finally {
@@ -1110,7 +1124,7 @@ export default function MapScreen() {
   const selectOrigin = (result: any) => {
     const lat = parseFloat(result.lat)
     const lng = parseFloat(result.lon)
-    const label = result.display_name.split(',').slice(0, 2).join(',')
+    const label = shortLabel(result.display_name)
     setOriginOverride({ lat, lng, label })
     setOriginText(label)
     setOriginResults([])
@@ -1154,10 +1168,10 @@ export default function MapScreen() {
     setReportSearching(true)
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}&format=json&limit=5&countrycodes=ar&bounded=1&viewbox=-59.2,-35.1,-57.8,-34.2`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}&format=json&limit=8&countrycodes=ar&bounded=1&viewbox=-59.2,-35.1,-57.8,-34.2`,
         { headers: { 'User-Agent': 'SafeTruck/1.0' } }
       )
-      setReportSearchResults(await res.json())
+      setReportSearchResults(dedupeByLabel(await res.json()))
     } catch (e) {
       console.log('Report search error:', e)
     } finally {
@@ -1173,7 +1187,7 @@ export default function MapScreen() {
 
   const selectReportResult = (result: any) => {
     setIncidentLocation({ lat: parseFloat(result.lat), lng: parseFloat(result.lon) })
-    setReportSearchText(result.display_name.split(',').slice(0, 2).join(','))
+    setReportSearchText(shortLabel(result.display_name))
     setReportSearchResults([])
     Keyboard.dismiss()
   }
@@ -1302,10 +1316,13 @@ export default function MapScreen() {
     routeAbortRef.current?.abort()
     routeAbortRef.current = null
     setLoading(false)
-    // Búsqueda
+    // Búsqueda: limpiar también resultados y el dropdown, si no queda
+    // "colgado" con las sugerencias viejas sin forma de cerrarlo.
     setCurrentRoute(null)
     setShowInfo(false)
     setSearchText('')
+    setSearchResults([])
+    setShowSearch(false)
     setDestMarker(null)
     // Origen: volver al default (GPS)
     setOriginOverride(null)
@@ -1687,7 +1704,7 @@ export default function MapScreen() {
                 onPress={() => selectResult(result)}
               >
                 <Text style={s.searchResultName} numberOfLines={1}>
-                  {result.display_name.split(',')[0]}
+                  {shortLabel(result.display_name)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1705,7 +1722,7 @@ export default function MapScreen() {
               >
                 <Ionicons name="time-outline" size={16} color={t.textMuted} style={{ marginRight: 8 }} />
                 <Text style={s.searchResultName} numberOfLines={1}>
-                  {r.display_name.split(',')[0]}
+                  {shortLabel(r.display_name)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1728,7 +1745,7 @@ export default function MapScreen() {
               >
                 <Ionicons name="location-outline" size={16} color={t.textMuted} style={{ marginRight: 8 }} />
                 <Text style={s.searchResultName} numberOfLines={1}>
-                  {result.display_name.split(',')[0]}
+                  {shortLabel(result.display_name)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1917,7 +1934,7 @@ export default function MapScreen() {
                 {reportSearchResults.map((r, idx) => (
                   <TouchableOpacity key={idx} style={s.reportSearchItem} onPress={() => selectReportResult(r)}>
                     <Text style={s.reportSearchItemText} numberOfLines={1}>
-                      {r.display_name.split(',').slice(0, 2).join(',')}
+                      {shortLabel(r.display_name)}
                     </Text>
                   </TouchableOpacity>
                 ))}

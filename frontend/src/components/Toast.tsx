@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 // Uso: const { showToast } = useToast();  showToast("Guardado", "success");
 
 type ToastType = "success" | "error" | "info";
-interface ToastItem { id: number; message: string; type: ToastType; }
+interface ToastItem { id: number; message: string; type: ToastType; leaving?: boolean; }
 
 interface ToastApi { showToast: (message: string, type?: ToastType) => void; }
 
@@ -26,8 +26,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const idRef = useRef(0);
 
+  // Dos fases: primero se marca "leaving" para que corra la animación de
+  // salida, y recién después se saca del array. Si se filtrara directo acá,
+  // el cartel desaparecería de golpe sin transición.
   const dismiss = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 180);
   }, []);
 
   const showToast = useCallback((message: string, type: ToastType = "info") => {
@@ -39,7 +45,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <style>{`@keyframes st-toast-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}`}</style>
+      <style>{`
+        @keyframes st-toast-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+        @keyframes st-toast-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-8px)}}
+      `}</style>
       <div
         style={{
           position: "fixed", top: 16, right: 16, zIndex: 9999,
@@ -58,7 +67,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 background: c.bg, color: "#fff", padding: "12px 14px",
                 borderRadius: 10, boxShadow: "0 6px 24px rgba(0,0,0,0.25)",
                 borderLeft: `4px solid ${c.bar}`, fontSize: 14, lineHeight: 1.35,
-                cursor: "pointer", animation: "st-toast-in .2s ease",
+                cursor: "pointer",
+                animation: t.leaving ? "st-toast-out .18s ease forwards" : "st-toast-in .2s ease",
               }}
             >
               <span>{t.message}</span>
