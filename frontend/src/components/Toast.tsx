@@ -16,8 +16,8 @@ export function useToast(): ToastApi {
   return ctx;
 }
 
-const COLORS: Record<ToastType, { bg: string; bar: string }> = {
-  success: { bg: "#0f5132", bar: "#34C759" },
+const COLORS: Record<ToastType, { bg: string; bar: string; text?: string }> = {
+  success: { bg: "#DCFCE7", bar: "#DCFCE7", text: "#14532D" },
   error:   { bg: "#5c1a1a", bar: "#FF3B30" },
   info:    { bg: "#1e293b", bar: "#3b82f6" },
 };
@@ -64,7 +64,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               onClick={() => dismiss(t.id)}
               style={{
                 display: "flex", alignItems: "center", gap: 10,
-                background: c.bg, color: "#fff", padding: "12px 14px",
+                background: c.bg, color: c.text ?? "#fff", padding: "12px 14px",
                 borderRadius: 10, boxShadow: "0 6px 24px rgba(0,0,0,0.25)",
                 borderLeft: `4px solid ${c.bar}`, fontSize: 14, lineHeight: 1.35,
                 cursor: "pointer",
