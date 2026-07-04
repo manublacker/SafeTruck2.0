@@ -205,6 +205,17 @@ function AutocompleteField({
           handleInput(setField, timerRef, e.target.value);
           if (!e.target.value.trim()) onPinned?.(null);
         }}
+        onKeyDown={(e) => {
+          // Si el desplegable de sugerencias está abierto, Escape solo lo cierra
+          // a él (frenamos la propagación). Si no, dejamos que Escape siga de
+          // largo: el modal tiene su propio listener global que lo cierra —
+          // sin este freno, cerrar el desplegable cerraba también el modal
+          // entero y se perdía la ruta ya cargada.
+          if (e.key === "Escape" && field.open) {
+            e.stopPropagation();
+            setField((f) => ({ ...f, open: false }));
+          }
+        }}
         onBlur={() => handleBlur(setField)}
         autoComplete="off"
         required
