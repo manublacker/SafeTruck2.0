@@ -338,13 +338,6 @@ export default function MapScreen() {
   const router = useRouter()
   const [tripSheet, setTripSheet] = useState<AssignedTrip | null>(null)
   const [tripUpdating, setTripUpdating] = useState(false)
-  // Bottom sheet arrastrable del viaje: translateY animado + altura medida +
-  // posición de reposo actual (0 = expandido). El usuario lo arrastra desde la
-  // cabecera para colapsarlo (deja asomando el "peek") o cerrarlo del todo.
-  const sheetY = useRef(new Animated.Value(0)).current
-  const sheetH = useRef(0)
-  const sheetRest = useRef(0)
-  const SHEET_PEEK = 120
   const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const routeAbortRef = useRef<AbortController | null>(null)
   // Generación del dibujo del viaje: se incrementa cada vez que arranca un dibujo
@@ -1386,56 +1379,13 @@ export default function MapScreen() {
     }
   }
 
-  // clearRoute se recrea en cada render; el PanResponder se crea una sola vez,
-  // así que lo llamamos vía ref para no capturar una versión vieja (tripId stale).
-  const clearRouteRef = useRef(clearRoute)
-  clearRouteRef.current = clearRoute
-
-  // Al abrir (o cambiar de) viaje, el sheet aparece siempre expandido.
-  useEffect(() => {
-    if (tripSheet) { sheetRest.current = 0; sheetY.setValue(0) }
-  }, [tripSheet?.id])  // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Gestos del bottom sheet del viaje. Snaps: 0 = expandido, (h - PEEK) =
-  // colapsado (asoma la cabecera), h = cerrado (dispara clearRoute).
-  const sheetPan = useRef(
-    PanResponder.create({
-      // La zona arrastrable (handle + cabecera) no tiene hijos táctiles, así que
-      // reclamamos el gesto ya al tocar: sobre el MapView nativo el reclamo por
-      // movimiento no es confiable (el mapa se queda el gesto y no pasa nada).
-      onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 3,
-      onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dy) > 3,
-      // Que ningún componente nativo (el mapa) nos robe el gesto a mitad de camino.
-      onPanResponderTerminationRequest: () => false,
-      onShouldBlockNativeResponder: () => true,
-      onPanResponderMove: (_, g) => {
-        const h = sheetH.current || 1
-        const next = Math.max(0, Math.min(h, sheetRest.current + g.dy))
-        sheetY.setValue(next)
-      },
-      onPanResponderRelease: (_, g) => {
-        const h = sheetH.current || 1
-        const collapsed = Math.max(0, h - SHEET_PEEK)
-        const cur = Math.max(0, Math.min(h, sheetRest.current + g.dy))
-        let target: number
-        if (g.vy > 0.6) target = sheetRest.current >= collapsed - 4 ? h : collapsed
-        else if (g.vy < -0.6) target = 0
-        else {
-          const snaps = [0, collapsed, h]
-          target = snaps.reduce((a, b) => (Math.abs(b - cur) < Math.abs(a - cur) ? b : a))
-        }
-        if (target >= h - 2) {
-          Animated.timing(sheetY, { toValue: h, duration: 200, useNativeDriver: false })
-            .start(() => { sheetRest.current = 0; sheetY.setValue(0); clearRouteRef.current() })
-        } else {
-          sheetRest.current = target
-          Animated.spring(sheetY, { toValue: target, useNativeDriver: false, bounciness: 4, speed: 14 }).start()
-        }
-      },
-    })
-  ).current
+  // Ambas tarjetas (viaje asignado y "Ruta calculada") son bottom sheets
+  // arrastrables. Cerrarlas deslizando = descartar → clearRoute limpia las dos.
+  const tripDrag = useDraggableSheet(clearRoute)
+  const routeDrag = useDraggableSheet(clearRoute)
+  // Al abrir (o cambiar de) viaje / al aparecer la ruta calculada, expandido.
+  useEffect(() => { if (tripSheet) tripDrag.reset() }, [tripSheet?.id])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (showInfo && currentRoute) routeDrag.reset() }, [showInfo, !!currentRoute])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Frena un viaje ASIGNADO en curso: lo vuelve a 'accepted' (deja de figurar
   // "en curso" para el empresario) y saca la ubicación viva del mapa. Así no
@@ -1881,9 +1831,15 @@ export default function MapScreen() {
 
       {/* Tarjeta de ruta */}
       {showInfo && currentRoute && !navMode && (
-        <View style={[s.routeCard, { paddingBottom: 28 }]}>
+        <Animated.View
+          style={[s.routeCard, { paddingBottom: 28, transform: [{ translateY: routeDrag.translateY }] }]}
+          onLayout={routeDrag.onLayout}
+        >
+          <View {...routeDrag.panHandlers} style={{ paddingBottom: 4 }}>
+            <View style={s.tripSheetHandle} />
+          </View>
           <View style={s.routeCardHeader}>
-            <View>
+            <View {...routeDrag.panHandlers}>
               <Text style={s.routeCardTitle}>Ruta calculada</Text>
               {currentRoute.has_unauthorized && (
                 <View style={[s.warnBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
@@ -1928,7 +1884,7 @@ export default function MapScreen() {
             <Ionicons name="navigate-circle-outline" size={18} color={t.text} />
             <Text style={s.simRouteBtnText}>Simular recorrido</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       )}
 
       {/* HUD de navegación */}
@@ -2078,10 +2034,10 @@ export default function MapScreen() {
       {/* ── Trip Sheet ─────────────────────────────────────────────────── */}
       {tripSheet && !navMode && !showInfo && (
         <Animated.View
-          style={[s.tripSheet, { paddingBottom: 30, transform: [{ translateY: sheetY }] }]}
-          onLayout={e => { sheetH.current = e.nativeEvent.layout.height }}
+          style={[s.tripSheet, { paddingBottom: 30, transform: [{ translateY: tripDrag.translateY }] }]}
+          onLayout={tripDrag.onLayout}
         >
-          <View {...sheetPan.panHandlers}>
+          <View {...tripDrag.panHandlers}>
           <View style={s.tripSheetHandle} />
 
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -2166,6 +2122,57 @@ export default function MapScreen() {
       )}
     </View>
   )
+}
+
+// Bottom sheet arrastrable reutilizable (viaje asignado + "Ruta calculada").
+// Snaps: 0 = expandido, (h - peek) = colapsado, h = cerrado (dispara onClose).
+// Driver JS y reclamo del gesto al tocar: sobre el MapView nativo el reclamo por
+// movimiento no es confiable y el mapa se queda el gesto.
+function useDraggableSheet(onClose: () => void, peek = 120) {
+  const y = useRef(new Animated.Value(0)).current
+  const h = useRef(0)
+  const rest = useRef(0)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 3,
+      onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dy) > 3,
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+      onPanResponderMove: (_, g) => {
+        const H = h.current || 1
+        y.setValue(Math.max(0, Math.min(H, rest.current + g.dy)))
+      },
+      onPanResponderRelease: (_, g) => {
+        const H = h.current || 1
+        const collapsed = Math.max(0, H - peek)
+        const cur = Math.max(0, Math.min(H, rest.current + g.dy))
+        let target: number
+        if (g.vy > 0.6) target = rest.current >= collapsed - 4 ? H : collapsed
+        else if (g.vy < -0.6) target = 0
+        else {
+          const snaps = [0, collapsed, H]
+          target = snaps.reduce((a, b) => (Math.abs(b - cur) < Math.abs(a - cur) ? b : a))
+        }
+        if (target >= H - 2) {
+          Animated.timing(y, { toValue: H, duration: 200, useNativeDriver: false })
+            .start(() => { rest.current = 0; y.setValue(0); closeRef.current() })
+        } else {
+          rest.current = target
+          Animated.spring(y, { toValue: target, useNativeDriver: false, bounciness: 4, speed: 14 }).start()
+        }
+      },
+    })
+  ).current
+  return {
+    translateY: y,
+    panHandlers: pan.panHandlers,
+    onLayout: (e: { nativeEvent: { layout: { height: number } } }) => { h.current = e.nativeEvent.layout.height },
+    reset: () => { rest.current = 0; y.setValue(0) },
+  }
 }
 
 function makeStyles(t: Theme) {
