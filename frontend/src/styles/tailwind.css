@@ -425,6 +425,17 @@
     align-items: stretch;
   }
 
+  /* Tarjeta informativa (plan Individual): no navega, así que sin cursor de
+     link ni efecto hover de "clickeable". Doble clase para ganarle en
+     especificidad al .landing-plan-card:hover de más abajo. */
+  .landing-plan-card.landing-plan-card--static,
+  .landing-plan-card.landing-plan-card--static:hover {
+    cursor: default;
+    transform: none;
+    border-color: #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+
   .landing-plan-card {
     position: relative;
     border-radius: 1rem;

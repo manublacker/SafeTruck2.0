@@ -344,7 +344,7 @@ export default function ProfileScreen() {
                 </Text>
                 {isIndependent && (
                   <TouchableOpacity
-                    onPress={() => router.push('/auth/onboarding')}
+                    onPress={() => router.push('/auth/onboarding?flow=independent')}
                     activeOpacity={0.85}
                     style={{ backgroundColor: t.accent, borderRadius: 10, paddingVertical: 11, alignItems: 'center', marginTop: 12 }}
                   >

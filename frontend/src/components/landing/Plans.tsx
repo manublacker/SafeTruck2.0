@@ -101,7 +101,7 @@ const Plans = () => (
           // El plan Individual se contrata desde la app (onboarding del
           // conductor); acá solo se muestra, sin link al registro de empresa.
           return p.appOnly ? (
-            <div key={p.name} className="landing-plan-card">{card}</div>
+            <div key={p.name} className="landing-plan-card landing-plan-card--static">{card}</div>
           ) : (
             <a
               key={p.name}

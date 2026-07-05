@@ -18,6 +18,30 @@ const PLAN_TRUCK_LIMITS: Record<string, number> = {
 
 const router = Router();
 
+/**
+ * Plan efectivo del usuario. La fuente de verdad es subscriptions (igual que
+ * requireActiveSubscription); profiles.plan es solo un espejo best-effort que
+ * puede quedar desactualizado, así que se usa únicamente como fallback.
+ */
+async function getUserPlan(userId: string): Promise<string> {
+  const { data: sub } = await supabase
+    .from("subscriptions")
+    .select("plan")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (sub?.plan) return sub.plan as string;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("plan")
+    .eq("id", userId)
+    .maybeSingle();
+  return (profile?.plan as string | null) ?? "starter";
+}
+
 const ALLOWED_ESTADOS = new Set([
   "Activo",
   "En ruta",
@@ -172,13 +196,7 @@ router.post("/", async (req: Request, res: Response) => {
 
   try {
     // ── Validar límite de flota según plan ──────────────────────────────────
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("plan")
-      .eq("id", userId)
-      .single();
-
-    const plan = (profile?.plan as string | null | undefined) ?? "starter";
+    const plan = await getUserPlan(userId);
     const limit = PLAN_TRUCK_LIMITS[plan] ?? 5;
 
     const countResult = await pool.query<{ count: string }>(
@@ -343,9 +361,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
   }
 
   try {
-    const { data: profile } = await supabase
-      .from('profiles').select('plan').eq('id', userId).single();
-    const plan = (profile?.plan as string | null) ?? 'starter';
+    const plan = await getUserPlan(userId);
     const limit = PLAN_TRUCK_LIMITS[plan] ?? 5;
 
     const countResult = await pool.query<{ count: string }>(

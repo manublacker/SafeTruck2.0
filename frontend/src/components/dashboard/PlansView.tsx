@@ -194,7 +194,12 @@ export default function PlansView() {
           gap: 16,
         }}
       >
-        {PLANS.map((plan) => {
+        {PLANS.filter(
+          // El plan Individual se contrata desde la app móvil; acá solo se
+          // muestra si ya es el plan actual (para que el independiente vea su
+          // estado y pueda renovar), no se le ofrece a las empresas.
+          (plan) => plan.slug !== "individual" || currentPlan === "individual"
+        ).map((plan) => {
           const isCurrent = currentPlan === plan.slug;
           const isLoading = upgrading === plan.slug;
           const highlighted = isCurrent || !!plan.badge;

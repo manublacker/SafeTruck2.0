@@ -50,6 +50,16 @@ export async function createMyTruck(input: NewTruckInput): Promise<{ id: number 
   })
 }
 
+/**
+ * Camiones que ya posee el usuario (para el independiente: 0 o 1). GET, así
+ * que no lo bloquea el gate de suscripción. Sirve para retomar el onboarding
+ * sin crear un camión duplicado si un intento anterior quedó a medias.
+ */
+export async function fetchMyOwnTrucks(): Promise<{ id: number; name: string }[]> {
+  const data = await apiRequest<{ id: number; name: string }[]>('/api/trucks')
+  return Array.isArray(data) ? data : []
+}
+
 /** Asigna el camión al propio conductor (driver_id del setup). */
 export async function assignTruckToSelf(truckId: number, driverId: number): Promise<void> {
   await apiRequest('/api/truck-drivers', {

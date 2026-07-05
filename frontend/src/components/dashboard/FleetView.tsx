@@ -17,6 +17,7 @@ const LICENSE_WARN_DAYS = 30;
 
 /** Límite de camiones por plan. enterprise = sin límite. */
 const PLAN_TRUCK_LIMITS: Record<string, number> = {
+  individual: 1,
   starter: 5,
   pro: 20,
   enterprise: Infinity,

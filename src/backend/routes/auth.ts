@@ -134,6 +134,24 @@ router.post("/independent-setup", authMiddleware, async (req: Request, res: Resp
       return;
     }
 
+    // Una cuenta ADMIN que administra conductores no puede auto-convertirse en
+    // independiente (perdería el sentido de su flota). Los conductores propios
+    // se detectan por user_id = admin con app_user_id distinto (o sin cuenta).
+    const ownsFleet = await pool.query(
+      `SELECT 1 FROM drivers
+       WHERE user_id::text = $1
+         AND (app_user_id IS NULL OR app_user_id::text <> $1)
+         AND is_active = true
+       LIMIT 1`,
+      [user.id]
+    );
+    if (ownsFleet.rowCount) {
+      res.status(409).json({
+        error: "Tu cuenta administra una flota de empresa. Usá el panel web; la cuenta independiente es para camioneros sin empresa.",
+      });
+      return;
+    }
+
     // FK: drivers.user_id referencia a users(id).
     await pool.query(
       `INSERT INTO users (id, email, full_name, role)
@@ -145,6 +163,11 @@ router.post("/independent-setup", authMiddleware, async (req: Request, res: Resp
     );
 
     const driverId = await withTransaction(async (client) => {
+      // Lock consultivo por usuario: dos setups concurrentes (doble tap) harían
+      // check-then-insert en paralelo y crearían dos filas (no hay unique en
+      // drivers). El lock serializa; se libera solo al terminar la transacción.
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [user.id]);
+
       const existing = await client.query<{ id: number }>(
         "SELECT id FROM drivers WHERE user_id::text = $1 AND app_user_id::text = $1 LIMIT 1",
         [user.id]

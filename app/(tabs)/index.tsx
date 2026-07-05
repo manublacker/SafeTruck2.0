@@ -1805,7 +1805,7 @@ export default function MapScreen() {
           style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
         >
           <Ionicons name="warning-outline" size={15} color={t.warning} />
-          <Text style={s.bannerText}>Todavía no tenés un camión configurado. Tocá acá para resolverlo desde tu perfil.</Text>
+          <Text style={s.bannerText}>Todavía no tenés un camión configurado. Tocá acá para ver los detalles en tu perfil.</Text>
         </TouchableOpacity>
       ))}
 

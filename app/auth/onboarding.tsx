@@ -16,13 +16,13 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 import { redeemInvitation, fetchMyAssignedTruck } from '../../src/services/assignedTrips'
 import {
-  setupIndependentAccount, createMyTruck, assignTruckToSelf,
+  setupIndependentAccount, createMyTruck, assignTruckToSelf, fetchMyOwnTrucks,
   confirmSubscription, hasActivePlan, INDEPENDENT_PLAN,
 } from '../../src/services/independent'
 import { startMobileCheckout } from '../../src/services/billing'
@@ -55,9 +55,14 @@ export default function OnboardingScreen() {
   const s = useMemo(() => makeStyles(t), [isDark])
   const router = useRouter()
 
-  const [mode, setMode] = useState<Mode>('choice')
+  // ?flow=independent (desde "Cargar mi camión" del perfil) arranca directo
+  // en el formulario del camión, sin repetir la elección.
+  const { flow } = useLocalSearchParams<{ flow?: string }>()
+  const [mode, setMode] = useState<Mode>(flow === 'independent' ? 'truck' : 'choice')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // Qué camino terminó: define el mensaje de la pantalla final.
+  const [doneKind, setDoneKind] = useState<'company' | 'independent' | null>(null)
 
   // empresa
   const [code, setCode] = useState('')
@@ -93,6 +98,7 @@ export default function OnboardingScreen() {
           axles: 0, is_default: true, created_at: '',
         })
       }
+      setDoneKind('company')
       setMode('done')
     } catch (e: any) {
       setError(e?.message ?? 'No se pudo canjear el código.')
@@ -132,22 +138,30 @@ export default function OnboardingScreen() {
   }
 
   // Con la suscripción activa, crea el camión y se lo asigna a sí mismo.
+  // Re-entrante: si un intento anterior creó el camión pero falló la
+  // asignación (o la app se cerró), reutiliza el camión existente en vez de
+  // crear un duplicado (el plan individual permite uno solo: el segundo
+  // create daría 403 y dejaría al usuario pagado y atrapado).
   async function finishIndependent(driver: number) {
-    const created = await createMyTruck({
-      name: truck.name.trim(),
-      patente: truck.patente.trim() || null,
-      max_weight_kg: parseNum(truck.max_weight_kg)!,
-      max_height_m: parseNum(truck.max_height_m)!,
-      max_width_m: parseNum(truck.max_width_m)!,
-      max_length_m: parseNum(truck.max_length_m)!,
-    })
-    await assignTruckToSelf(created.id, driver)
+    const existing = (await fetchMyOwnTrucks().catch(() => []))[0]
+    const truckId = existing
+      ? existing.id
+      : (await createMyTruck({
+          name: truck.name.trim(),
+          patente: truck.patente.trim() || null,
+          max_weight_kg: parseNum(truck.max_weight_kg)!,
+          max_height_m: parseNum(truck.max_height_m)!,
+          max_width_m: parseNum(truck.max_width_m)!,
+          max_length_m: parseNum(truck.max_length_m)!,
+        })).id
+    await assignTruckToSelf(truckId, driver)
     setActiveVehicle({
-      id: String(created.id), user_id: '', plate: truck.patente.trim(), name: truck.name.trim(),
+      id: String(truckId), user_id: '', plate: truck.patente.trim(), name: existing?.name ?? truck.name.trim(),
       weight_kg: parseNum(truck.max_weight_kg)!, height_m: parseNum(truck.max_height_m)!,
       width_m: parseNum(truck.max_width_m)!, length_m: parseNum(truck.max_length_m)!,
       axles: 0, is_default: true, created_at: '',
     })
+    setDoneKind('independent')
     setMode('done')
   }
 
@@ -371,7 +385,7 @@ export default function OnboardingScreen() {
             <View style={s.doneIcon}><Ionicons name="checkmark" size={34} color="#fff" /></View>
             <Text style={[s.title, { textAlign: 'center' }]}>¡Cuenta lista!</Text>
             <Text style={[s.subtitle, { textAlign: 'center' }]}>
-              {driverId != null
+              {doneKind === 'independent'
                 ? 'Tu camión quedó cargado y tu plan está activo. Ya podés calcular rutas y navegar.'
                 : 'Quedaste vinculado a tu empresa. Cuando te asignen un camión y viajes, los vas a ver acá.'}
             </Text>
