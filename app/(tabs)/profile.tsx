@@ -20,6 +20,7 @@ import {
 } from '../../src/services/assignedTrips'
 import { confirmSubscription, hasActivePlan, INDEPENDENT_PLAN, type SubscriptionRow } from '../../src/services/independent'
 import { startMobileCheckout, fetchMobileSubscription } from '../../src/services/billing'
+import { OTA_TAG } from '../../src/constants/version'
 
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -400,7 +401,7 @@ export default function ProfileScreen() {
           </Card>
 
           <Text style={{ textAlign: 'center', fontSize: 11, color: '#9AA3AD', fontVariantNumeric: 'tabular-nums', letterSpacing: 0.4, paddingBottom: 8 }}>
-            SafeTruck · versión 1.0.0
+            SafeTruck · versión 1.0.0 · {OTA_TAG}
           </Text>
         </>
       )}

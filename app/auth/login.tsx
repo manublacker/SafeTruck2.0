@@ -12,6 +12,7 @@ import { registerForPushNotifications } from '../../src/services/push'
 import { fetchMyDriverProfile } from '../../src/services/assignedTrips'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
+import { OTA_TAG } from '../../src/constants/version'
 
 export default function LoginScreen() {
   const [email, setEmail]       = useState('')
@@ -82,7 +83,7 @@ export default function LoginScreen() {
           resizeMode="contain"
         />
         <Text style={s.title}>SafeTruck</Text>
-        <Text style={s.subtitle}>Navegación para camiones en el AMBA</Text>
+        <Text style={s.subtitle}>Navegación para camiones en el AMBA · {OTA_TAG}</Text>
 
         <TextInput
           style={s.input}
