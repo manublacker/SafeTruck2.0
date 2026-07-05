@@ -30,7 +30,10 @@ app.use(express.json({ limit: '50mb' }))
 
 app.use('/api/auth', authRouter)
 app.use('/api/billing', billingRouter)
-app.use('/api/routes', routeRouter)
+// Ruteo protegido: calcular rutas exige sesión + plan activo (propio, o el de
+// la empresa que te invitó). requireActiveSubscription solo bloquea POST, que
+// es justamente el verbo del cálculo.
+app.use('/api/routes', authMiddleware, requireActiveSubscription, routeRouter)
 app.use('/api/search', searchRouter)
 app.use('/api/incidents', incidentsRouter)
 app.use('/api/reports', reportsRouter)
@@ -49,7 +52,8 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'SafeTru
 // Routing (existente)
 // ────────────────────────────────────────────────────────────────────────────
 
-app.post('/route', async (req, res) => {
+// Mismo gate que /api/routes: sin plan activo no se calculan rutas.
+app.post('/route', authMiddleware, requireActiveSubscription, async (req, res) => {
   res.setTimeout(60000)
   try {
     const { origin, destination, vehicle } = req.body

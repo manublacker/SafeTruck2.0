@@ -340,6 +340,15 @@ export default function ProfileScreen() {
                       ? 'Tu empresa aún no te asignó un camión.'
                       : 'Sin camión: primero configurá tu cuenta.'}
                 </Text>
+                {isIndependent && (
+                  <TouchableOpacity
+                    onPress={() => router.push('/auth/onboarding')}
+                    activeOpacity={0.85}
+                    style={{ backgroundColor: t.accent, borderRadius: 10, paddingVertical: 11, alignItems: 'center', marginTop: 12 }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13.5 }}>Cargar mi camión</Text>
+                  </TouchableOpacity>
+                )}
               </Card>
             )}
           </View>
