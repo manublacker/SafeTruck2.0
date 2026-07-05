@@ -22,6 +22,7 @@ import locationsRouter from './routes/locations'
 import pushTokensRouter from './routes/push-tokens'
 import { loadGraphCache } from './graphCache'
 import { attachRealtime } from './realtime/hub'
+import { runMaintenanceAlerts } from './jobs/maintenanceAlerts'
 
 const app = express()
 app.use(cors({ maxAge: 86400 }))
@@ -99,6 +100,27 @@ app.get('/health', (_, res) => res.json({ status: 'ok' }))
 // Los endpoints legacy /admin/drivers (st_drivers) fueron eliminados en Fase 2.
 // La gestión de conductores ahora usa /api/drivers (Aiven) + /api/invitations.
 
+// ────────────────────────────────────────────────────────────────────────────
+// Scheduler de alertas push (mantenimiento / licencia): corre 1 vez al día a las
+// 09:00 hora Argentina (12:00 UTC). Sin dependencias: setTimeout hasta la próxima
+// hora objetivo y luego setInterval de 24 h. Best-effort — si una corrida falla,
+// se loguea y se reintenta al día siguiente.
+function scheduleMaintenanceAlerts() {
+  const DAY = 24 * 60 * 60 * 1000
+  const runSafe = () => {
+    runMaintenanceAlerts()
+      .then((r) => console.log(`[alerts] corrida diaria: ${r.sent} push enviados (${r.checked} conductores)`))
+      .catch((e) => console.error('[alerts] error en la corrida:', e?.message ?? e))
+  }
+  const now = new Date()
+  const next = new Date(now)
+  next.setUTCHours(12, 0, 0, 0) // 09:00 ART
+  if (next.getTime() <= now.getTime()) next.setTime(next.getTime() + DAY)
+  const delay = next.getTime() - now.getTime()
+  setTimeout(() => { runSafe(); setInterval(runSafe, DAY) }, delay)
+  console.log(`[alerts] scheduler activo — próxima corrida en ~${Math.round(delay / 3600000)}h`)
+}
+
 const PORT = process.env.PORT || 3001
 
 // Creamos el HTTP server explícito (en vez de app.listen) para poder engancharle
@@ -117,4 +139,5 @@ server.listen(PORT, () => {
   } else {
     console.log('[graphCache] desactivado (GRAPH_CACHE != true) — /api/routes usa fallback por query')
   }
+  scheduleMaintenanceAlerts()
 })
