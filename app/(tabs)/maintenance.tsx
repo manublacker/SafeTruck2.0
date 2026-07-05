@@ -121,6 +121,7 @@ export default function MaintenanceScreen() {
   const [isIndependent, setIsIndependent] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState('cargando…')
 
   // Edición de peso/dimensiones (modal numérico).
   const [editField, setEditField] = useState<null | SpecField>(null)
@@ -138,6 +139,14 @@ export default function MaintenanceScreen() {
       if (maint.status === 'fulfilled') { setData(maint.value); setError(null) }
       else setError('No pudimos cargar el mantenimiento. Revisá tu conexión.')
       if (truck.status === 'fulfilled') setSpecTruck(truck.value)
+      // DEBUG temporal — sacar después.
+      setDebugInfo(
+        `maint=${maint.status}` +
+        ` | truck=${truck.status}` +
+        (truck.status === 'fulfilled'
+          ? `:${truck.value ? (truck.value.name ?? 'sinNombre') : 'NULL'}`
+          : `:${(truck as PromiseRejectedResult).reason?.message ?? 'err'}`)
+      )
     } finally {
       setLoading(false)
     }
@@ -195,6 +204,13 @@ export default function MaintenanceScreen() {
       <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', color: t.accent, marginBottom: 16 }}>
         MANTENIMIENTO
       </Text>
+
+      {/* DEBUG temporal — sacar después */}
+      <View style={{ backgroundColor: '#FEF3C7', borderRadius: 8, padding: 10, marginBottom: 14, borderWidth: 1, borderColor: '#F59E0B' }}>
+        <Text style={{ fontSize: 12, color: '#92400E', fontWeight: '700' }}>DEBUG</Text>
+        <Text style={{ fontSize: 12, color: '#92400E' }}>{debugInfo}</Text>
+        <Text style={{ fontSize: 12, color: '#92400E' }}>specTruck: {specTruck ? (specTruck.name ?? 'sí') : 'null'} · indep: {String(isIndependent)}</Text>
+      </View>
 
       {loading && data === undefined ? (
         <ActivityIndicator color={t.accent} style={{ marginVertical: 40 }} />
