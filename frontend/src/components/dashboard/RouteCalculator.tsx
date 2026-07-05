@@ -91,7 +91,9 @@ const RouteCalculator = forwardRef<RouteCalculatorHandle, Props>(function RouteC
             lon: resolvedDestination.lon,
           },
           vehicle: {
-            maxWeightKg: selectedTruck.max_weight_kg,
+            // Peso real de circulación: la carga actual si se cargó, sino la
+            // capacidad máxima (peor caso, ruteo conservador).
+            maxWeightKg: selectedTruck.current_weight_kg ?? selectedTruck.max_weight_kg,
             maxHeightM: selectedTruck.max_height_m,
             maxWidthM: selectedTruck.max_width_m,
             maxLengthM: selectedTruck.max_length_m,

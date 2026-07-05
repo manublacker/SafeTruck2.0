@@ -7,6 +7,8 @@ export interface Truck {
   max_height_m: number;
   max_width_m: number;
   max_length_m: number;
+  /** Peso que transporta AHORA (carga actual). null = sin especificar. */
+  current_weight_kg: number | null;
   patente: string | null;
   modelo: string | null;
   anio: number | null;

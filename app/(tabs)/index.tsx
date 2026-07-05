@@ -13,7 +13,7 @@ import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme, isDarkTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
-import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, fetchMyDriverProfile, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
+import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, fetchMyDriverProfile, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, effectiveWeightKg, type AssignedTrip } from '../../src/services/assignedTrips'
 import { getRecentDestinations, addRecentDestination, removeRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
 import { useRealtime } from '../../src/services/realtime'
 
@@ -151,7 +151,7 @@ export default function MapScreen() {
             user_id:    '',
             plate:      truck.patente ?? '',
             name:       truck.name,
-            weight_kg:  truck.max_weight_kg,
+            weight_kg:  effectiveWeightKg(truck),
             height_m:   truck.max_height_m,
             width_m:    truck.max_width_m,
             length_m:   truck.max_length_m,

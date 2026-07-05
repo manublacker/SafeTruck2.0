@@ -15,6 +15,8 @@ import {
   fetchMyAssignedTruck,
   fetchMyDriverProfile,
   syncMyPhoneToFleet,
+  updateMyTruckSpecs,
+  effectiveWeightKg,
   type AssignedTruck,
   type DriverProfile,
 } from '../../src/services/assignedTrips'
@@ -98,15 +100,31 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [editField, setEditField] = useState<null | 'name' | 'phone'>(null)
+  // Campos editables desde el modal: datos de cuenta + campos del camión.
+  //  • current_weight_kg (peso actual): lo edita cualquier conductor.
+  //  • max_* (capacidad): solo el independiente (dueño sin panel web).
+  type SpecField = 'current_weight_kg' | 'max_weight_kg' | 'max_height_m' | 'max_width_m' | 'max_length_m'
+  type EditField = 'name' | 'phone' | SpecField
+  const [editField, setEditField] = useState<null | EditField>(null)
   const [draft, setDraft]         = useState('')
   const [saving, setSaving]       = useState(false)
 
   // El teléfono vive en la cuenta (profiles); si falta, caemos al de la ficha de empresa.
   const currentPhone = profile?.phone ?? driverProfile?.telefono ?? null
 
-  const openEdit = (field: 'name' | 'phone') => {
-    setDraft(field === 'name' ? (profile?.full_name ?? '') : (currentPhone ?? ''))
+  const TRUCK_SPEC_META: Record<SpecField, { label: string; unit: string; placeholder: string }> = {
+    current_weight_kg: { label: 'Peso actual', unit: 'kg', placeholder: 'Ej: 18000' },
+    max_weight_kg:     { label: 'Peso máximo', unit: 'kg', placeholder: 'Ej: 25000' },
+    max_height_m:      { label: 'Alto',        unit: 'm',  placeholder: 'Ej: 4.10' },
+    max_width_m:       { label: 'Ancho',       unit: 'm',  placeholder: 'Ej: 2.60' },
+    max_length_m:      { label: 'Largo',       unit: 'm',  placeholder: 'Ej: 12.50' },
+  }
+  const isSpecField = (f: EditField): f is SpecField => f in TRUCK_SPEC_META
+
+  const openEdit = (field: EditField) => {
+    if (field === 'name') setDraft(profile?.full_name ?? '')
+    else if (field === 'phone') setDraft(currentPhone ?? '')
+    else setDraft(assignedTruck ? String(assignedTruck[field] ?? '') : '')
     setEditField(field)
   }
 
@@ -114,6 +132,26 @@ export default function ProfileScreen() {
     if (!profile || !editField) return
     setSaving(true)
     try {
+      // ── Specs del camión (independiente) ──────────────────────────────
+      if (isSpecField(editField)) {
+        const num = Number(draft.trim().replace(',', '.'))
+        if (!Number.isFinite(num) || num <= 0) {
+          Alert.alert('Valor inválido', 'Ingresá un número mayor a 0.'); setSaving(false); return
+        }
+        const updated = await updateMyTruckSpecs({ [editField]: num })
+        setAssignedTruck(updated)
+        // El ruteo usa activeVehicle: lo actualizamos para que tome el nuevo peso
+        // (el actual si se cargó) y dimensiones sin tener que reabrir la app.
+        setActiveVehicle({
+          id: String(updated.id), user_id: '', plate: updated.patente ?? '', name: updated.name,
+          weight_kg: effectiveWeightKg(updated), height_m: updated.max_height_m,
+          width_m: updated.max_width_m, length_m: updated.max_length_m,
+          axles: 0, is_default: true, created_at: '',
+        })
+        setEditField(null)
+        return
+      }
+      // ── Datos de cuenta (nombre / teléfono) ───────────────────────────
       const value = draft.trim() || null
       if (editField === 'name') {
         if (!value) { Alert.alert('Nombre', 'Ingresá un nombre o alias.'); setSaving(false); return }
@@ -127,8 +165,8 @@ export default function ProfileScreen() {
         void syncMyPhoneToFleet(value) // best-effort: refleja en la ficha de empresa
       }
       setEditField(null)
-    } catch {
-      Alert.alert('Error', 'No se pudo guardar. Intentá de nuevo.')
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'No se pudo guardar. Intentá de nuevo.')
     } finally {
       setSaving(false)
     }
@@ -157,7 +195,7 @@ export default function ProfileScreen() {
         user_id:    '',
         plate:      at.value.patente ?? '',
         name:       at.value.name,
-        weight_kg:  at.value.max_weight_kg,
+        weight_kg:  effectiveWeightKg(at.value),
         height_m:   at.value.max_height_m,
         width_m:    at.value.max_width_m,
         length_m:   at.value.max_length_m,
@@ -330,6 +368,44 @@ export default function ProfileScreen() {
                     </View>
                   )}
                 </View>
+
+                {/* ── Peso actual: lo que transporta AHORA. Lo edita cualquier
+                    conductor (cambia en cada viaje) y es lo que usa el ruteo. ── */}
+                <View style={{ marginTop: 14, borderTopWidth: 1, borderTopColor: t.border }}>
+                  {(() => {
+                    const meta = TRUCK_SPEC_META.current_weight_kg
+                    const value = assignedTruck.current_weight_kg != null
+                      ? `${assignedTruck.current_weight_kg} ${meta.unit}`
+                      : 'Sin especificar'
+                    return (
+                      <TouchableOpacity activeOpacity={0.7} onPress={() => openEdit('current_weight_kg')}
+                        style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}>
+                        <Text style={{ fontSize: 13.5, color: t.textMuted, flex: 1 }}>{meta.label}</Text>
+                        <Text style={{ fontSize: 13.5, fontWeight: '600', color: assignedTruck.current_weight_kg != null ? t.text : t.textSoft }}>{value}</Text>
+                        <Ionicons name="create-outline" size={16} color={t.textSoft} style={{ marginLeft: 8 }} />
+                      </TouchableOpacity>
+                    )
+                  })()}
+                </View>
+
+                {/* ── Capacidad máxima (specs físicas, afectan el ruteo). Editables
+                    solo para el independiente; el de empresa las ve read-only. ── */}
+                <View style={{ borderTopWidth: 1, borderTopColor: t.border }}>
+                  {(['max_weight_kg', 'max_height_m', 'max_width_m', 'max_length_m'] as SpecField[]).map((key, i, arr) => {
+                    const meta = TRUCK_SPEC_META[key]
+                    const value = `${assignedTruck[key] ?? '—'} ${meta.unit}`
+                    const row = (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: i < arr.length - 1 ? 1 : 0, borderBottomColor: t.border }}>
+                        <Text style={{ fontSize: 13.5, color: t.textMuted, flex: 1 }}>{meta.label}</Text>
+                        <Text style={{ fontSize: 13.5, fontWeight: '600', color: t.text }}>{value}</Text>
+                        {isIndependent && <Ionicons name="create-outline" size={16} color={t.textSoft} style={{ marginLeft: 8 }} />}
+                      </View>
+                    )
+                    return isIndependent
+                      ? <TouchableOpacity key={key} activeOpacity={0.7} onPress={() => openEdit(key)}>{row}</TouchableOpacity>
+                      : <View key={key}>{row}</View>
+                  })}
+                </View>
               </Card>
             ) : (
               <Card style={{ padding: 14 }} t={t}>
@@ -398,15 +474,21 @@ export default function ProfileScreen() {
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 24 }}>
           <View style={{ backgroundColor: t.card, borderRadius: 16, padding: 20 }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: t.text, marginBottom: 14 }}>
-              {editField === 'name' ? 'Editar nombre o alias' : 'Editar teléfono'}
+              {editField && isSpecField(editField)
+                ? `${TRUCK_SPEC_META[editField].label} (${TRUCK_SPEC_META[editField].unit})`
+                : editField === 'name' ? 'Editar nombre o alias' : 'Editar teléfono'}
             </Text>
             <TextInput
               value={draft}
               onChangeText={setDraft}
-              placeholder={editField === 'name' ? 'Nombre o alias' : 'Teléfono'}
+              placeholder={editField && isSpecField(editField)
+                ? TRUCK_SPEC_META[editField].placeholder
+                : editField === 'name' ? 'Nombre o alias' : 'Teléfono'}
               placeholderTextColor={t.textSoft}
-              keyboardType={editField === 'phone' ? 'phone-pad' : 'default'}
-              textContentType={editField === 'phone' ? 'telephoneNumber' : 'name'}
+              keyboardType={
+                editField && isSpecField(editField) ? 'decimal-pad'
+                : editField === 'phone' ? 'phone-pad' : 'default'}
+              textContentType={editField === 'phone' ? 'telephoneNumber' : 'none'}
               autoFocus
               style={{ backgroundColor: bgColor, color: t.text, borderRadius: 10, borderWidth: 1, borderColor: t.border, padding: 14, fontSize: 16, marginBottom: 16 }}
             />

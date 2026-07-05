@@ -20,22 +20,24 @@ interface DraftTruck {
   max_height_m: string;
   max_width_m: string;
   max_length_m: string;
+  current_weight_kg: string;
   fecha_service: string;
   proximo_service: string;
 }
 
 const EMPTY_DRAFT: DraftTruck = {
-  name:           "",
-  patente:        "",
-  modelo:         "",
-  anio:           "",
-  km_actual:      "",
-  max_weight_kg:  "",
-  max_height_m:   "",
-  max_width_m:    "",
-  max_length_m:   "",
-  fecha_service:  "",
-  proximo_service:"",
+  name:              "",
+  patente:           "",
+  modelo:            "",
+  anio:              "",
+  km_actual:         "",
+  max_weight_kg:     "",
+  max_height_m:      "",
+  max_width_m:       "",
+  max_length_m:      "",
+  current_weight_kg: "",
+  fecha_service:     "",
+  proximo_service:   "",
 };
 
 function fromTruck(t: Truck): DraftTruck {
@@ -45,12 +47,13 @@ function fromTruck(t: Truck): DraftTruck {
     modelo:         t.modelo ?? "",
     anio:           t.anio != null ? String(t.anio) : "",
     km_actual:      t.km_actual != null ? String(t.km_actual) : "",
-    max_weight_kg:  String(t.max_weight_kg),
-    max_height_m:   String(t.max_height_m),
-    max_width_m:    String(t.max_width_m),
-    max_length_m:   String(t.max_length_m),
-    fecha_service:  t.fecha_service ?? "",
-    proximo_service:t.proximo_service ?? "",
+    max_weight_kg:     String(t.max_weight_kg),
+    max_height_m:      String(t.max_height_m),
+    max_width_m:       String(t.max_width_m),
+    max_length_m:      String(t.max_length_m),
+    current_weight_kg: t.current_weight_kg != null ? String(t.current_weight_kg) : "",
+    fecha_service:     t.fecha_service ?? "",
+    proximo_service:   t.proximo_service ?? "",
   };
 }
 
@@ -119,6 +122,7 @@ function buildPayload(draft: DraftTruck): BuildResult {
       max_height_m,
       max_width_m,
       max_length_m,
+      current_weight_kg: parseNumberOrNull(draft.current_weight_kg),
       fecha_service:   draft.fecha_service || null,
       proximo_service: draft.proximo_service || null,
     },
@@ -268,6 +272,16 @@ export default function TruckEditModal({ truck, onSave, onClose, onSubscriptionR
                 value={draft.max_weight_kg}
                 onChange={updateMasked("max_weight_kg", onlyDecimal)}
                 placeholder="15000"
+              />
+            </Field>
+            <Field label="Peso actual (kg)" hint="Carga de ahora">
+              <input
+                className="st-field"
+                type="text"
+                inputMode="decimal"
+                value={draft.current_weight_kg}
+                onChange={updateMasked("current_weight_kg", onlyDecimal)}
+                placeholder="Opcional"
               />
             </Field>
             <Field label="Alto máx (m)" required hint="Máx. 4.0 m">
