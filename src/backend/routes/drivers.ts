@@ -189,8 +189,11 @@ router.get('/me/maintenance', async (req: Request, res: Response) => {
       fecha_service: string | null
       proximo_service: string | null
       days_left: number | null
+      max_weight_kg: number | null
+      max_height_m: number | null
     }>(
       `SELECT t.id, t.name, t.patente, t.km_actual, t.fecha_service, t.proximo_service,
+              t.max_weight_kg, t.max_height_m,
               CASE WHEN t.proximo_service IS NULL THEN NULL
                    ELSE (t.proximo_service::date - CURRENT_DATE) END AS days_left
        FROM truck_drivers td

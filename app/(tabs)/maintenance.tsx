@@ -171,7 +171,9 @@ export default function MaintenanceScreen() {
                 </View>
                 <DataRow label="Fecha próx. service" value={formatDate(truck.proximo_service)} valueColor={urgency(truck.days_left, t).color} t={t} />
                 <DataRow label="Último service" value={formatDate(truck.fecha_service)} t={t} />
-                <DataRow label="Km actual" value={formatKm(truck.km_actual)} isLast t={t} />
+                <DataRow label="Km actual" value={formatKm(truck.km_actual)} t={t} />
+                <DataRow label="Peso máximo" value={truck.max_weight_kg != null ? `${truck.max_weight_kg.toLocaleString('es-AR')} kg` : null} t={t} />
+                <DataRow label="Altura máxima" value={truck.max_height_m != null ? `${truck.max_height_m.toLocaleString('es-AR')} m` : null} isLast t={t} />
               </Card>
             ) : (
               <Card style={{ padding: 14 }} t={t}>
