@@ -82,6 +82,8 @@ export interface MyMaintenance {
     proximo_service: string | null
     /** Días hasta el próximo service. Negativo = vencido. null = sin fecha. */
     days_left: number | null
+    max_weight_kg: number | null
+    max_height_m: number | null
   } | null
   last_maintenance: {
     tipo: string
