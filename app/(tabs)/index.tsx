@@ -1799,10 +1799,14 @@ export default function MapScreen() {
           <Text style={s.bannerText}>Tu cuenta no está configurada. Tocá acá para vincularte a una empresa o usar SafeTruck como independiente.</Text>
         </TouchableOpacity>
       ) : (truckChecked && !activeVehicle && (
-        <View style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}>
+        <TouchableOpacity
+          onPress={() => router.push('/(tabs)/profile')}
+          activeOpacity={0.8}
+          style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
+        >
           <Ionicons name="warning-outline" size={15} color={t.warning} />
-          <Text style={s.bannerText}>Todavía no tenés un camión configurado</Text>
-        </View>
+          <Text style={s.bannerText}>Todavía no tenés un camión configurado. Tocá acá para resolverlo desde tu perfil.</Text>
+        </TouchableOpacity>
       ))}
 
 

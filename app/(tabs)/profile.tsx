@@ -140,8 +140,10 @@ export default function ProfileScreen() {
     if (!opts?.silent) setProfileLoading(true)
 
     // El rol vive en user_metadata (lo escribe el backend en el onboarding).
-    const { data: sess } = await supabase.auth.getSession()
-    const independent = sess.session?.user?.user_metadata?.role === 'independent'
+    // getUser() lo trae fresco del servidor: la sesión cacheada puede tener el
+    // rol viejo si la cuenta se volvió independiente después del login.
+    const { data: fresh } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }))
+    const independent = fresh.user?.user_metadata?.role === 'independent'
     setIsIndependent(independent)
     if (independent) fetchMobileSubscription().then(setSubscription).catch(() => {})
 
