@@ -1,20 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity,
-  TextInput, Modal,
 } from 'react-native'
-import { Alert } from '../../components/AppAlert'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { supabase } from '../../src/services/supabase'
 import { useStore } from '../../src/store/useStore'
 import { useRealtime } from '../../src/services/realtime'
 import { getTheme, Theme } from '../../src/theme'
-import {
-  fetchMyMaintenance, fetchMyAssignedTruck, updateMyTruckSpecs, effectiveWeightKg,
-  type MyMaintenance, type AssignedTruck,
-} from '../../src/services/assignedTrips'
+import { fetchMyMaintenance, type MyMaintenance } from '../../src/services/assignedTrips'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -97,91 +91,28 @@ function StatusBadge({ days, t }: { days: number | null; t: Theme }) {
 
 // ── Pantalla ─────────────────────────────────────────────────────────────────
 
-// Campos editables del camión desde Mantenimiento.
-//  • current_weight_kg (peso actual): lo edita cualquier conductor.
-//  • max_* (capacidad): solo el independiente (dueño sin panel web).
-type SpecField = 'current_weight_kg' | 'max_weight_kg' | 'max_height_m' | 'max_width_m' | 'max_length_m'
-const TRUCK_SPEC_META: Record<SpecField, { label: string; unit: string; placeholder: string }> = {
-  current_weight_kg: { label: 'Peso actual', unit: 'kg', placeholder: 'Ej: 18000' },
-  max_weight_kg:     { label: 'Peso máximo', unit: 'kg', placeholder: 'Ej: 25000' },
-  max_height_m:      { label: 'Alto',        unit: 'm',  placeholder: 'Ej: 4.10' },
-  max_width_m:       { label: 'Ancho',       unit: 'm',  placeholder: 'Ej: 2.60' },
-  max_length_m:      { label: 'Largo',       unit: 'm',  placeholder: 'Ej: 12.50' },
-}
-
 export default function MaintenanceScreen() {
   const isDark = useStore(s => s.isDark)
-  const setActiveVehicle = useStore(s => s.setActiveVehicle)
   const t = getTheme(isDark)
   const insets = useSafeAreaInsets()
   const bgColor = isDark ? t.bg : '#F7F8FA'
 
   const [data, setData] = useState<MyMaintenance | null | undefined>(undefined)
-  const [specTruck, setSpecTruck] = useState<AssignedTruck | null>(null)
-  const [isIndependent, setIsIndependent] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState('cargando…')
-
-  // Edición de peso/dimensiones (modal numérico).
-  const [editField, setEditField] = useState<null | SpecField>(null)
-  const [draft, setDraft] = useState('')
-  const [saving, setSaving] = useState(false)
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true)
     try {
-      // El rol vive en user_metadata (lo escribe el backend en el onboarding).
-      supabase.auth.getSession()
-        .then(({ data: sess }) => setIsIndependent(sess.session?.user?.user_metadata?.role === 'independent'))
-        .catch(() => {})
-      const [maint, truck] = await Promise.allSettled([fetchMyMaintenance(), fetchMyAssignedTruck()])
-      if (maint.status === 'fulfilled') { setData(maint.value); setError(null) }
-      else setError('No pudimos cargar el mantenimiento. Revisá tu conexión.')
-      if (truck.status === 'fulfilled') setSpecTruck(truck.value)
-      // DEBUG temporal — sacar después.
-      setDebugInfo(
-        `maint=${maint.status}` +
-        ` | truck=${truck.status}` +
-        (truck.status === 'fulfilled'
-          ? `:${truck.value ? (truck.value.name ?? 'sinNombre') : 'NULL'}`
-          : `:${(truck as PromiseRejectedResult).reason?.message ?? 'err'}`)
-      )
+      const res = await fetchMyMaintenance()
+      setData(res)
+      setError(null)
+    } catch {
+      setError('No pudimos cargar el mantenimiento. Revisá tu conexión.')
     } finally {
       setLoading(false)
     }
   }, [])
-
-  const openEdit = (field: SpecField) => {
-    setDraft(specTruck ? String(specTruck[field] ?? '') : '')
-    setEditField(field)
-  }
-
-  async function saveEdit() {
-    if (!editField) return
-    setSaving(true)
-    try {
-      const num = Number(draft.trim().replace(',', '.'))
-      if (!Number.isFinite(num) || num <= 0) {
-        Alert.alert('Valor inválido', 'Ingresá un número mayor a 0.'); setSaving(false); return
-      }
-      const updated = await updateMyTruckSpecs({ [editField]: num })
-      setSpecTruck(updated)
-      // El ruteo usa activeVehicle: lo actualizamos con el nuevo peso (el actual
-      // si se cargó) y dimensiones, sin tener que reabrir la app.
-      setActiveVehicle({
-        id: String(updated.id), user_id: '', plate: updated.patente ?? '', name: updated.name,
-        weight_kg: effectiveWeightKg(updated), height_m: updated.max_height_m,
-        width_m: updated.max_width_m, length_m: updated.max_length_m,
-        axles: 0, is_default: true, created_at: '',
-      })
-      setEditField(null)
-    } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'No se pudo guardar. Intentá de nuevo.')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   useEffect(() => { void load() }, [load])
   useFocusEffect(useCallback(() => { void load({ silent: true }) }, [load]))
@@ -204,13 +135,6 @@ export default function MaintenanceScreen() {
       <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', color: t.accent, marginBottom: 16 }}>
         MANTENIMIENTO
       </Text>
-
-      {/* DEBUG temporal — sacar después */}
-      <View style={{ backgroundColor: '#FEF3C7', borderRadius: 8, padding: 10, marginBottom: 14, borderWidth: 1, borderColor: '#F59E0B' }}>
-        <Text style={{ fontSize: 12, color: '#92400E', fontWeight: '700' }}>DEBUG</Text>
-        <Text style={{ fontSize: 12, color: '#92400E' }}>{debugInfo}</Text>
-        <Text style={{ fontSize: 12, color: '#92400E' }}>specTruck: {specTruck ? (specTruck.name ?? 'sí') : 'null'} · indep: {String(isIndependent)}</Text>
-      </View>
 
       {loading && data === undefined ? (
         <ActivityIndicator color={t.accent} style={{ marginVertical: 40 }} />
@@ -256,42 +180,6 @@ export default function MaintenanceScreen() {
             )}
           </View>
 
-          {/* ── Carga y dimensiones (afectan el ruteo) ───────────────── */}
-          {specTruck && (
-            <View style={{ marginBottom: 22 }}>
-              <SectionLabel>Carga y dimensiones</SectionLabel>
-              <Card t={t}>
-                {/* Peso actual — lo edita cualquier conductor (cambia cada viaje) */}
-                <TouchableOpacity activeOpacity={0.7} onPress={() => openEdit('current_weight_kg')}
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: t.border }}>
-                  <Text style={{ fontSize: 13.5, color: t.textMuted, flex: 1 }}>Peso actual</Text>
-                  <Text style={{ fontSize: 13.5, fontWeight: '600', color: specTruck.current_weight_kg != null ? t.text : t.textSoft }}>
-                    {specTruck.current_weight_kg != null ? `${specTruck.current_weight_kg} kg` : 'Sin especificar'}
-                  </Text>
-                  <Ionicons name="create-outline" size={16} color={t.textSoft} style={{ marginLeft: 8 }} />
-                </TouchableOpacity>
-                {/* Capacidad máxima — solo el independiente la edita */}
-                {(['max_weight_kg', 'max_height_m', 'max_width_m', 'max_length_m'] as SpecField[]).map((key, i, arr) => {
-                  const meta = TRUCK_SPEC_META[key]
-                  const value = `${specTruck[key] ?? '—'} ${meta.unit}`
-                  const row = (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: i < arr.length - 1 ? 1 : 0, borderBottomColor: t.border }}>
-                      <Text style={{ fontSize: 13.5, color: t.textMuted, flex: 1 }}>{meta.label}</Text>
-                      <Text style={{ fontSize: 13.5, fontWeight: '600', color: t.text }}>{value}</Text>
-                      {isIndependent && <Ionicons name="create-outline" size={16} color={t.textSoft} style={{ marginLeft: 8 }} />}
-                    </View>
-                  )
-                  return isIndependent
-                    ? <TouchableOpacity key={key} activeOpacity={0.7} onPress={() => openEdit(key)}>{row}</TouchableOpacity>
-                    : <View key={key}>{row}</View>
-                })}
-              </Card>
-              <Text style={{ fontSize: 11.5, color: t.textMuted, marginTop: 8, paddingHorizontal: 2, lineHeight: 16 }}>
-                El peso actual es lo que estás transportando ahora; el ruteo lo usa para evitar calles con límite de carga.
-              </Text>
-            </View>
-          )}
-
           {/* ── Último mantenimiento ─────────────────────────────────── */}
           {lastM && (
             <>
@@ -329,33 +217,6 @@ export default function MaintenanceScreen() {
           </Text>
         </>
       )}
-
-      <Modal visible={editField !== null} transparent animationType="fade" onRequestClose={() => setEditField(null)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 24 }}>
-          <View style={{ backgroundColor: t.card, borderRadius: 16, padding: 20 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: t.text, marginBottom: 14 }}>
-              {editField ? `${TRUCK_SPEC_META[editField].label} (${TRUCK_SPEC_META[editField].unit})` : ''}
-            </Text>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder={editField ? TRUCK_SPEC_META[editField].placeholder : ''}
-              placeholderTextColor={t.textSoft}
-              keyboardType="decimal-pad"
-              autoFocus
-              style={{ backgroundColor: bgColor, color: t.text, borderRadius: 10, borderWidth: 1, borderColor: t.border, padding: 14, fontSize: 16, marginBottom: 16 }}
-            />
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
-              <TouchableOpacity onPress={() => setEditField(null)} disabled={saving} style={{ paddingVertical: 10, paddingHorizontal: 16 }}>
-                <Text style={{ color: t.textMuted, fontWeight: '600' }}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={saveEdit} disabled={saving} style={{ backgroundColor: t.accent, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 18 }}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Guardar</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   )
 }

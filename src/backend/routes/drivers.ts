@@ -142,8 +142,7 @@ router.get('/me/truck', async (req: Request, res: Response) => {
   try {
     const result = await pool.query(
       `SELECT t.id, t.name, t.patente, t.modelo, t.anio,
-              t.max_weight_kg, t.max_height_m, t.max_width_m, t.max_length_m,
-              t.current_weight_kg, t.estado
+              t.max_weight_kg, t.max_height_m, t.max_width_m, t.max_length_m, t.estado
        FROM drivers d
        JOIN truck_drivers td ON td.driver_id = d.id
        JOIN trucks t         ON t.id = td.truck_id AND t.is_active = true
@@ -154,74 +153,6 @@ router.get('/me/truck', async (req: Request, res: Response) => {
     res.json(result.rows[0] ?? null)
   } catch (err: any) {
     console.error('Error en GET /api/drivers/me/truck:', err)
-    res.status(500).json({ error: err.message })
-  }
-})
-
-// ---------------------------------------------------------------------------
-// PATCH /api/drivers/me/truck — El conductor edita datos de SU camión desde el móvil.
-//   • current_weight_kg (peso que transporta AHORA): lo puede editar CUALQUIER
-//     conductor, porque cambia en cada viaje (carga y descarga). Es lo que usa
-//     el ruteo para saber con cuánto peso circula.
-//   • capacidad (max_weight_kg/alto/ancho/largo): SOLO el conductor independiente,
-//     que es el dueño y no tiene panel web. Para los de empresa esas specs las
-//     administra la flota desde la web (acá se ignoran / rechazan).
-// ---------------------------------------------------------------------------
-router.patch('/me/truck', async (req: Request, res: Response) => {
-  const appUserId = req.user!.id
-  const isIndependent = (req.user!.user_metadata as any)?.role === 'independent'
-
-  const allowed = isIndependent
-    ? ['current_weight_kg', 'max_weight_kg', 'max_height_m', 'max_width_m', 'max_length_m']
-    : ['current_weight_kg']
-
-  const updates: Record<string, number> = {}
-  for (const field of allowed) {
-    if (field in req.body) {
-      const num = Number(req.body[field])
-      if (!Number.isFinite(num) || num <= 0) {
-        res.status(400).json({ error: `Valor inválido para ${field}.` })
-        return
-      }
-      updates[field] = num
-    }
-  }
-  if (Object.keys(updates).length === 0) {
-    res.status(400).json({ error: 'Sin campos para actualizar.' })
-    return
-  }
-
-  try {
-    // Resolvemos el camión vinculado al conductor (misma relación que el GET).
-    const truckRes = await pool.query<{ id: number }>(
-      `SELECT t.id
-       FROM drivers d
-       JOIN truck_drivers td ON td.driver_id = d.id
-       JOIN trucks t         ON t.id = td.truck_id AND t.is_active = true
-       WHERE d.app_user_id = $1 AND d.is_active = true
-       LIMIT 1`,
-      [appUserId]
-    )
-    if (!truckRes.rowCount) {
-      res.status(404).json({ error: 'No tenés un camión configurado.' })
-      return
-    }
-    const truckId = truckRes.rows[0].id
-
-    const fields = Object.keys(updates)
-    const setClauses = fields.map((f, i) => `${f} = $${i + 1}`).join(', ')
-    const values = [...fields.map(f => updates[f]), truckId]
-    const result = await pool.query(
-      `UPDATE trucks SET ${setClauses}, updated_at = NOW()
-       WHERE id = $${fields.length + 1}
-       RETURNING id, name, patente, modelo, anio,
-                 max_weight_kg, max_height_m, max_width_m, max_length_m,
-                 current_weight_kg, estado`,
-      values
-    )
-    res.json(result.rows[0])
-  } catch (err: any) {
-    console.error('Error en PATCH /api/drivers/me/truck:', err)
     res.status(500).json({ error: err.message })
   }
 })

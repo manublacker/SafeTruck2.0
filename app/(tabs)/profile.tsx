@@ -15,7 +15,6 @@ import {
   fetchMyAssignedTruck,
   fetchMyDriverProfile,
   syncMyPhoneToFleet,
-  effectiveWeightKg,
   type AssignedTruck,
   type DriverProfile,
 } from '../../src/services/assignedTrips'
@@ -158,7 +157,7 @@ export default function ProfileScreen() {
         user_id:    '',
         plate:      at.value.patente ?? '',
         name:       at.value.name,
-        weight_kg:  effectiveWeightKg(at.value),
+        weight_kg:  at.value.max_weight_kg,
         height_m:   at.value.max_height_m,
         width_m:    at.value.max_width_m,
         length_m:   at.value.max_length_m,

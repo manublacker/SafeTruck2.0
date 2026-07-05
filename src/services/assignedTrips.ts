@@ -191,34 +191,11 @@ export interface AssignedTruck {
   max_height_m: number
   max_width_m: number
   max_length_m: number
-  /** Peso que transporta AHORA (carga actual). null = sin especificar. */
-  current_weight_kg: number | null
   estado: string
 }
 
 export async function fetchMyAssignedTruck(): Promise<AssignedTruck | null> {
   return apiRequest<AssignedTruck | null>('/api/drivers/me/truck')
-}
-
-/** Peso efectivo para el ruteo: el actual si se cargó, sino la capacidad máxima. */
-export function effectiveWeightKg(truck: { current_weight_kg?: number | null; max_weight_kg: number }): number {
-  return truck.current_weight_kg ?? truck.max_weight_kg
-}
-
-/**
- * Campos del camión editables desde el móvil. `current_weight_kg` lo puede
- * cambiar cualquier conductor; las specs de capacidad solo el independiente
- * (el backend valida el permiso por rol).
- */
-export type TruckSpecs = Partial<Pick<AssignedTruck,
-  'current_weight_kg' | 'max_weight_kg' | 'max_height_m' | 'max_width_m' | 'max_length_m'>>
-
-/** Actualiza datos del camión propio (peso actual y, para independientes, capacidad). */
-export async function updateMyTruckSpecs(specs: TruckSpecs): Promise<AssignedTruck> {
-  return apiRequest<AssignedTruck>('/api/drivers/me/truck', {
-    method: 'PATCH',
-    body: JSON.stringify(specs),
-  })
 }
 
 export interface DriverProfile {

@@ -37,12 +37,6 @@ export default function TabLayout() {
       detachInactiveScreens={false}
       screenOptions={{
       headerShown: false,
-      // Premonta TODAS las tabs al abrir la app (por defecto cada una se monta
-      // recién la primera vez que la enfocás). Junto con detachInactiveScreens
-      // arriba, cada pantalla corre su carga de datos al arranque y queda viva:
-      // al navegar a Perfil/Viajes/Manten. ya están montadas y con datos, sin
-      // el spinner/frame de montaje que había al entrar por primera vez.
-      lazy: false,
       tabBarStyle: {
         backgroundColor: t.navy,
         borderTopWidth: 0,

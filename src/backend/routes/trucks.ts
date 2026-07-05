@@ -31,7 +31,6 @@ const UPDATABLE_FIELDS = [
   "max_height_m",
   "max_width_m",
   "max_length_m",
-  "current_weight_kg",
   "patente",
   "modelo",
   "anio",
@@ -50,7 +49,6 @@ interface TruckRow {
   max_height_m: number;
   max_width_m: number;
   max_length_m: number;
-  current_weight_kg: number | null;
   patente: string | null;
   modelo: string | null;
   anio: number | null;
@@ -71,7 +69,6 @@ interface TruckResponse {
   max_height_m: number;
   max_width_m: number;
   max_length_m: number;
-  current_weight_kg: number | null;
   patente: string | null;
   modelo: string | null;
   anio: number | null;
@@ -86,7 +83,6 @@ interface TruckResponse {
 const TRUCK_BASE_SELECT = `
   SELECT
     t.id, t.name, t.max_weight_kg, t.max_height_m, t.max_width_m, t.max_length_m,
-    t.current_weight_kg,
     t.patente, t.modelo, t.anio, t.km_actual, t.fecha_service, t.proximo_service,
     t.estado, t.created_at,
     d.id       AS driver_id,
