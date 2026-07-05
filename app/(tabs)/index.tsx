@@ -1400,8 +1400,16 @@ export default function MapScreen() {
   // colapsado (asoma la cabecera), h = cerrado (dispara clearRoute).
   const sheetPan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) =>
-        Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      // La zona arrastrable (handle + cabecera) no tiene hijos táctiles, así que
+      // reclamamos el gesto ya al tocar: sobre el MapView nativo el reclamo por
+      // movimiento no es confiable (el mapa se queda el gesto y no pasa nada).
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 3,
+      onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dy) > 3,
+      // Que ningún componente nativo (el mapa) nos robe el gesto a mitad de camino.
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
       onPanResponderMove: (_, g) => {
         const h = sheetH.current || 1
         const next = Math.max(0, Math.min(h, sheetRest.current + g.dy))
@@ -1419,11 +1427,11 @@ export default function MapScreen() {
           target = snaps.reduce((a, b) => (Math.abs(b - cur) < Math.abs(a - cur) ? b : a))
         }
         if (target >= h - 2) {
-          Animated.timing(sheetY, { toValue: h, duration: 200, useNativeDriver: true })
+          Animated.timing(sheetY, { toValue: h, duration: 200, useNativeDriver: false })
             .start(() => { sheetRest.current = 0; sheetY.setValue(0); clearRouteRef.current() })
         } else {
           sheetRest.current = target
-          Animated.spring(sheetY, { toValue: target, useNativeDriver: true, bounciness: 4, speed: 14 }).start()
+          Animated.spring(sheetY, { toValue: target, useNativeDriver: false, bounciness: 4, speed: 14 }).start()
         }
       },
     })
