@@ -156,7 +156,6 @@ export default function OnboardingScreen() {
     if (driverId == null) return
     setLoading(true)
     setError('')
-    setPaymentPending(false)
     try {
       // Si ya pagó antes (reintento / app cerrada a mitad del flujo), no lo
       // mandamos a pagar de nuevo.
@@ -168,10 +167,31 @@ export default function OnboardingScreen() {
       if (hasActivePlan(sub)) {
         await finishIndependent(driverId)
       } else {
+        // Volvió del checkout sin pago acreditado: puede reintentar el pago
+        // (botón principal) o verificar más tarde si pagó recién (secundario).
         setPaymentPending(true)
       }
     } catch (e: any) {
       setError(e?.message ?? 'No se pudo completar el pago.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Solo consulta si el pago ya figura acreditado, sin abrir MercadoPago.
+  async function handleVerifyPayment() {
+    if (driverId == null) return
+    setLoading(true)
+    setError('')
+    try {
+      const sub = await confirmSubscription(INDEPENDENT_PLAN)
+      if (hasActivePlan(sub)) {
+        await finishIndependent(driverId)
+      } else {
+        setError('Todavía no encontramos tu pago. Si acabás de pagar, esperá un minuto y volvé a verificar.')
+      }
+    } catch (e: any) {
+      setError(e?.message ?? 'No se pudo verificar el pago.')
     } finally {
       setLoading(false)
     }
@@ -324,7 +344,8 @@ export default function OnboardingScreen() {
 
             {paymentPending && (
               <Text style={s.pending}>
-                Todavía no vimos tu pago acreditado. Si ya pagaste, tocá el botón para verificar de nuevo.
+                Todavía no vimos tu pago acreditado. Podés volver a intentar el pago,
+                o si ya pagaste, verificarlo de nuevo.
               </Text>
             )}
             {!!error && <Text style={s.error}>{error}</Text>}
@@ -332,9 +353,15 @@ export default function OnboardingScreen() {
             <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handlePay} disabled={loading}>
               {loading
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={s.btnText}>{paymentPending ? 'Ya pagué, verificar' : 'Pagar con MercadoPago'}</Text>
+                : <Text style={s.btnText}>Pagar con MercadoPago</Text>
               }
             </TouchableOpacity>
+
+            {paymentPending && (
+              <TouchableOpacity style={[s.btnSecondary, loading && s.btnDisabled]} onPress={handleVerifyPayment} disabled={loading}>
+                <Text style={s.btnSecondaryText}>Ya pagué, verificar</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -409,6 +436,11 @@ function makeStyles(t: Theme) {
     },
 
     btn: { backgroundColor: t.accent, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
+    btnSecondary: {
+      backgroundColor: t.card, borderRadius: 12, padding: 16, alignItems: 'center',
+      marginTop: 10, borderWidth: 1, borderColor: t.border,
+    },
+    btnSecondaryText: { color: t.text, fontSize: 15, fontWeight: '600' },
     btnDisabled: { opacity: 0.6 },
     btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
     link: { marginTop: 20, alignItems: 'center' },
