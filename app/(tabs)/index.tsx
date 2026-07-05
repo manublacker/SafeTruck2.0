@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
   Modal, ScrollView, TextInput, Keyboard, Platform, AppState,
+  Animated, PanResponder,
 } from 'react-native'
 import { Alert } from '../../components/AppAlert'
 import MapView, { Marker, Polyline, Region } from 'react-native-maps'
@@ -337,6 +338,13 @@ export default function MapScreen() {
   const router = useRouter()
   const [tripSheet, setTripSheet] = useState<AssignedTrip | null>(null)
   const [tripUpdating, setTripUpdating] = useState(false)
+  // Bottom sheet arrastrable del viaje: translateY animado + altura medida +
+  // posición de reposo actual (0 = expandido). El usuario lo arrastra desde la
+  // cabecera para colapsarlo (deja asomando el "peek") o cerrarlo del todo.
+  const sheetY = useRef(new Animated.Value(0)).current
+  const sheetH = useRef(0)
+  const sheetRest = useRef(0)
+  const SHEET_PEEK = 120
   const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const routeAbortRef = useRef<AbortController | null>(null)
   // Generación del dibujo del viaje: se incrementa cada vez que arranca un dibujo
@@ -1378,6 +1386,49 @@ export default function MapScreen() {
     }
   }
 
+  // clearRoute se recrea en cada render; el PanResponder se crea una sola vez,
+  // así que lo llamamos vía ref para no capturar una versión vieja (tripId stale).
+  const clearRouteRef = useRef(clearRoute)
+  clearRouteRef.current = clearRoute
+
+  // Al abrir (o cambiar de) viaje, el sheet aparece siempre expandido.
+  useEffect(() => {
+    if (tripSheet) { sheetRest.current = 0; sheetY.setValue(0) }
+  }, [tripSheet?.id])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Gestos del bottom sheet del viaje. Snaps: 0 = expandido, (h - PEEK) =
+  // colapsado (asoma la cabecera), h = cerrado (dispara clearRoute).
+  const sheetPan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        const h = sheetH.current || 1
+        const next = Math.max(0, Math.min(h, sheetRest.current + g.dy))
+        sheetY.setValue(next)
+      },
+      onPanResponderRelease: (_, g) => {
+        const h = sheetH.current || 1
+        const collapsed = Math.max(0, h - SHEET_PEEK)
+        const cur = Math.max(0, Math.min(h, sheetRest.current + g.dy))
+        let target: number
+        if (g.vy > 0.6) target = sheetRest.current >= collapsed - 4 ? h : collapsed
+        else if (g.vy < -0.6) target = 0
+        else {
+          const snaps = [0, collapsed, h]
+          target = snaps.reduce((a, b) => (Math.abs(b - cur) < Math.abs(a - cur) ? b : a))
+        }
+        if (target >= h - 2) {
+          Animated.timing(sheetY, { toValue: h, duration: 200, useNativeDriver: true })
+            .start(() => { sheetRest.current = 0; sheetY.setValue(0); clearRouteRef.current() })
+        } else {
+          sheetRest.current = target
+          Animated.spring(sheetY, { toValue: target, useNativeDriver: true, bounciness: 4, speed: 14 }).start()
+        }
+      },
+    })
+  ).current
+
   // Frena un viaje ASIGNADO en curso: lo vuelve a 'accepted' (deja de figurar
   // "en curso" para el empresario) y saca la ubicación viva del mapa. Así no
   // queda colgado in_progress al cerrar la ruta. Best-effort.
@@ -2018,7 +2069,11 @@ export default function MapScreen() {
 
       {/* ── Trip Sheet ─────────────────────────────────────────────────── */}
       {tripSheet && !navMode && !showInfo && (
-        <View style={[s.tripSheet, { paddingBottom: 30 }]}>
+        <Animated.View
+          style={[s.tripSheet, { paddingBottom: 30, transform: [{ translateY: sheetY }] }]}
+          onLayout={e => { sheetH.current = e.nativeEvent.layout.height }}
+        >
+          <View {...sheetPan.panHandlers}>
           <View style={s.tripSheetHandle} />
 
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -2066,6 +2121,7 @@ export default function MapScreen() {
               )}
             </View>
           )}
+          </View>
 
           {/* Origen del viaje: por defecto el guardado; se puede cambiar a la ubicación actual. */}
           {!navMode && !simRunning && (
@@ -2098,7 +2154,7 @@ export default function MapScreen() {
               )}
             </View>
           )}
-        </View>
+        </Animated.View>
       )}
     </View>
   )
