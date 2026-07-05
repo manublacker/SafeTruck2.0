@@ -13,7 +13,7 @@ import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme, isDarkTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
-import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, fetchMyDriverProfile, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, authHeaders, type AssignedTrip } from '../../src/services/assignedTrips'
+import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, fetchMyDriverProfile, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
 import { getRecentDestinations, addRecentDestination, removeRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
 import { useRealtime } from '../../src/services/realtime'
 
@@ -395,7 +395,7 @@ export default function MapScreen() {
       const res = await fetch(`${BACKEND}/route`, {
         method: 'POST',
         signal: controller.signal,
-        headers: await authHeaders(),
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({
           origin: { lat: oLat, lng: oLng },
           destination: { lat: dLat, lng: dLng },
@@ -1243,7 +1243,7 @@ export default function MapScreen() {
       const res = await fetch(`${BACKEND}/route`, {
         method: 'POST',
         signal: controller.signal,
-        headers: await authHeaders(),
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({
           origin: originPoint,
           destination: { lat: destLat, lng: destLng },
