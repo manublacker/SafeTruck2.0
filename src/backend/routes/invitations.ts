@@ -98,7 +98,7 @@ router.post('/redeem', authMiddleware, async (req: Request, res: Response) => {
       // la empresa que lo invitó. Sus camiones y su historial quedan intactos.
       await client.query(
         `UPDATE drivers SET is_active = false, updated_at = NOW()
-         WHERE user_id = $1 AND app_user_id = $1 AND is_active = true`,
+         WHERE user_id::text = $1 AND app_user_id::text = $1 AND is_active = true`,
         [driverUserId]
       )
 
