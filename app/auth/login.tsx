@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router'
 import { supabase } from '../../src/services/supabase'
 import { signInWithGoogle, authErrorMessage } from '../../src/services/auth'
 import { registerForPushNotifications } from '../../src/services/push'
+import { fetchMyDriverProfile } from '../../src/services/assignedTrips'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 
@@ -47,7 +48,12 @@ export default function LoginScreen() {
       if (profile) {
         setProfile(profile)
         void registerForPushNotifications()
-        router.replace('/(tabs)/')
+
+        // Cuenta sin configurar (ni empresa ni independiente): la mandamos al
+        // onboarding para que elija, en vez de dejarla en las tabs sin poder
+        // hacer nada. Si la consulta falla (red), no bloqueamos el ingreso.
+        const linked = await fetchMyDriverProfile().catch(() => undefined)
+        router.replace(linked === null ? '/auth/onboarding' : '/(tabs)/')
       }
     } catch (e: any) {
       Alert.alert('Error al ingresar', authErrorMessage(e))
