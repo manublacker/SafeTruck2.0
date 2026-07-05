@@ -262,11 +262,16 @@ async function upsertSubscription(p: UpsertParams) {
 
   if (subErr) throw subErr
 
+  // profiles.plan es solo un espejo (la fuente de verdad es subscriptions).
+  // UPDATE y no upsert: un upsert de {id, plan} viola el NOT NULL de full_name
+  // incluso sobre filas existentes (Postgres valida la fila propuesta antes de
+  // resolver el conflicto). Y si falla, no tumbamos la confirmación del pago.
   const { error: profileErr } = await supabase
     .from('profiles')
-    .upsert({ id: p.userId, plan: p.plan }, { onConflict: 'id' })
+    .update({ plan: p.plan })
+    .eq('id', p.userId)
 
-  if (profileErr) throw profileErr
+  if (profileErr) console.error('[billing] profiles.plan no actualizado:', profileErr.message)
 }
 
 async function logEvent(eventId: string, eventType: string, userId: string, payload: object) {
