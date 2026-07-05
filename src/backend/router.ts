@@ -73,7 +73,7 @@ export async function calculateRoute(
 
     const segments: RouteSegment[] = validRows.map((r: any) => {
       const allowed = r.heavy_vehicle_allowed
-      const isFalse = allowed === false || allowed === 'false' || allowed === 'f' || allowed === null || allowed === undefined || allowed === 0
+      const isFalse = allowed === false || allowed === 'false' || allowed === 'f' || allowed === 0
       const isTrue = !isFalse && allowed !== null && allowed !== undefined
 
       let status: 'ok' | 'unauthorized' | 'unknown' = 'unknown'
