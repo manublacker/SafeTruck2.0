@@ -46,7 +46,13 @@ app.use('/api/assigned-trips', assignedTripsRouter)
 app.use('/api/invitations', invitationsRouter)
 app.use('/api/locations', locationsRouter)
 app.use('/api/push-tokens', pushTokensRouter)
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'SafeTruck API' }))
+// Railway inyecta RAILWAY_GIT_COMMIT_SHA: permite verificar desde afuera qué
+// versión del código está desplegada (clave para diagnosticar deploys colgados).
+app.get('/api/health', (_req, res) => res.json({
+  status: 'ok',
+  service: 'SafeTruck API',
+  commit: (process.env.RAILWAY_GIT_COMMIT_SHA ?? 'desconocido').slice(0, 7),
+}))
 
 // ────────────────────────────────────────────────────────────────────────────
 // Routing (existente)
