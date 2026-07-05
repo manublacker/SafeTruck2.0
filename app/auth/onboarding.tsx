@@ -129,7 +129,16 @@ export default function OnboardingScreen() {
         telefono: profile?.phone ?? null,
       })
       setDriverId(setup.driver_id)
-      setMode('payment')
+
+      // Si ya tiene el plan activo (está retomando el flujo después de haber
+      // pagado), no le mostramos la pantalla de pago: directo a crear y
+      // asignar el camión.
+      const sub = await confirmSubscription(INDEPENDENT_PLAN).catch(() => null)
+      if (hasActivePlan(sub)) {
+        await finishIndependent(setup.driver_id)
+      } else {
+        setMode('payment')
+      }
     } catch (e: any) {
       setError(e?.message ?? 'No se pudo configurar tu cuenta.')
     } finally {
