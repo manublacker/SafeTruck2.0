@@ -32,3 +32,15 @@ export async function addRecentDestination(dest: RecentDest): Promise<RecentDest
     return []
   }
 }
+
+/** Saca un destino puntual de la lista (botón "X" en Recientes) y persiste. */
+export async function removeRecentDestination(display_name: string): Promise<RecentDest[]> {
+  try {
+    const current = await getRecentDestinations()
+    const next = current.filter(d => d.display_name !== display_name)
+    await SecureStore.setItemAsync(KEY, JSON.stringify(next))
+    return next
+  } catch {
+    return []
+  }
+}

@@ -14,7 +14,7 @@ import { Theme, getTheme, isDarkTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
 import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, fetchMyDriverProfile, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
-import { getRecentDestinations, addRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
+import { getRecentDestinations, addRecentDestination, removeRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
 import { useRealtime } from '../../src/services/realtime'
 
 // Corre una sola vez por sesión de app: al abrir, completamos viajes personales
@@ -879,6 +879,12 @@ export default function MapScreen() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'background') return
+      // Cerrar los desplegables de búsqueda (destino/origen): si quedaban
+      // abiertos al mandar la app a segundo plano (foco en el campo sin haber
+      // tocado nada más), al reabrirla React Native retoma el mismo estado y
+      // aparecían los "Recientes" de la nada, sin que el usuario tocara la barra.
+      setShowSearch(false)
+      setShowOriginSearch(false)
       const id = personalTripIdRef.current
       if (id == null) return
       personalTripIdRef.current = null
@@ -1038,6 +1044,17 @@ export default function MapScreen() {
       Keyboard.dismiss()
     }, [])
   )
+
+  // Al cerrar el teclado (botón atrás, tocar fuera, o tras elegir un resultado)
+  // ocultamos los desplegables de búsqueda. Sin esto, los "Recientes" quedaban
+  // colgados sobre el mapa aunque el usuario ya no estuviera escribiendo.
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidHide', () => {
+      setShowSearch(false)
+      setShowOriginSearch(false)
+    })
+    return () => sub.remove()
+  }, [])
 
   // Label corto: calle + barrio/localidad (igual que la web). Mostrar solo la
   // primera parte hacía que 5 resultados distintos se vieran todos iguales.
@@ -1715,16 +1732,24 @@ export default function MapScreen() {
           <View style={s.searchResults}>
             <Text style={s.searchSectionLabel}>Recientes</Text>
             {recents.map((r, idx) => (
-              <TouchableOpacity
+              <View
                 key={idx}
                 style={[s.searchResultItem, idx < recents.length - 1 && s.searchResultBorder]}
-                onPress={() => selectResult(r)}
               >
-                <Ionicons name="time-outline" size={16} color={t.textMuted} style={{ marginRight: 8 }} />
-                <Text style={s.searchResultName} numberOfLines={1}>
-                  {shortLabel(r.display_name)}
-                </Text>
-              </TouchableOpacity>
+                <Ionicons name="time-outline" size={16} color={t.textMuted} />
+                <TouchableOpacity style={{ flex: 1 }} onPress={() => selectResult(r)}>
+                  <Text style={s.searchResultName} numberOfLines={1}>
+                    {shortLabel(r.display_name)}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => void removeRecentDestination(r.display_name).then(setRecents)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityLabel="Quitar de recientes"
+                >
+                  <Ionicons name="close" size={18} color={t.textMuted} />
+                </TouchableOpacity>
+              </View>
             ))}
           </View>
         )}

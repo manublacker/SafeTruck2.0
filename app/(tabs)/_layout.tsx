@@ -29,7 +29,13 @@ export default function TabLayout() {
     }
 
   return (
-    <Tabs screenOptions={{
+    <Tabs
+      // Mantiene las pantallas montadas al cambiar de tab (por defecto Android/iOS
+      // las "detachan" y destruyen su vista nativa). Sin esto, el MapView se
+      // recreaba cada vez que se volvía al Mapa: pantalla azul + recarga de tiles
+      // y ruta. Con 4 tabs el costo de memoria es mínimo.
+      detachInactiveScreens={false}
+      screenOptions={{
       headerShown: false,
       tabBarStyle: {
         backgroundColor: t.navy,
