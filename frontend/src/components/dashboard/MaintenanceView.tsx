@@ -257,11 +257,8 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
   const [presetTruck, setPresetTruck]   = useState<number | null>(null);
   const [historyTruck, setHistoryTruck] = useState<Truck | null>(null);
 
-  // Filtros de la lista.
+  // Filtro por estado (se activa desde los KPIs).
   const [statusFilter, setStatusFilter] = useState<ServiceUrgency | null>(null);
-  const [query, setQuery] = useState("");
-  const [kmMin, setKmMin] = useState("");
-  const [kmMax, setKmMax] = useState("");
 
   const licenciasRef = useRef<HTMLDivElement | null>(null);
 
@@ -312,30 +309,10 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
     return c;
   }, [fleet]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const min = num(kmMin);
-    const max = num(kmMax);
-    return fleet.filter(({ truck, status }) => {
-      if (statusFilter && status.urgency !== statusFilter) return false;
-      if (q && !`${truck.name ?? ""} ${truck.patente ?? ""}`.toLowerCase().includes(q)) return false;
-      const km = num(truck.km_actual);
-      if (min != null && (km == null || km < min)) return false;
-      if (max != null && (km == null || km > max)) return false;
-      return true;
-    });
-  }, [fleet, statusFilter, query, kmMin, kmMax]);
-
-  const attention = useMemo(
-    () => filtered.filter((f) => f.status.urgency === "vencido" || f.status.urgency === "proximo").sort(byUrgency),
-    [filtered],
+  const sortedFleet = useMemo(
+    () => fleet.filter(({ status }) => !statusFilter || status.urgency === statusFilter).sort(byUrgency),
+    [fleet, statusFilter],
   );
-  const rest = useMemo(
-    () => filtered.filter((f) => f.status.urgency === "al_dia" || f.status.urgency === "sin_datos").sort(byUrgency),
-    [filtered],
-  );
-
-  const hasFilters = !!(statusFilter || query || kmMin || kmMax);
 
   function openCreate(truckId?: number) {
     setPresetTruck(truckId ?? null);
@@ -344,13 +321,6 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
 
   function toggleFilter(u: ServiceUrgency) {
     setStatusFilter((prev) => (prev === u ? null : u));
-  }
-
-  function clearFilters() {
-    setStatusFilter(null);
-    setQuery("");
-    setKmMin("");
-    setKmMax("");
   }
 
   function handleSaved() {
@@ -443,31 +413,6 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
             </span>
           </div>
 
-          {/* Buscador + filtros */}
-          {trucks.length > 0 && (
-            <FleetToolbar
-              query={query} onQuery={setQuery}
-              kmMin={kmMin} kmMax={kmMax} onKmMin={setKmMin} onKmMax={setKmMax}
-              hasFilters={hasFilters} onClear={clearFilters}
-            />
-          )}
-
-          {/* Camiones que requieren atención */}
-          {attention.length > 0 && (
-            <Section title={`Requieren atención (${attention.length})`}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-                {attention.map((row) => (
-                  <TruckAttentionCard
-                    key={row.truck.id}
-                    row={row}
-                    onLoad={() => openCreate(row.truck.id)}
-                    onHistory={() => setHistoryTruck(row.truck)}
-                  />
-                ))}
-              </div>
-            </Section>
-          )}
-
           {/* Licencias por vencer */}
           {(alerts.licencias.vencidas.length > 0 || alerts.licencias.por_vencer.length > 0) && (
             <div ref={licenciasRef}>
@@ -481,23 +426,19 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
             </div>
           )}
 
-          {/* Resto de la flota */}
-          <Section title={attention.length > 0 ? "Resto de la flota" : "Estado de la flota"}>
+          {/* Estado de la flota */}
+          <Section title="Estado de la flota">
             {trucks.length === 0 ? (
               <EmptyState
                 icon={<Icons.Truck size={26} />}
                 title="No tenés camiones registrados"
                 subtitle="Cargá camiones en la sección Flota para empezar a registrar su mantenimiento."
               />
-            ) : rest.length === 0 ? (
-              <Hint>
-                {hasFilters
-                  ? "Ningún camión coincide con los filtros."
-                  : "El resto de la flota está al día."}
-              </Hint>
+            ) : sortedFleet.length === 0 ? (
+              <Hint>Ningún camión coincide con el filtro seleccionado.</Hint>
             ) : (
               <TrucksMaintenanceTable
-                rows={rest}
+                rows={sortedFleet}
                 onHistory={(t) => setHistoryTruck(t)}
                 onLoad={(t) => openCreate(t.id)}
               />
@@ -592,39 +533,6 @@ function KpiFilterCard({
   );
 }
 
-// ── Buscador + filtros ───────────────────────────────────────────────────────
-
-function FleetToolbar({
-  query, onQuery, kmMin, kmMax, onKmMin, onKmMax, hasFilters, onClear,
-}: {
-  query: string;
-  onQuery: (v: string) => void;
-  kmMin: string;
-  kmMax: string;
-  onKmMin: (v: string) => void;
-  onKmMax: (v: string) => void;
-  hasFilters: boolean;
-  onClear: () => void;
-}) {
-  return (
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
-      <input
-        value={query}
-        onChange={(e) => onQuery(e.target.value)}
-        placeholder="Buscar por nombre o patente…"
-        style={{ ...inputStyle, width: 260 }}
-      />
-      <input value={kmMin} onChange={(e) => onKmMin(e.target.value)} type="number" min="0" placeholder="Km mín." style={{ ...inputStyle, width: 110 }} />
-      <input value={kmMax} onChange={(e) => onKmMax(e.target.value)} type="number" min="0" placeholder="Km máx." style={{ ...inputStyle, width: 110 }} />
-      {hasFilters && (
-        <button className="st-btn-secondary" style={{ padding: "8px 12px" }} onClick={onClear}>
-          Limpiar filtros
-        </button>
-      )}
-    </div>
-  );
-}
-
 // ── Badge + barra de progreso ────────────────────────────────────────────────
 
 function StatusBadge({ urgency }: { urgency: ServiceUrgency }) {
@@ -662,38 +570,6 @@ function ServiceProgressBar({ status, height = 8 }: { status: ServiceStatus; hei
               : undefined,
           }}
         />
-      </div>
-    </div>
-  );
-}
-
-// ── Card de camión que requiere atención ─────────────────────────────────────
-
-function TruckAttentionCard({ row, onLoad, onHistory }: { row: FleetRow; onLoad: () => void; onHistory: () => void }) {
-  const { truck, status, recordCount } = row;
-  const meta = URGENCY_META[status.urgency];
-  return (
-    <div style={{ border: "1px solid var(--c-border)", borderLeft: `3px solid ${meta.color}`, borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ minWidth: 0 }}>
-          {truck.patente && (
-            <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.82rem", fontWeight: 700, color: "var(--c-ink)", letterSpacing: 0.3 }}>{truck.patente}</div>
-          )}
-          <div style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--c-ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{truck.name}</div>
-        </div>
-        <StatusBadge urgency={status.urgency} />
-      </div>
-      <div style={{ fontSize: "0.8rem", color: "var(--c-ink-2)" }}>
-        Km actual: <strong style={{ color: "var(--c-ink)" }}>{formatKm(truck.km_actual)}</strong>
-      </div>
-      <ServiceProgressBar status={status} />
-      <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
-        <button className="st-btn-primary" style={{ padding: "7px 12px", fontSize: "0.8rem" }} onClick={onLoad}>
-          <Icons.Plus size={12} /> Service
-        </button>
-        <button className="st-btn-secondary" style={{ padding: "7px 12px", fontSize: "0.8rem" }} onClick={onHistory}>
-          Historial{recordCount ? ` (${recordCount})` : ""}
-        </button>
       </div>
     </div>
   );
