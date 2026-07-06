@@ -8,7 +8,7 @@ import UpcomingTripsPanel from "./UpcomingTripsPanel";
 import type { AdminPage } from "./AdminSidebar";
 import type { RouteResponse } from "@/types/route";
 import type { Truck, Driver } from "@/types/auth";
-import { fetchDriverLocations, fetchAssignedTrips, calculateRoute, createAssignedTrip, SubscriptionRequiredError, type AssignedTrip } from "@/services/api";
+import { fetchDriverLocations, fetchAssignedTrips, fetchAssignedTripById, calculateRoute, createAssignedTrip, SubscriptionRequiredError, type AssignedTrip } from "@/services/api";
 import { useRealtime, type RoutePathSegment } from "@/hooks/useRealtime";
 import { sameAssignedTrip } from "@/lib/tripFormat";
 import { reconcileById } from "@/lib/reconcile";
@@ -235,17 +235,30 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
     setPendingAssign(null);                // mirar un viaje cancela cualquier preview de asignación
     const myReq = ++viewReqRef.current;
 
-    // 1) Base inmediata: ruta guardada o, en su defecto, los extremos.
-    const saved = parseTripRoute(trip.path);
-    if (saved?.found && saved.path.length >= 2) {
-      setRouteResult(saved);
-      setOriginPin(null);
-      setDestinationPin(null);
-    } else {
-      setRouteResult(null);
-      setOriginPin(coordsToPin(trip.origin_lat, trip.origin_lon, trip.origin_label ?? "Origen"));
-      setDestinationPin(coordsToPin(trip.destination_lat, trip.destination_lon, trip.destination_label ?? "Destino"));
-    }
+    // 1) Base inmediata: los extremos (pines). El recorrido guardado (`path`) ya
+    // NO viene en la lista para no disparar egress; lo pedimos aparte con
+    // fetchAssignedTripById y, si llega válido y seguimos en el mismo viaje, lo
+    // mostramos como base. Para viajes históricos (completed/cancelled) este path
+    // es lo único que se dibuja (no se recalcula).
+    setRouteResult(null);
+    setOriginPin(coordsToPin(trip.origin_lat, trip.origin_lon, trip.origin_label ?? "Origen"));
+    setDestinationPin(coordsToPin(trip.destination_lat, trip.destination_lon, trip.destination_label ?? "Destino"));
+
+    // El recálculo en vivo (paso 2) es preferido para viajes activos; este flag
+    // evita que el path guardado, si llega después, pise una ruta ya recalculada.
+    let freshApplied = false;
+
+    void fetchAssignedTripById(trip.id)
+      .then((full) => {
+        if (viewReqRef.current !== myReq || freshApplied) return;  // otro viaje o ya hay recálculo
+        const saved = parseTripRoute(full.path);
+        if (saved?.found && saved.path.length >= 2) {
+          setRouteResult(saved);
+          setOriginPin(null);
+          setDestinationPin(null);
+        }
+      })
+      .catch(() => { /* sin path o sin permiso: quedan los pines */ });
 
     // 2) Recálculo en vivo con las specs actuales del camión del viaje. Solo
     // tiene sentido para viajes que todavía pueden circular (pending/accepted/
@@ -275,6 +288,7 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
       .then((fresh) => {
         if (viewReqRef.current !== myReq) return;          // llegó otro "Ver viaje"
         if (fresh.found && fresh.path.length >= 2) {
+          freshApplied = true;                             // gana sobre el path guardado
           setRouteResult(fresh);
           setOriginPin(null);
           setDestinationPin(null);

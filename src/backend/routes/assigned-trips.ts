@@ -15,6 +15,20 @@ const router = Router()
 router.use(authMiddleware)
 router.use(requireActiveSubscription)
 
+// Columnas de assigned_trips SIN el `path`. El `path` es el JSON del recorrido
+// completo (~20 KB/fila) y sólo se necesita al DIBUJAR un viaje puntual en el
+// mapa, no en las listas. Como las listas se pollean cada 30s desde el dashboard,
+// mandar el path en cada una disparaba el egress de Supabase (se llegó a exceder
+// la cuota gratis). Las listas usan estas columnas; el path se pide aparte con
+// GET /:id sólo cuando hace falta. NO agregar `path` acá.
+const TRIP_LIST_COLS = `
+  at.id, at.empresa_user_id, at.driver_id, at.truck_id,
+  at.origin_label, at.destination_label,
+  at.origin_lat, at.origin_lon, at.destination_lat, at.destination_lon,
+  at.distance_m, at.duration_min, at.status, at.scheduled_at, at.created_at,
+  at.accepted_at, at.started_at, at.completed_at, at.driver_app_user_id, at.trip_source
+`
+
 // POST / — Admin crea un viaje asignado y notifica al conductor
 router.post('/', async (req: Request, res: Response) => {
   const adminId = req.user!.id
@@ -221,7 +235,7 @@ router.get('/', async (req: Request, res: Response) => {
     } catch { /* best-effort: si falla, igual devolvemos la lista */ }
 
     const result = await pool.query(
-      `SELECT at.*,
+      `SELECT ${TRIP_LIST_COLS},
               d.nombre     AS driver_nombre,
               t.patente    AS truck_patente
        FROM assigned_trips at
@@ -242,7 +256,7 @@ router.get('/mine', async (req: Request, res: Response) => {
   const userId = req.user!.id
   try {
     const result = await pool.query(
-      `SELECT at.*, t.patente AS truck_patente, t.name AS truck_name
+      `SELECT ${TRIP_LIST_COLS}, t.patente AS truck_patente, t.name AS truck_name
        FROM assigned_trips at
        LEFT JOIN trucks t ON t.id = at.truck_id AND t.is_active = true
        WHERE at.driver_app_user_id = $1
@@ -251,6 +265,24 @@ router.get('/mine', async (req: Request, res: Response) => {
       [userId]
     )
     res.json(result.rows)
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /:id — Un viaje puntual CON el path (el recorrido completo para dibujar en
+// el mapa). Se llama sólo al abrir un viaje, no en las listas → el path pesado
+// viaja una vez y no en cada poll. Chequea que el viaje sea del que lo pide
+// (empresa dueña o conductor asignado).
+router.get('/:id', async (req: Request, res: Response) => {
+  const userId = req.user!.id
+  try {
+    const trip = await getTripById(Number(req.params.id))
+    if (!trip) return res.status(404).json({ error: 'Viaje no encontrado' })
+    if (trip.empresa_user_id !== userId && trip.driver_app_user_id !== userId) {
+      return res.status(403).json({ error: 'Sin permiso' })
+    }
+    res.json(trip)
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

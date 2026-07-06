@@ -70,6 +70,17 @@ export async function fetchAllMyTrips(): Promise<AssignedTrip[]> {
   return Array.isArray(data) ? data : []
 }
 
+// Trae UN viaje CON su `path` (el recorrido guardado). La lista /mine ya no
+// manda el path (era el grueso del egress de Supabase); se pide sólo acá, como
+// fallback para dibujar el recorrido cuando no se pudo recalcular la ruta.
+export async function fetchMyTripById(id: number | string): Promise<AssignedTrip | null> {
+  try {
+    return await apiRequest<AssignedTrip>(`/api/assigned-trips/${id}`)
+  } catch {
+    return null
+  }
+}
+
 // ── Mantenimiento del conductor (read-only) ─────────────────────────────────
 
 export interface MyMaintenance {

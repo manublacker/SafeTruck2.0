@@ -328,6 +328,13 @@ export async function fetchAssignedTrips(): Promise<AssignedTrip[]> {
   return apiRequest<AssignedTrip[]>("/api/assigned-trips");
 }
 
+// Trae UN viaje con su `path` (el recorrido para dibujar). Las listas ya NO
+// mandan el path (era el grueso del egress de Supabase); se pide sólo acá, al
+// abrir un viaje en el mapa.
+export async function fetchAssignedTripById(id: number | string): Promise<AssignedTrip> {
+  return apiRequest<AssignedTrip>(`/api/assigned-trips/${id}`);
+}
+
 export async function createAssignedTrip(data: {
   driver_id: number;
   truck_id: number;

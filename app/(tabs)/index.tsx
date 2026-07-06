@@ -14,7 +14,7 @@ import { supabase } from '../../src/services/supabase'
 import { Theme, getTheme, isDarkTheme } from '../../src/theme'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
-import { fetchAllMyTrips, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, fetchMyDriverProfile, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
+import { fetchAllMyTrips, fetchMyTripById, updateTripStatus, createPersonalTrip, sendLocation, clearLocation, fetchMyAssignedTruck, fetchMyDriverProfile, isSubscriptionError, SUBSCRIPTION_INACTIVE_MESSAGE, type AssignedTrip } from '../../src/services/assignedTrips'
 import { getRecentDestinations, addRecentDestination, removeRecentDestination, type RecentDest } from '../../src/services/recentDestinations'
 import { useRealtime } from '../../src/services/realtime'
 
@@ -354,11 +354,19 @@ export default function MapScreen() {
 
   // Dibuja la ruta del viaje con el path GUARDADO (línea azul fija). Fallback
   // cuando no se puede recalcular (sin camión asignado, sin coords o sin red).
-  const drawStoredTripPath = useCallback((trip: AssignedTrip, gen: number) => {
+  const drawStoredTripPath = useCallback(async (trip: AssignedTrip, gen: number) => {
     if (tripDrawRef.current !== gen) return  // el contexto cambió mientras tanto
+    // La lista /mine ya no trae el `path` (para no disparar egress de Supabase);
+    // si falta, lo pedimos on-demand justo para este viaje.
+    let rawPath = trip.path
+    if (rawPath == null) {
+      const full = await fetchMyTripById(trip.id)
+      if (tripDrawRef.current !== gen) return
+      rawPath = full?.path ?? null
+    }
     const path = (() => {
       try {
-        const p = typeof trip.path === 'string' ? JSON.parse(trip.path) : trip.path
+        const p = typeof rawPath === 'string' ? JSON.parse(rawPath) : rawPath
         return (p?.path || p?.polyline || p?.segments?.flatMap((s: any) => s.coordinates) || []) as { lat: number; lon?: number; lng?: number }[]
       } catch { return [] }
     })()
@@ -457,7 +465,7 @@ export default function MapScreen() {
       }
       setTripSheet(found)
       const colored = await drawColoredTripRoute(found, gen)
-      if (!colored) drawStoredTripPath(found, gen)
+      if (!colored) void drawStoredTripPath(found, gen)
     } catch {
       Alert.alert('Error', 'No se pudo cargar el viaje. Revisá tu conexión e intentá de nuevo.')
     }
@@ -483,7 +491,7 @@ export default function MapScreen() {
     const gen = ++tripDrawRef.current
     void (async () => {
       const ok = await drawColoredTripRoute(tripSheet, gen)
-      if (!ok && tripDrawRef.current === gen) drawStoredTripPath(tripSheet, gen)
+      if (!ok && tripDrawRef.current === gen) void drawStoredTripPath(tripSheet, gen)
     })()
   }, [tripSheet, drawColoredTripRoute, drawStoredTripPath])
 
@@ -927,7 +935,7 @@ export default function MapScreen() {
         } else {
           const gen = ++tripDrawRef.current
           const ok = await drawColoredTripRoute(tripSheet, gen)
-          if (!ok && tripDrawRef.current === gen) drawStoredTripPath(tripSheet, gen)
+          if (!ok && tripDrawRef.current === gen) void drawStoredTripPath(tripSheet, gen)
         }
         const path = simPathLatLng()
         if (path.length >= 2 && mapRef.current) {
