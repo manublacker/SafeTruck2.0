@@ -3,6 +3,7 @@ import { authMiddleware } from '../middleware/authMiddleware'
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription'
 import pool from '../db'
 import { broadcastToCompany } from '../realtime/hub'
+import { sendExpoPush } from '../lib/push'
 import {
   distanceMetersFromRoute,
   durationMinutesFromRoute,
@@ -77,7 +78,7 @@ router.post('/', async (req: Request, res: Response) => {
     const tripId = result.rows[0].id
 
     if (driver.app_user_id) {
-      sendPushNotification(
+      sendExpoPush(
         driver.app_user_id,
         '🚛 Nuevo viaje asignado',
         `${origin_address ?? 'Origen'} → ${destination_address ?? 'Destino'}`,
@@ -376,26 +377,6 @@ async function getTripById(id: number) {
     [id]
   )
   return r.rows[0] ?? null
-}
-
-async function sendPushNotification(
-  driverAppUserId: string,
-  title: string,
-  body: string,
-  data: Record<string, unknown>
-) {
-  const r = await pool.query<{ token: string }>(
-    'SELECT token FROM push_tokens WHERE driver_app_user_id = $1',
-    [driverAppUserId]
-  )
-  const token = r.rows[0]?.token
-  if (!token) return
-
-  await fetch('https://exp.host/--/api/v2/push/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ to: token, title, body, data }),
-  })
 }
 
 export default router

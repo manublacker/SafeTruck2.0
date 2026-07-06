@@ -24,3 +24,6 @@ android_backup*/
 .DS_Store
 **/.DS_Store
 backups/
+
+# Config personal de Claude Code (no compartir)
+.claude/settings.local.json

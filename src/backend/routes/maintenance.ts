@@ -12,6 +12,7 @@
  *******************************************************/
 import { Router, Request, Response } from "express";
 import pool from "../db";
+import { runMaintenanceAlerts } from "../jobs/maintenanceAlerts";
 
 const router = Router();
 
@@ -442,6 +443,21 @@ router.delete("/:id", async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (err) {
     console.error("Error en DELETE /api/maintenance/:id:", err);
+    res.status(500).json({ error: "Error interno del servidor." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/maintenance/run-alerts — Dispara el job de alertas push a demanda
+// (para probar sin esperar la corrida diaria). No filtra por user_id: el job
+// recorre todos los conductores con token. Requiere sesión + plan activo.
+// ---------------------------------------------------------------------------
+router.post("/run-alerts", async (_req: Request, res: Response) => {
+  try {
+    const result = await runMaintenanceAlerts();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("Error en POST /api/maintenance/run-alerts:", err);
     res.status(500).json({ error: "Error interno del servidor." });
   }
 });
