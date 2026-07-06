@@ -24,6 +24,12 @@ const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
 const SERVICE_WARN_DAYS = 30;
 /** Km restantes al próximo service para considerarlo "próximo a vencer". */
 const KM_WARN = 2000;
+/**
+ * Horizonte máximo (≈10 años) para un `proximo_service`. Más allá lo tratamos
+ * como dato basura (p. ej. año 4444 → "en 883082d") y lo ignoramos, así el
+ * camión no aparece con una fecha absurda ni se clasifica por ella.
+ */
+const SERVICE_HORIZON_DAYS = 3660;
 
 // Cache a nivel módulo (stale-while-revalidate). Al cambiar de pestaña este
 // componente se DESMONTA (Dashboard usa montaje condicional); sin el cache,
@@ -162,13 +168,15 @@ const URGENCY_META: Record<ServiceUrgency, { label: string; color: string; order
 function computeServiceStatus(truck: Truck, lastRecord?: MaintenanceRecord): ServiceStatus {
   // Eje fecha
   let dateProgress: number | null = null;
-  const daysLeft = daysUntil(truck.proximo_service);
-  if (truck.proximo_service) {
+  let daysLeft = daysUntil(truck.proximo_service);
+  // Fecha fuera del horizonte razonable = basura → la ignoramos.
+  if (daysLeft != null && daysLeft > SERVICE_HORIZON_DAYS) daysLeft = null;
+  if (truck.proximo_service && daysLeft != null) {
     const end = new Date(truck.proximo_service).getTime();
     const start = truck.fecha_service ? new Date(truck.fecha_service).getTime() : null;
     if (start != null && Number.isFinite(start) && end > start) {
       dateProgress = (Date.now() - start) / (end - start);
-    } else if (daysLeft != null) {
+    } else {
       dateProgress = daysLeft <= 0 ? 1 : daysLeft <= SERVICE_WARN_DAYS ? 0.85 : 0.4;
     }
   }
