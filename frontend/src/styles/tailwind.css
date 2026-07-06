@@ -739,7 +739,10 @@
     font-size: 0.875rem;
   }
 
-  @media (max-width: 900px) {
+  /* Colapsamos la nav a hamburguesa ANTES de que la marca "Safe Truck" se solape
+     con los links / botones: la fila completa (marca + 4 links + 2 botones)
+     necesita ~1130px, así que cortamos con margen en 1200px. */
+  @media (max-width: 1200px) {
     .landing-nav__links,
     .landing-nav__actions {
       display: none;
@@ -767,7 +770,9 @@
       color: var(--landing-brand-dark);
       font-weight: 500;
     }
+  }
 
+  @media (max-width: 900px) {
     .landing-how-it-works__grid {
       grid-template-columns: 1fr;
     }
