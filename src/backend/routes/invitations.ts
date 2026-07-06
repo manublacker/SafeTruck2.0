@@ -4,6 +4,7 @@ import { authMiddleware } from '../middleware/authMiddleware'
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription'
 import pool, { withTransaction } from '../db'
 import { supabase } from '../supabaseClient'
+import { broadcastToCompany } from '../realtime/hub'
 
 const router = Router()
 
@@ -194,10 +195,9 @@ router.post('/register', async (req: Request, res: Response) => {
       [driverUserId, email.trim().toLowerCase(), full_name.trim()]
     )
 
+    let driverId: number = 0
     try {
       await withTransaction(async (client) => {
-        let driverId: number
-
         if (invitation.driver_id) {
           await client.query(
             'UPDATE drivers SET app_user_id = $1, updated_at = NOW() WHERE id = $2',
@@ -230,6 +230,12 @@ router.post('/register', async (req: Request, res: Response) => {
           [driverUserId, driverId]
         )
       })
+      // El admin no tiene por qué estar mirando la pestaña en ese instante,
+      // pero si está conectado, la tarjeta de "invitación pendiente" pasa a
+      // ser el conductor nuevo sin que tenga que recargar la página.
+      try {
+        broadcastToCompany(adminId, { type: 'driver_registered', driver_id: driverId }, { role: 'admin' })
+      } catch { /* broadcast best-effort */ }
       res.json({ success: true, email: authData.user.email })
     } catch (e) {
       // Si falla la DB, borramos el usuario de Supabase para no dejar huérfanos

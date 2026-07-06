@@ -37,7 +37,12 @@ export default function FleetView({ onNavigate, initialTab = "trucks" }: { onNav
     } catch { /* silencioso */ }
   }, []);
 
-  useEffect(() => { void loadDrivers(); }, [loadDrivers]);
+  // Al montar Y cada vez que se entra a la pestaña "Conductores": el toggle
+  // trucks/drivers no remonta el componente, así que sin esto un conductor
+  // que canjeó su invitación mientras estábamos en "Camiones" no aparecía
+  // hasta refrescar la página entera (el WebSocket es best-effort, esto es
+  // el respaldo).
+  useEffect(() => { if (tab === "drivers") void loadDrivers(); }, [loadDrivers, tab]);
 
   const refreshAllDrivers = useCallback(async () => {
     await loadDrivers();
@@ -738,8 +743,12 @@ function DriversTab({ drivers, refreshDrivers, onNavigate }: DriversTabProps) {
 
   // Presencia en tiempo real: el backend manda la lista de choferes conectados
   // (snapshot al conectar el admin + updates cuando entra/sale un chofer).
+  // driver_registered: un conductor canjeó su invitación y ya tiene cuenta —
+  // refrescamos para que la tarjeta de "invitación pendiente" pase a ser el
+  // conductor nuevo sin que el admin tenga que recargar la página.
   useRealtime((e) => {
     if (e.type === "presence") setOnlineIds(new Set(e.online_driver_ids));
+    if (e.type === "driver_registered") { void refreshDrivers(); void loadData(); }
   });
 
   const loadData = useCallback(async () => {

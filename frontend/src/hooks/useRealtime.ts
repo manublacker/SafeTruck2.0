@@ -34,7 +34,8 @@ export type RealtimeEvent =
   | { type: "driver_location_removed"; driver_app_user_id: string }
   | { type: "trip_update"; trip: Record<string, unknown> }
   | { type: "trip_assigned"; trip: Record<string, unknown> }
-  | { type: "presence"; online_driver_ids: string[] };
+  | { type: "presence"; online_driver_ids: string[] }
+  | { type: "driver_registered"; driver_id: number };
 
 // El WS vive en el mismo host que la API. Si VITE_API_URL apunta a Railway
 // (prod), derivamos wss://...; si está vacío (dev, mismo origen vía proxy de
