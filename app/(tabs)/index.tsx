@@ -1386,6 +1386,9 @@ export default function MapScreen() {
   // Al abrir (o cambiar de) viaje / al aparecer la ruta calculada, expandido.
   useEffect(() => { if (tripSheet) tripDrag.reset() }, [tripSheet?.id])  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (showInfo && currentRoute) routeDrag.reset() }, [showInfo, !!currentRoute])  // eslint-disable-line react-hooks/exhaustive-deps
+  // Al iniciar el viaje se achica sola (como la ruta manual al arrancar
+  // navegación), dejando lugar para el FAB de reporte.
+  useEffect(() => { if (tripSheet?.status === 'in_progress') tripDrag.collapse() }, [tripSheet?.status])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Frena un viaje ASIGNADO en curso: lo vuelve a 'accepted' (deja de figurar
   // "en curso" para el empresario) y saca la ubicación viva del mapa. Así no
@@ -1931,11 +1934,12 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* FAB de reporte — oculto en la pantalla de "Ruta calculada" para no
-          superponerse con el botón de arrancar (play). */}
-      {!(showInfo && currentRoute && !navMode) && (
+      {/* FAB de reporte — oculto en la pantalla de "Ruta calculada" (para no
+          superponerse con el botón de arrancar) y en un viaje asignado que
+          todavía no arrancó (la tarjeta está expandida a pantalla completa). */}
+      {!(showInfo && currentRoute && !navMode) && !(tripSheet && tripSheet.status !== 'in_progress' && !navMode) && (
         <TouchableOpacity
-          style={[s.fab, tripSheet && !navMode && s.fabTripRaised, navMode && s.fabNavRaised]}
+          style={[s.fab, tripSheet?.status === 'in_progress' && !navMode && s.fabTripRaised, navMode && s.fabNavRaised]}
           onPress={openReportModal}
           activeOpacity={0.85}
         >
@@ -2032,94 +2036,124 @@ export default function MapScreen() {
       </Modal>
 
       {/* ── Trip Sheet ─────────────────────────────────────────────────── */}
-      {tripSheet && !navMode && !showInfo && (
-        <Animated.View
-          style={[s.tripSheet, { paddingBottom: 30, transform: [{ translateY: tripDrag.translateY }] }]}
-          onLayout={tripDrag.onLayout}
-        >
-          <View {...tripDrag.panHandlers}>
-          <View style={s.tripSheetHandle} />
+      {tripSheet && !navMode && !showInfo && (() => {
+        const cfg: Record<string, { label: string; color: string; bg: string }> = {
+          pending:     { label: 'Pendiente',  color: '#D9881A', bg: '#FBF1E0' },
+          accepted:    { label: 'Aceptado',   color: '#1A56C4', bg: '#EFF4FF' },
+          in_progress: { label: 'En curso',   color: '#1F9D57', bg: '#E7F6EE' },
+          completed:   { label: 'Completado', color: '#9AA3AD', bg: '#F2F4F7' },
+          cancelled:   { label: 'Cancelado',  color: t.accent,  bg: t.accentSoft },
+        }
+        const c = cfg[tripSheet.status] ?? cfg.pending
+        const tripHasUnauthorized = !!tripSegments?.some((seg: any) => seg.status === 'unauthorized')
+        const isRestart = tripSheet.status === 'completed' || tripSheet.status === 'cancelled'
+        return (
+          <Animated.View
+            style={[s.routeCard, s.tripSheet, { paddingBottom: 28, transform: [{ translateY: tripDrag.translateY }] }]}
+            onLayout={tripDrag.onLayout}
+          >
+            <View {...tripDrag.panHandlers} style={{ paddingBottom: 4 }}>
+              <View style={s.tripSheetHandle} />
+            </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
-            <View style={{ flex: 1 }}>
-              {(() => {
-                const cfg: Record<string, { label: string; color: string; bg: string }> = {
-                  pending:     { label: 'Pendiente',  color: '#D9881A', bg: '#FBF1E0' },
-                  accepted:    { label: 'Aceptado',   color: '#1A56C4', bg: '#EFF4FF' },
-                  in_progress: { label: 'En curso',   color: '#1F9D57', bg: '#E7F6EE' },
-                  completed:   { label: 'Completado', color: '#9AA3AD', bg: '#F2F4F7' },
-                  cancelled:   { label: 'Cancelado',  color: t.accent,  bg: t.accentSoft },
-                }
-                const c = cfg[tripSheet.status] ?? cfg.pending
-                return (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: c.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, alignSelf: 'flex-start', marginBottom: 12 }}>
-                    <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: c.color }} />
-                    <Text style={{ fontSize: 10.5, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: c.color }}>{c.label}</Text>
+            {/* ── Header: mismo formato que "Ruta calculada" (título + acción circular) ── */}
+            <View style={s.routeCardHeader}>
+              <View {...tripDrag.panHandlers} style={{ flex: 1 }}>
+                <Text style={s.routeCardTitle} numberOfLines={1}>{tripSheet.destination_label ?? 'Viaje asignado'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: c.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, alignSelf: 'flex-start', marginTop: 8 }}>
+                  <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: c.color }} />
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: c.color }}>{c.label}</Text>
+                </View>
+                {tripHasUnauthorized && (
+                  <View style={[s.warnBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                    <Ionicons name="alert-circle-outline" size={12} color={t.warning} />
+                    <Text style={s.warnBadgeText}>Tramos no habilitados</Text>
                   </View>
-                )
-              })()}
+                )}
+              </View>
 
-              <View style={{ position: 'relative' }}>
-                <View style={{ position: 'absolute', left: 5, top: 14, bottom: 14, borderLeftWidth: 2, borderLeftColor: t.borderStrong, borderStyle: 'dashed' }} />
-                <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', marginBottom: 12 }}>
-                  <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2.5, borderColor: t.textSoft, backgroundColor: 'transparent', marginTop: 2, flexShrink: 0 }} />
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: t.text, flex: 1 }} numberOfLines={1}>{tripSheet.origin_label ?? 'Origen'}</Text>
+              {tripUpdating ? (
+                <ActivityIndicator color={t.accent} style={{ width: 40, height: 40 }} />
+              ) : tripSheet.status === 'in_progress' ? (
+                <TouchableOpacity style={[s.playBtn, { backgroundColor: t.success }]} onPress={() => handleTripAction('completed')}>
+                  <Ionicons name="flag" size={18} color="#fff" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={s.playBtn} onPress={() => handleTripAction('in_progress')}>
+                  <Ionicons name={isRestart ? 'refresh' : 'play'} size={18} color="#fff" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={s.divider} />
+
+            {(tripSheet.distance_m != null && tripSheet.duration_min != null) && (
+              <View style={s.stats}>
+                <View style={s.stat}>
+                  <Text style={s.statVal}>{(tripSheet.distance_m / 1000).toFixed(1)} km</Text>
+                  <Text style={s.statLbl}>DISTANCIA</Text>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
-                  <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: t.accent, marginTop: 2, flexShrink: 0 }} />
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: t.text, flex: 1 }} numberOfLines={1}>{tripSheet.destination_label ?? 'Destino'}</Text>
+                <View style={s.statDiv} />
+                <View style={s.stat}>
+                  <Text style={s.statVal}>{formatDuration(tripSheet.duration_min)}</Text>
+                  <Text style={s.statLbl}>TIEMPO EST.</Text>
                 </View>
+              </View>
+            )}
+
+            {/* ── Itinerario y camión: info propia de un viaje asignado, sin equivalente en la ruta manual ── */}
+            <View style={{ position: 'relative', marginBottom: 14 }}>
+              <View style={{ position: 'absolute', left: 5, top: 14, bottom: 14, borderLeftWidth: 2, borderLeftColor: t.borderStrong, borderStyle: 'dashed' }} />
+              <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', marginBottom: 12 }}>
+                <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2.5, borderColor: t.textSoft, backgroundColor: 'transparent', marginTop: 2, flexShrink: 0 }} />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: t.text, flex: 1 }} numberOfLines={1}>{tripSheet.origin_label ?? 'Origen'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
+                <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: t.accent, marginTop: 2, flexShrink: 0 }} />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: t.text, flex: 1 }} numberOfLines={1}>{tripSheet.destination_label ?? 'Destino'}</Text>
               </View>
             </View>
 
-          </View>
+            {(tripSheet.truck_patente || tripSheet.truck_name) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <Ionicons name="bus" size={14} color={t.textMuted} />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: t.textMuted }}>{tripSheet.truck_name ?? ''}</Text>
+                {tripSheet.truck_patente && (
+                  <View style={{ backgroundColor: t.surface2, borderRadius: 4, borderWidth: 1, borderColor: t.border, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: t.textMuted }}>{tripSheet.truck_patente}</Text>
+                  </View>
+                )}
+              </View>
+            )}
 
-          {(tripSheet.truck_patente || tripSheet.truck_name) && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <Ionicons name="bus" size={14} color={t.textMuted} />
-              <Text style={{ fontSize: 13, fontWeight: '600', color: t.textMuted }}>{tripSheet.truck_name ?? ''}</Text>
-              {tripSheet.truck_patente && (
-                <View style={{ backgroundColor: t.surface2, borderRadius: 4, borderWidth: 1, borderColor: t.border, paddingHorizontal: 6, paddingVertical: 2 }}>
-                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: t.textMuted }}>{tripSheet.truck_patente}</Text>
-                </View>
-              )}
-            </View>
-          )}
-          </View>
+            {!!tripSegments?.length && (
+              <View style={[s.legend, { marginBottom: 14 }]}>
+                {[
+                  { color: t.success, label: 'Habilitada' },
+                  { color: t.danger,  label: 'No habilitada' },
+                  { color: t.warning, label: 'Sin datos' },
+                ].map(item => (
+                  <View key={item.label} style={s.legendItem}>
+                    <View style={[s.legendDot, { backgroundColor: item.color }]} />
+                    <Text style={s.legendText}>{item.label}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
-          {/* Origen del viaje: por defecto el guardado; se puede cambiar a la ubicación actual. */}
-          {!navMode && !simRunning && (
-            <TouchableOpacity
-              onPress={tripFromCurrent ? useTripSavedOrigin : useCurrentAsTripOrigin}
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: t.border, marginBottom: 8 }}
-            >
-              <Ionicons name={tripFromCurrent ? 'flag-outline' : 'navigate-outline'} size={15} color={t.text} />
-              <Text style={{ fontSize: 13, fontWeight: '600', color: t.text }}>
-                {tripFromCurrent ? 'Volver al origen del viaje' : 'Salir desde mi ubicación'}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {tripUpdating ? (
-            <ActivityIndicator color={t.accent} />
-          ) : (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {tripSheet.status !== 'in_progress' && (
-                <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: t.success, flex: 1 }]} onPress={() => handleTripAction('in_progress')}>
-                  <Text style={s.tripSheetBtnText}>
-                    {tripSheet.status === 'completed' || tripSheet.status === 'cancelled' ? 'Reiniciar viaje' : 'Iniciar viaje'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              {tripSheet.status === 'in_progress' && (
-                <TouchableOpacity style={[s.tripSheetBtn, { backgroundColor: t.accent, flex: 1 }]} onPress={() => handleTripAction('completed')}>
-                  <Text style={s.tripSheetBtnText}>Llegué al destino</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </Animated.View>
-      )}
+            {/* Origen del viaje: por defecto el guardado; se puede cambiar a la ubicación actual.
+                Mismo formato que "Simular recorrido" en la ruta manual. */}
+            {!navMode && !simRunning && (
+              <TouchableOpacity style={s.simRouteBtn} onPress={tripFromCurrent ? useTripSavedOrigin : useCurrentAsTripOrigin} activeOpacity={0.85}>
+                <Ionicons name={tripFromCurrent ? 'flag-outline' : 'navigate-outline'} size={18} color={t.text} />
+                <Text style={s.simRouteBtnText}>
+                  {tripFromCurrent ? 'Volver al origen del viaje' : 'Salir desde mi ubicación'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </Animated.View>
+        )
+      })()}
     </View>
   )
 }
@@ -2172,6 +2206,14 @@ function useDraggableSheet(onClose: () => void, peek = 120) {
     panHandlers: pan.panHandlers,
     onLayout: (e: { nativeEvent: { layout: { height: number } } }) => { h.current = e.nativeEvent.layout.height },
     reset: () => { rest.current = 0; y.setValue(0) },
+    // Colapsa a la posición "peek" (asoma solo la cabecera), animado. Se usa al
+    // iniciar un viaje asignado, igual que la ruta manual se achica al navegar.
+    collapse: () => {
+      const H = h.current || 1
+      const target = Math.max(0, H - peek)
+      rest.current = target
+      Animated.spring(y, { toValue: target, useNativeDriver: false, bounciness: 4, speed: 14 }).start()
+    },
   }
 }
 
@@ -2211,7 +2253,10 @@ function makeStyles(t: Theme) {
     },
     fabActive: { backgroundColor: t.danger, shadowColor: t.danger },
     fabRaised: { bottom: 210 },
-    fabTripRaised: { bottom: 300 },
+    // Antes se usaba con la tarjeta expandida (300); ahora el FAB solo
+    // aparece con el viaje en curso, cuando la tarjeta ya se colapsó sola
+    // (asoma ~120px de "peek"), por eso el offset es mucho menor.
+    fabTripRaised: { bottom: 150 },
     // En navegación, el reporte va JUSTO ARRIBA del botón de stop (mismo lado
     // derecho), apenas por encima del HUD de navegación.
     fabNavRaised: { bottom: 104, right: 24 },
@@ -2382,12 +2427,6 @@ function makeStyles(t: Theme) {
       width: 36, height: 4, borderRadius: 2,
       backgroundColor: t.borderStrong, alignSelf: 'center', marginBottom: 16,
     },
-    tripSheetBtn: {
-      paddingVertical: 12, paddingHorizontal: 16,
-      borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-    },
-    tripSheetBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
     modalCard: {
       backgroundColor: t.card,

@@ -12,7 +12,7 @@ const PLANS = [
   {
     slug: "individual",
     name: "Individual",
-    price: "$14.900",
+    price: "$64.900",
     period: "ARS / mes",
     features: [
       "Para camioneros independientes",
@@ -25,7 +25,7 @@ const PLANS = [
   {
     slug: "starter",
     name: "Starter",
-    price: "$43.500",
+    price: "$143.500",
     period: "ARS / mes",
     features: [
       "Hasta 5 camiones",
@@ -38,7 +38,7 @@ const PLANS = [
   {
     slug: "pro",
     name: "Pro",
-    price: "$118.500",
+    price: "$218.500",
     period: "ARS / mes",
     badge: "Más popular",
     features: [
@@ -53,7 +53,7 @@ const PLANS = [
   {
     slug: "enterprise",
     name: "Enterprise",
-    price: "$298.500",
+    price: "$398.500",
     period: "ARS / mes",
     features: [
       "Camiones ilimitados",

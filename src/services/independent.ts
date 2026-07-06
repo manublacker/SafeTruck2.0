@@ -50,13 +50,24 @@ export async function createMyTruck(input: NewTruckInput): Promise<{ id: number 
   })
 }
 
+export interface OwnTruck {
+  id: number
+  name: string
+  patente: string | null
+  max_weight_kg: number
+  max_height_m: number
+  max_width_m: number
+  max_length_m: number
+}
+
 /**
  * Camiones que ya posee el usuario (para el independiente: 0 o 1). GET, así
  * que no lo bloquea el gate de suscripción. Sirve para retomar el onboarding
  * sin crear un camión duplicado si un intento anterior quedó a medias.
+ * Devuelve las dimensiones reales para no pisarlas con las del formulario.
  */
-export async function fetchMyOwnTrucks(): Promise<{ id: number; name: string }[]> {
-  const data = await apiRequest<{ id: number; name: string }[]>('/api/trucks')
+export async function fetchMyOwnTrucks(): Promise<OwnTruck[]> {
+  const data = await apiRequest<OwnTruck[]>('/api/trucks')
   return Array.isArray(data) ? data : []
 }
 

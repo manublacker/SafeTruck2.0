@@ -27,7 +27,12 @@ export default function InviteDriverModal({ onClose, onSubscriptionRequired }: P
     setSubscriptionError(false);
     try {
       const inv = await createInvitation();
-      const url = `${window.location.origin}/unirse?code=${inv.code}`;
+      // Fijo al dominio de producción (no window.location.origin): si el admin
+      // genera el link desde una preview de Vercel, esa preview tiene la
+      // protección de Vercel activada y el conductor terminaba logueándose en
+      // Vercel en vez de registrarse en /unirse.
+      const appUrl = import.meta.env.VITE_APP_URL ?? window.location.origin;
+      const url = `${appUrl}/unirse?code=${inv.code}`;
       setLink(url);
     } catch (err) {
       if (err instanceof SubscriptionRequiredError) {

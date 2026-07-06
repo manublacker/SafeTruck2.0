@@ -1060,12 +1060,6 @@ select.st-field.placeholder { color: var(--c-ink-3); }
     border-radius: 12px !important;
     font-weight: 700;
   }
-  .st-btn-refresh-mobile {
-    background: #11302c !important;
-    color: #fff !important;
-    border-color: #11302c !important;
-  }
-
   /* ── Modales: una sola columna y que entren en la pantalla del celu ── */
   .st-modal {
     max-width: calc(100vw - 24px) !important;

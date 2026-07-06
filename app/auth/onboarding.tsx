@@ -152,22 +152,44 @@ export default function OnboardingScreen() {
   // crear un duplicado (el plan individual permite uno solo: el segundo
   // create daría 403 y dejaría al usuario pagado y atrapado).
   async function finishIndependent(driver: number) {
-    const existing = (await fetchMyOwnTrucks().catch(() => []))[0]
-    const truckId = existing
-      ? existing.id
-      : (await createMyTruck({
-          name: truck.name.trim(),
-          patente: truck.patente.trim() || null,
-          max_weight_kg: parseNum(truck.max_weight_kg)!,
-          max_height_m: parseNum(truck.max_height_m)!,
-          max_width_m: parseNum(truck.max_width_m)!,
-          max_length_m: parseNum(truck.max_length_m)!,
-        })).id
-    await assignTruckToSelf(truckId, driver)
+    const own = await fetchMyOwnTrucks().catch(() => [] as Awaited<ReturnType<typeof fetchMyOwnTrucks>>)
+
+    // Elegir el camión a reutilizar con criterio, no el primero de la lista
+    // (un ex-admin puede tener varios de su vieja flota): por patente, después
+    // por nombre, y si no matchea nada, el más reciente (el del intento a
+    // medias, GET /api/trucks ordena por created_at ASC).
+    const formPatente = truck.patente.trim().toUpperCase()
+    const formName = truck.name.trim().toLowerCase()
+    const existing =
+      (formPatente ? own.find(tk => (tk.patente ?? '').toUpperCase() === formPatente) : undefined) ??
+      own.find(tk => tk.name.trim().toLowerCase() === formName) ??
+      own[own.length - 1]
+
+    const chosen = existing ?? {
+      ...(await createMyTruck({
+        name: truck.name.trim(),
+        patente: truck.patente.trim() || null,
+        max_weight_kg: parseNum(truck.max_weight_kg)!,
+        max_height_m: parseNum(truck.max_height_m)!,
+        max_width_m: parseNum(truck.max_width_m)!,
+        max_length_m: parseNum(truck.max_length_m)!,
+      })),
+      name: truck.name.trim(),
+      patente: truck.patente.trim() || null,
+      max_weight_kg: parseNum(truck.max_weight_kg)!,
+      max_height_m: parseNum(truck.max_height_m)!,
+      max_width_m: parseNum(truck.max_width_m)!,
+      max_length_m: parseNum(truck.max_length_m)!,
+    }
+
+    await assignTruckToSelf(chosen.id, driver)
+    // activeVehicle desde los datos REALES del camión elegido: si se reutiliza
+    // uno existente, sus dimensiones persistidas mandan (el ruteo debe usar
+    // las del camión de verdad, no lo que se retipeó en el formulario).
     setActiveVehicle({
-      id: String(truckId), user_id: '', plate: truck.patente.trim(), name: existing?.name ?? truck.name.trim(),
-      weight_kg: parseNum(truck.max_weight_kg)!, height_m: parseNum(truck.max_height_m)!,
-      width_m: parseNum(truck.max_width_m)!, length_m: parseNum(truck.max_length_m)!,
+      id: String(chosen.id), user_id: '', plate: chosen.patente ?? '', name: chosen.name,
+      weight_kg: Number(chosen.max_weight_kg), height_m: Number(chosen.max_height_m),
+      width_m: Number(chosen.max_width_m), length_m: Number(chosen.max_length_m),
       axles: 0, is_default: true, created_at: '',
     })
     setDoneKind('independent')

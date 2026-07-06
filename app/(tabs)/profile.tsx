@@ -94,6 +94,9 @@ export default function ProfileScreen() {
   // 'independent' = paga su propio plan (fuente: user_metadata.role, lo setea el backend en el onboarding)
   const [isIndependent, setIsIndependent] = useState(false)
   const [subscription, setSubscription] = useState<SubscriptionRow | null>(null)
+  // Respaldo si profiles.email no está seteado (ej. conductores invitados, cuya
+  // fila de profiles no se crea con email — ver src/backend/routes/invitations.ts).
+  const [authEmail, setAuthEmail] = useState<string | null>(null)
   const [paying, setPaying] = useState(false)
   const [profileLoading, setProfileLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -146,6 +149,7 @@ export default function ProfileScreen() {
     const { data: fresh } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }))
     const independent = fresh.user?.user_metadata?.role === 'independent'
     setIsIndependent(independent)
+    setAuthEmail(fresh.user?.email ?? null)
     if (independent) fetchMobileSubscription().then(setSubscription).catch(() => {})
 
     const [dp, at] = await Promise.allSettled([
@@ -388,7 +392,7 @@ export default function ProfileScreen() {
           <SectionLabel>Datos de contacto</SectionLabel>
           <Card style={{ marginBottom: 22 }} t={t}>
             <DataRow label="Teléfono" value={currentPhone} onPress={() => openEdit('phone')} t={t} />
-            <DataRow label="Email" value={profile?.email ?? null} isLast t={t} />
+            <DataRow label="Email" value={profile?.email ?? authEmail} isLast t={t} />
           </Card>
 
           {/* ── Cuenta ──────────────────────────────────────────────── */}

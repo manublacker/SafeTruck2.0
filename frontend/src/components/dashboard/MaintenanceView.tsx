@@ -221,7 +221,7 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
           Mantenimiento y vencimientos
         </h3>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="st-btn-ghost" onClick={exportCsv}>Exportar CSV</button>
+          <button className="st-btn-secondary" onClick={exportCsv}>Exportar CSV</button>
           <button className="st-btn-primary" onClick={() => openCreate()}>
             <Icons.Plus size={14} /> Cargar mantenimiento
           </button>
