@@ -8,11 +8,13 @@ import About from "@/components/landing/About";
 import Footer from "@/components/landing/Footer";
 import LandingMobile from "@/pages/LandingMobile";
 
-// En celular y tablets (≤1024px) mostramos el rediseño mobile-first; en desktop,
-// el diseño ancho de siempre. Se renderiza solo uno (no ambos) para no duplicar
-// ids de sección. 1024 cubre iPad Mini/Air/Pro en vertical (el grid de planes del
-// diseño ancho se apretaba y cortaba los precios en ese rango).
-function useIsMobile(breakpoint = 1024) {
+// Sólo en teléfonos reales (≤640px) mostramos el rediseño mobile-first; de ahí
+// para arriba (tablets, ventana a media pantalla, desktop) va la landing web, que
+// ya reflowea sola vía media queries (nav→hamburguesa en 900px, grids→1 columna
+// en 768/640). Antes el corte estaba en 1024px y al achicar la ventana a la mitad
+// saltaba al modo celular (hasta cambiaba el logo). Se renderiza solo uno (no
+// ambos) para no duplicar ids de sección.
+function useIsMobile(breakpoint = 640) {
   const query = `(max-width: ${breakpoint}px)`;
   return useSyncExternalStore(
     (onChange) => {

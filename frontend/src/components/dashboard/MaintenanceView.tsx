@@ -494,6 +494,7 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
           trucks={trucks}
           presetTruck={presetTruck}
           prefill={prefill ?? undefined}
+          records={records}
           onSaved={handleSaved}
           onClose={closeCreate}
           onSubscriptionRequired={() => { closeCreate(); onNavigate("plans"); }}
@@ -773,6 +774,7 @@ function TruckHistoryPanel({
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [editRecord, setEditRecord] = useState<MaintenanceRecord | null>(null);
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -815,9 +817,9 @@ function TruckHistoryPanel({
           <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--c-ink)" }}>{truck.name}</div>
           {truck.patente && <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.85rem", color: "var(--c-ink-2)", marginTop: 4 }}>{truck.patente}</div>}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
-            <button className="st-btn-primary" onClick={onMarkDone}>✓ Marcar service realizado</button>
+            <button className="st-btn-primary" onClick={onMarkDone}>✓ Realizado</button>
             <button className="st-btn-secondary" onClick={onAdd}>
-              <Icons.Plus size={13} /> Cargar otro
+              <Icons.Plus size={13} /> Cargar mantenimiento
             </button>
           </div>
         </div>
@@ -836,7 +838,21 @@ function TruckHistoryPanel({
                 const prevSameTipo = sorted.slice(i + 1).find((r) => r.tipo === m.tipo);
                 const interval = serviceInterval(m, prevSameTipo);
                 return (
-                  <div key={m.id} style={{ border: "1px solid var(--c-border)", borderRadius: 12, padding: 14 }}>
+                  <div
+                    key={m.id}
+                    onClick={() => setEditRecord(m)}
+                    onMouseEnter={() => setHoveredId(m.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    title="Editar service"
+                    style={{
+                      border: "1px solid var(--c-border)",
+                      borderRadius: 12,
+                      padding: 14,
+                      cursor: "pointer",
+                      background: hoveredId === m.id ? "var(--c-surface-2)" : "transparent",
+                      transition: "background 120ms ease",
+                    }}
+                  >
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
                       <span style={{ fontWeight: 700, color: "var(--c-ink)" }}>{meta.emoji} {meta.label}</span>
                       <span style={{ fontSize: "0.8rem", color: "var(--c-ink-2)" }}>{formatDate(m.fecha)}</span>
@@ -855,17 +871,10 @@ function TruckHistoryPanel({
                     {m.notas && <div style={{ marginTop: 8, fontSize: "0.82rem", color: "var(--c-ink-2)", fontStyle: "italic" }}>{m.notas}</div>}
                     <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                       <button
-                        className="st-btn-secondary"
-                        style={{ padding: "6px 12px", fontSize: "0.8rem" }}
-                        onClick={() => setEditRecord(m)}
-                      >
-                        Editar
-                      </button>
-                      <button
                         className="st-btn-danger"
                         style={{ padding: "6px 12px", fontSize: "0.8rem" }}
                         disabled={deletingId === m.id}
-                        onClick={() => setConfirmId(m.id)}
+                        onClick={(e) => { e.stopPropagation(); setConfirmId(m.id); }}
                       >
                         {deletingId === m.id ? "Eliminando…" : "Eliminar"}
                       </button>
@@ -884,6 +893,7 @@ function TruckHistoryPanel({
           trucks={[truck]}
           presetTruck={truck.id}
           editRecord={editRecord}
+          records={records ?? []}
           onSaved={() => { setEditRecord(null); void load(); onChanged(); }}
           onClose={() => setEditRecord(null)}
           onSubscriptionRequired={() => setEditRecord(null)}
@@ -913,6 +923,7 @@ function MaintenanceModal({
   presetTruck,
   editRecord,
   prefill,
+  records,
   onSaved,
   onClose,
   onSubscriptionRequired,
@@ -921,6 +932,7 @@ function MaintenanceModal({
   presetTruck: number | null;
   editRecord?: MaintenanceRecord;
   prefill?: MaintenancePrefill;
+  records?: MaintenanceRecord[];
   onSaved: () => void;
   onClose: () => void;
   onSubscriptionRequired: () => void;
@@ -946,10 +958,27 @@ function MaintenanceModal({
   const [proximoKm, setProximoKm]       = useState(editRecord?.proximo_km != null ? String(editRecord.proximo_km) : (prefill?.proximoKm ?? ""));
   const [saving, setSaving]             = useState(false);
 
+  // Piso de km: el mayor km ya registrado para el camión (excluyendo el que se
+  // edita). Los services son acumulativos → no se puede cargar un km menor.
+  const kmFloor = useMemo(() => {
+    if (truckId === "") return null;
+    const prior = (records ?? [])
+      .filter((r) => r.truck_id === Number(truckId) && r.id !== editRecord?.id)
+      .map((r) => num(r.km_al_service))
+      .filter((n): n is number => n != null);
+    return prior.length ? Math.max(...prior) : null;
+  }, [records, truckId, editRecord]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (truckId === "") { showToast("Seleccioná un camión.", "error"); return; }
     if (!fecha) { showToast("La fecha es requerida.", "error"); return; }
+
+    const kmVal = km ? Number(km) : null;
+    if (kmVal != null && kmFloor != null && kmVal < kmFloor) {
+      showToast(`El km no puede ser menor al del service anterior (${kmFloor.toLocaleString("es-AR")} km). Los services son acumulativos.`, "error");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -1005,7 +1034,12 @@ function MaintenanceModal({
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Km al service">
-            <input type="number" min="0" value={km} onChange={(e) => setKm(e.target.value)} style={inputStyle} placeholder="Ej: 120000" />
+            <input type="number" min={kmFloor ?? 0} value={km} onChange={(e) => setKm(e.target.value)} style={inputStyle} placeholder="Ej: 120000" />
+            {kmFloor != null && (
+              <span style={{ display: "block", marginTop: 4, fontSize: "0.72rem", color: "var(--c-ink-3)" }}>
+                Mínimo {kmFloor.toLocaleString("es-AR")} km (service anterior)
+              </span>
+            )}
           </Field>
           <Field label="Costo ($)">
             <input type="number" min="0" step="0.01" value={costo} onChange={(e) => setCosto(e.target.value)} style={inputStyle} placeholder="Ej: 85000" />
