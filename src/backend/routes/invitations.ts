@@ -3,7 +3,6 @@ import { randomInt } from 'crypto'
 import { authMiddleware } from '../middleware/authMiddleware'
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription'
 import pool, { withTransaction } from '../db'
-import { supabase } from '../supabaseClient'
 import { broadcastToCompany } from '../realtime/hub'
 
 const router = Router()
@@ -147,44 +146,56 @@ router.post('/redeem', authMiddleware, async (req: Request, res: Response) => {
   }
 })
 
-// POST /register — Conductor se registra con un código de invitación (sin confirmación de email)
-router.post('/register', async (req: Request, res: Response) => {
-  const { code, email, password, full_name } = req.body
+// POST /validate — Chequeo liviano del código ANTES de mandar el OTP, para no
+// crear una cuenta de auth (vía signUp) contra una invitación inválida/vencida.
+// Público: lo llama la web /unirse en el paso 1, antes del signUp de Supabase.
+router.post('/validate', async (req: Request, res: Response) => {
+  const rawCode = String(req.body?.code ?? '').toUpperCase().trim()
+  if (!rawCode) return res.status(400).json({ error: 'Falta el código de invitación.' })
+  try {
+    const r = await pool.query(
+      `SELECT hint_name FROM driver_invitations
+       WHERE code = $1 AND redeemed_at IS NULL AND expires_at > NOW()`,
+      [rawCode]
+    )
+    if (!r.rowCount) return res.status(404).json({ error: 'Código de invitación inválido o vencido.' })
+    return res.json({ valid: true, hint_name: r.rows[0].hint_name ?? null })
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message })
+  }
+})
 
-  if (!code || !email || !password || !full_name) {
-    return res.status(400).json({ error: 'Todos los campos son requeridos.' })
-  }
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' })
-  }
+// POST /complete — El conductor YA verificó su email por OTP (mismo flujo que el
+// registro del empresario en la web: signUp + verifyOtp), así que llega con su
+// sesión de Supabase en el header. Acá lo vinculamos a la empresa: creamos o
+// enlazamos su ficha de driver, canjeamos la invitación y le pasamos los viajes
+// que le habían asignado antes de que se registrara.
+router.post('/complete', authMiddleware, async (req: Request, res: Response) => {
+  const driverUserId = req.user!.id
+  const email = req.user!.email
+  const metaName = (req.user!.user_metadata as { full_name?: string })?.full_name
+  const fullName = String(req.body?.full_name ?? metaName ?? '').trim() || email
+  const rawCode = String(req.body?.code ?? '').toUpperCase().trim()
+  if (!rawCode) return res.status(400).json({ error: 'Falta el código de invitación.' })
 
   try {
-    // Validar código
     const invRes = await pool.query(
-      `SELECT * FROM driver_invitations
-       WHERE code = $1 AND redeemed_at IS NULL AND expires_at > NOW()`,
-      [code.toUpperCase().trim()]
+      `SELECT * FROM driver_invitations WHERE code = $1`,
+      [rawCode]
     )
-    if (!invRes.rowCount) {
-      return res.status(404).json({ error: 'Código de invitación inválido o vencido.' })
-    }
+    if (!invRes.rowCount) return res.status(404).json({ error: 'Código de invitación inválido.' })
     const invitation = invRes.rows[0]
-    const adminId = invitation.admin_id
 
-    // Crear usuario en Supabase ya confirmado (service role key)
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: email.trim().toLowerCase(),
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: full_name.trim(), role: 'driver' },
-    })
-    if (authError) {
-      if (authError.message.toLowerCase().includes('already registered')) {
-        return res.status(409).json({ error: 'El email ya está registrado.' })
-      }
-      throw authError
+    // Idempotencia: si /complete se reintenta (red cortada, doble submit) y la
+    // invitación ya la canjeó ESTE usuario, devolvemos OK en vez de error.
+    if (invitation.redeemed_at) {
+      if (invitation.redeemed_by === driverUserId) return res.json({ success: true, email })
+      return res.status(409).json({ error: 'Esta invitación ya fue utilizada.' })
     }
-    const driverUserId = authData.user.id
+    if (new Date(invitation.expires_at).getTime() <= Date.now()) {
+      return res.status(410).json({ error: 'La invitación venció.' })
+    }
+    const adminId = invitation.admin_id
 
     // Sincronizar el nuevo conductor en la tabla users de Aiven.
     // Necesario antes del BEGIN porque drivers.user_id tiene FK a users(id).
@@ -192,56 +203,52 @@ router.post('/register', async (req: Request, res: Response) => {
       `INSERT INTO users (id, email, full_name)
        VALUES ($1, $2, $3)
        ON CONFLICT (id) DO NOTHING`,
-      [driverUserId, email.trim().toLowerCase(), full_name.trim()]
+      [driverUserId, email.toLowerCase(), fullName]
     )
 
     let driverId: number = 0
+    await withTransaction(async (client) => {
+      if (invitation.driver_id) {
+        await client.query(
+          'UPDATE drivers SET app_user_id = $1, updated_at = NOW() WHERE id = $2',
+          [driverUserId, invitation.driver_id]
+        )
+        driverId = invitation.driver_id
+      } else {
+        const insertRes = await client.query<{ id: number }>(
+          `INSERT INTO drivers (user_id, nombre, estado, is_active, app_user_id)
+           VALUES ($1, $2, 'Activo', true, $3)
+           RETURNING id`,
+          [adminId, fullName, driverUserId]
+        )
+        driverId = insertRes.rows[0].id
+        await client.query(
+          'UPDATE driver_invitations SET driver_id = $1 WHERE id = $2',
+          [driverId, invitation.id]
+        )
+      }
+
+      await client.query(
+        'UPDATE driver_invitations SET redeemed_at = NOW(), redeemed_by = $1 WHERE id = $2',
+        [driverUserId, invitation.id]
+      )
+
+      await client.query(
+        `UPDATE assigned_trips SET driver_app_user_id = $1
+         WHERE driver_id = $2 AND driver_app_user_id IS NULL
+           AND status IN ('pending', 'accepted')`,
+        [driverUserId, driverId]
+      )
+    })
+
+    // El admin no tiene por qué estar mirando la pestaña en ese instante, pero
+    // si está conectado, la tarjeta de "invitación pendiente" pasa a ser el
+    // conductor nuevo sin que tenga que recargar la página.
     try {
-      await withTransaction(async (client) => {
-        if (invitation.driver_id) {
-          await client.query(
-            'UPDATE drivers SET app_user_id = $1, updated_at = NOW() WHERE id = $2',
-            [driverUserId, invitation.driver_id]
-          )
-          driverId = invitation.driver_id
-        } else {
-          const insertRes = await client.query<{ id: number }>(
-            `INSERT INTO drivers (user_id, nombre, estado, is_active, app_user_id)
-             VALUES ($1, $2, 'Activo', true, $3)
-             RETURNING id`,
-            [adminId, full_name.trim(), driverUserId]
-          )
-          driverId = insertRes.rows[0].id
-          await client.query(
-            'UPDATE driver_invitations SET driver_id = $1 WHERE id = $2',
-            [driverId, invitation.id]
-          )
-        }
+      broadcastToCompany(adminId, { type: 'driver_registered', driver_id: driverId }, { role: 'admin' })
+    } catch { /* broadcast best-effort */ }
 
-        await client.query(
-          'UPDATE driver_invitations SET redeemed_at = NOW(), redeemed_by = $1 WHERE id = $2',
-          [driverUserId, invitation.id]
-        )
-
-        await client.query(
-          `UPDATE assigned_trips SET driver_app_user_id = $1
-           WHERE driver_id = $2 AND driver_app_user_id IS NULL
-             AND status IN ('pending', 'accepted')`,
-          [driverUserId, driverId]
-        )
-      })
-      // El admin no tiene por qué estar mirando la pestaña en ese instante,
-      // pero si está conectado, la tarjeta de "invitación pendiente" pasa a
-      // ser el conductor nuevo sin que tenga que recargar la página.
-      try {
-        broadcastToCompany(adminId, { type: 'driver_registered', driver_id: driverId }, { role: 'admin' })
-      } catch { /* broadcast best-effort */ }
-      res.json({ success: true, email: authData.user.email })
-    } catch (e) {
-      // Si falla la DB, borramos el usuario de Supabase para no dejar huérfanos
-      await supabase.auth.admin.deleteUser(driverUserId).catch(() => {})
-      throw e
-    }
+    res.json({ success: true, email })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
