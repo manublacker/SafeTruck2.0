@@ -608,7 +608,6 @@ function DriverDetailPanel({
   }
 
   const rows: { label: string; value: string; style?: React.CSSProperties }[] = [
-    { label: "Teléfono", value: driver.telefono ?? "—" },
     { label: "Camión asignado", value: truck ?? "Sin asignar" },
   ];
 

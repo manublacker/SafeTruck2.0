@@ -287,7 +287,6 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
                 trucks={trucks}
                 recordsByTruck={recordCountByTruck(records)}
                 onHistory={(t) => setHistoryTruck(t)}
-                onLoad={(t) => openCreate(t.id)}
               />
             )}
           </Section>
@@ -399,33 +398,44 @@ function TrucksMaintenanceTable({
   trucks,
   recordsByTruck,
   onHistory,
-  onLoad,
 }: {
   trucks: Truck[];
   recordsByTruck: Map<number, number>;
   onHistory: (t: Truck) => void;
-  onLoad: (t: Truck) => void;
 }) {
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
   return (
     <div style={{ border: "1px solid var(--c-border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", minWidth: 720 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", minWidth: 640 }}>
           <thead>
             <tr style={{ background: "var(--c-surface-2)", textAlign: "left", color: "var(--c-ink-2)" }}>
               <Th>Camión</Th>
               <Th>Km actual</Th>
               <Th>Último service</Th>
               <Th>Próximo service</Th>
-              <Th>Registros</Th>
-              <Th>Acciones</Th>
+              <Th>Services realizados</Th>
             </tr>
           </thead>
           <tbody>
             {trucks.map((t) => {
               const days = daysUntil(t.proximo_service);
               const color = urgencyColor(days);
+              const isHovered = hoveredId === t.id;
               return (
-                <tr key={t.id} style={{ borderTop: "1px solid var(--c-border)" }}>
+                <tr
+                  key={t.id}
+                  onClick={() => onHistory(t)}
+                  onMouseEnter={() => setHoveredId(t.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  title="Ver historial de mantenimiento"
+                  style={{
+                    borderTop: "1px solid var(--c-border)",
+                    cursor: "pointer",
+                    background: isHovered ? "var(--c-surface-2)" : "transparent",
+                    transition: "background 120ms ease",
+                  }}
+                >
                   <Td>
                     <div style={{ fontWeight: 700, color: "var(--c-ink)" }}>{t.name}</div>
                     {t.patente && <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.76rem", color: "var(--c-ink-3)" }}>{t.patente}</div>}
@@ -437,14 +447,6 @@ function TrucksMaintenanceTable({
                     {t.proximo_service && <span style={{ color, fontSize: "0.76rem", marginLeft: 6 }}>({relativeDays(days)})</span>}
                   </Td>
                   <Td>{recordsByTruck.get(t.id) ?? 0}</Td>
-                  <Td>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button className="st-btn-secondary" style={{ padding: "6px 10px" }} onClick={() => onHistory(t)}>Historial</button>
-                      <button className="st-btn-secondary" style={{ padding: "6px 10px" }} onClick={() => onLoad(t)}>
-                        <Icons.Plus size={12} />
-                      </button>
-                    </div>
-                  </Td>
                 </tr>
               );
             })}

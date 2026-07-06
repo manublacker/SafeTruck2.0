@@ -7,12 +7,6 @@ import { Icons } from "./DashboardIcons";
 const DRIVER_ESTADOS = ["Activo", "De licencia", "Inactivo"] as const;
 type DriverEstado = (typeof DRIVER_ESTADOS)[number];
 
-function sanitizeTelefono(raw: string): string {
-  const hasPlus = raw.trim().startsWith("+");
-  const digits = raw.replace(/\D/g, "").slice(0, 15);
-  return hasPlus ? `+${digits}` : digits;
-}
-
 interface Props {
   driver: Driver | null;
   onSave: () => void;
@@ -21,20 +15,17 @@ interface Props {
 
 interface DraftDriver {
   nombre: string;
-  telefono: string;
   estado: DriverEstado;
 }
 
 const EMPTY_DRAFT: DraftDriver = {
   nombre:   "",
-  telefono: "",
   estado:   "Activo",
 };
 
 function fromDriver(d: Driver): DraftDriver {
   return {
     nombre:   d.nombre,
-    telefono: d.telefono ?? "",
     estado: (DRIVER_ESTADOS as readonly string[]).includes(d.estado)
       ? (d.estado as DriverEstado)
       : "Activo",
@@ -53,8 +44,7 @@ function buildPayload(draft: DraftDriver): BuildResult {
     ok: true,
     data: {
       nombre,
-      telefono: draft.telefono.trim() || null,
-      estado:   draft.estado,
+      estado: draft.estado,
     },
   };
 }
@@ -101,11 +91,6 @@ export default function DriverEditModal({ driver, onSave, onClose }: Props) {
     (k: keyof DraftDriver) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setDraft((d) => ({ ...d, [k]: e.target.value }));
-
-  const updateMasked =
-    (k: keyof DraftDriver, mask: (s: string) => string) =>
-    (e: React.ChangeEvent<HTMLInputElement>) =>
-      setDraft((d) => ({ ...d, [k]: mask(e.target.value) }));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -154,30 +139,17 @@ export default function DriverEditModal({ driver, onSave, onClose }: Props) {
             />
           </Field>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Field label="Teléfono">
-              <input
-                className="st-field"
-                type="tel"
-                inputMode="tel"
-                value={draft.telefono}
-                onChange={updateMasked("telefono", sanitizeTelefono)}
-                placeholder="+541112345678"
-                maxLength={16}
-              />
-            </Field>
-            <Field label="Estado">
-              <select
-                className="st-field"
-                value={draft.estado}
-                onChange={update("estado")}
-              >
-                {DRIVER_ESTADOS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
+          <Field label="Estado">
+            <select
+              className="st-field"
+              value={draft.estado}
+              onChange={update("estado")}
+            >
+              {DRIVER_ESTADOS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </Field>
         </div>
 
         {error && (
