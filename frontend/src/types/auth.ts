@@ -26,6 +26,9 @@ export interface Driver {
   is_active: boolean;
   created_at: string;
   app_user_id: string | null;
+  // Email con el que el conductor se registró desde el link/código de
+  // invitación. null si todavía no canjeó la invitación (sin cuenta propia).
+  email?: string | null;
   // Datos de licencia (opcionales: el listado clásico puede no traerlos; el
   // módulo de Mantenimiento los usa para el semáforo de vencimientos).
   licencia?: string | null;

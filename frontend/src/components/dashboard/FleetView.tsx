@@ -608,6 +608,7 @@ function DriverDetailPanel({
   }
 
   const rows: { label: string; value: string; style?: React.CSSProperties }[] = [
+    { label: "Email", value: driver.email ?? "Todavía no canjeó la invitación" },
     { label: "Teléfono", value: driver.telefono ?? "—" },
     { label: "Camión asignado", value: truck ?? "Sin asignar" },
   ];
