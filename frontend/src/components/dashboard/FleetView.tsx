@@ -312,7 +312,7 @@ function TrucksTab({ onNavigate }: { onNavigate: (page: AdminPage) => void }) {
         </h3>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            className="st-btn-ghost"
+            className="st-btn-secondary"
             style={{ opacity: (atLimit || trucksLocked) ? 0.45 : 1, cursor: (atLimit || trucksLocked) ? "not-allowed" : "pointer" }}
             onClick={(atLimit || trucksLocked) ? undefined : () => setFromTemplate(true)}
             disabled={atLimit || trucksLocked}

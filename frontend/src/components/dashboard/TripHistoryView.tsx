@@ -68,10 +68,9 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
   const { showToast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState<AssignedTrip | null>(null);
   const [trips, setTrips]     = useState<AssignedTrip[]>(cachedTrips ?? []);
-  // `loading` = primera carga (skeleton, sin cache). `refreshing` = revalidación
-  // en segundo plano (sólo alimenta el estado del botón "Actualizar").
+  // `loading` = primera carga (skeleton, sin cache); un refresco en segundo
+  // plano (silent) no la activa.
   const [loading, setLoading] = useState(cachedTrips === null);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError]     = useState("");
   const [selected, setSelected] = useState<AssignedTrip | null>(null);
 
@@ -84,10 +83,8 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
   const loadTrips = useCallback(async (opts?: { silent?: boolean }) => {
     setError("");
     // Con cache mostramos lo que hay y revalidamos sin tapar la tabla; sin cache
-    // (primera carga) sí mostramos el skeleton. Un refresco `silent` (polling de
-    // fondo) no muestra ni skeleton ni el indicador de "Actualizando…".
+    // (primera carga) sí mostramos el skeleton.
     if (cachedTrips === null) setLoading(true);
-    else if (!opts?.silent) setRefreshing(true);
     try {
       // Reusa el prefetch en vuelo (si el Dashboard ya lo disparó) o pide ahora.
       // La reconciliación vive dentro de prefetchTrips.
@@ -97,7 +94,6 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
       if (!opts?.silent) setError(err instanceof Error ? err.message : "Error al cargar el historial.");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -271,14 +267,6 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
             title={filtered.length === 0 ? "No hay viajes para exportar" : "Descargar CSV con los filtros aplicados"}
           >
             Exportar CSV
-          </button>
-          <button
-            className="st-btn-secondary st-btn-refresh-mobile"
-            style={{ minWidth: 134 }}
-            onClick={() => void loadTrips()}
-            disabled={loading || refreshing}
-          >
-            {(loading || refreshing) ? "Actualizando…" : "Actualizar"}
           </button>
         </div>
       </div>

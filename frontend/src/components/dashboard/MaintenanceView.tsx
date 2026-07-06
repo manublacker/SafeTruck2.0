@@ -221,7 +221,7 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
           Mantenimiento y vencimientos
         </h3>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="st-btn-ghost" onClick={exportCsv}>Exportar CSV</button>
+          <button className="st-btn-secondary" onClick={exportCsv}>Exportar CSV</button>
           <button className="st-btn-primary" onClick={() => openCreate()}>
             <Icons.Plus size={14} /> Cargar mantenimiento
           </button>
@@ -440,7 +440,13 @@ function TrucksMaintenanceTable({
                   <Td>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button className="st-btn-secondary" style={{ padding: "6px 10px" }} onClick={() => onHistory(t)}>Historial</button>
-                      <button className="st-btn-secondary" style={{ padding: "6px 10px" }} onClick={() => onLoad(t)}>
+                      <button
+                        className="st-btn-secondary"
+                        style={{ padding: "6px 10px" }}
+                        onClick={() => onLoad(t)}
+                        title="Cargar registro de mantenimiento"
+                        aria-label="Cargar registro de mantenimiento"
+                      >
                         <Icons.Plus size={12} />
                       </button>
                     </div>
