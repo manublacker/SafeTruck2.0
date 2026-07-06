@@ -1,7 +1,16 @@
 import { useState, useEffect } from "react";
 import type { Truck } from "@/types/auth";
 import { createTruck, updateTruck, deleteTruck, SubscriptionRequiredError } from "@/services/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { Icons } from "./DashboardIcons";
+
+/** Rango razonable para el año del camión (frena valores basura tipo 4444). */
+const MIN_TRUCK_YEAR = 1950;
+
+/** Normaliza texto para comparar nombres/modelos (trim + minúsculas + espacios). */
+function normalizeName(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
 
 interface Props {
   truck: Truck | null;
@@ -106,6 +115,11 @@ function buildPayload(draft: DraftTruck): BuildResult {
     return { ok: false, error: "Las dimensiones (peso, alto, ancho, largo) son requeridas." };
   }
 
+  const anio = parseNumberOrNull(draft.anio);
+  const maxYear = new Date().getFullYear() + 1;
+  if (anio !== null && (anio < MIN_TRUCK_YEAR || anio > maxYear)) {
+    return { ok: false, error: `El año debe estar entre ${MIN_TRUCK_YEAR} y ${maxYear}.` };
+  }
 
   return {
     ok: true,
@@ -113,7 +127,7 @@ function buildPayload(draft: DraftTruck): BuildResult {
       name:            modelo,
       patente:         draft.patente.trim() || null,
       modelo,
-      anio:            parseNumberOrNull(draft.anio),
+      anio,
       km_actual:       parseNumberOrNull(draft.km_actual),
       max_weight_kg,
       max_height_m,
@@ -126,6 +140,7 @@ function buildPayload(draft: DraftTruck): BuildResult {
 }
 
 export default function TruckEditModal({ truck, onSave, onClose, onSubscriptionRequired }: Props) {
+  const { user } = useAuth();
   const [draft, setDraft] = useState<DraftTruck>(() =>
     truck ? fromTruck(truck) : EMPTY_DRAFT,
   );
@@ -138,6 +153,16 @@ export default function TruckEditModal({ truck, onSave, onClose, onSubscriptionR
   const isEdit = truck !== null;
   const title = isEdit ? "Editar camión" : "Nuevo camión";
   const today = new Date().toISOString().slice(0, 10);
+  // Tope de 10 años para el próximo service (frena años basura tipo 4444).
+  const maxService = `${new Date().getFullYear() + 10}-12-31`;
+
+  // Aviso no bloqueante: al crear, si ya existe un camión con el mismo modelo
+  // normalizado. Evita duplicados como "pesados 1" cargado dos veces.
+  const duplicateWarning =
+    !isEdit && draft.modelo.trim() &&
+    (user?.trucks ?? []).some((t) => normalizeName(t.name) === normalizeName(draft.modelo))
+      ? `Ya existe un camión "${draft.modelo.trim()}". Revisá que no sea un duplicado antes de guardar.`
+      : "";
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -317,6 +342,7 @@ export default function TruckEditModal({ truck, onSave, onClose, onSubscriptionR
                   value={draft.proximo_service}
                   onChange={update("proximo_service")}
                   min={today}
+                  max={maxService}
                 />
               </Field>
             </div>
@@ -350,6 +376,23 @@ export default function TruckEditModal({ truck, onSave, onClose, onSubscriptionR
                 Ver planes y precios
               </button>
             )}
+          </div>
+        )}
+
+        {duplicateWarning && !error && (
+          <div
+            style={{
+              background: "rgba(245,158,11,0.08)",
+              border: "1px solid rgba(245,158,11,0.35)",
+              color: "#b45309",
+              borderRadius: "var(--r-md)",
+              padding: "10px 14px",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              marginTop: 14,
+            }}
+          >
+            {duplicateWarning}
           </div>
         )}
 

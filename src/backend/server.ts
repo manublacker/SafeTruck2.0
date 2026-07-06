@@ -31,7 +31,10 @@ app.use(express.json({ limit: '50mb' }))
 
 app.use('/api/auth', authRouter)
 app.use('/api/billing', billingRouter)
-app.use('/api/routes', routeRouter)
+// Ruteo protegido: calcular rutas exige sesión + plan activo (propio, o el de
+// la empresa que te invitó). requireActiveSubscription solo bloquea POST, que
+// es justamente el verbo del cálculo.
+app.use('/api/routes', authMiddleware, requireActiveSubscription, routeRouter)
 app.use('/api/search', searchRouter)
 app.use('/api/incidents', incidentsRouter)
 app.use('/api/reports', reportsRouter)
@@ -44,13 +47,20 @@ app.use('/api/assigned-trips', assignedTripsRouter)
 app.use('/api/invitations', invitationsRouter)
 app.use('/api/locations', locationsRouter)
 app.use('/api/push-tokens', pushTokensRouter)
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'SafeTruck API' }))
+// Railway inyecta RAILWAY_GIT_COMMIT_SHA: permite verificar desde afuera qué
+// versión del código está desplegada (clave para diagnosticar deploys colgados).
+app.get('/api/health', (_req, res) => res.json({
+  status: 'ok',
+  service: 'SafeTruck API',
+  commit: (process.env.RAILWAY_GIT_COMMIT_SHA ?? 'desconocido').slice(0, 7),
+}))
 
 // ────────────────────────────────────────────────────────────────────────────
 // Routing (existente)
 // ────────────────────────────────────────────────────────────────────────────
 
-app.post('/route', async (req, res) => {
+// Mismo gate que /api/routes: sin plan activo no se calculan rutas.
+app.post('/route', authMiddleware, requireActiveSubscription, async (req, res) => {
   res.setTimeout(60000)
   try {
     const { origin, destination, vehicle } = req.body

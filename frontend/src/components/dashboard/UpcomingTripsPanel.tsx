@@ -80,7 +80,7 @@ export default function UpcomingTripsPanel({ trips, loading, activeDrivers = [] 
           }}
         >
           <p style={{ margin: 0, color: "var(--c-ink-3)", fontSize: "0.88rem" }}>
-            No hay viajes próximos
+            No hay viajes activos
           </p>
         </div>
       )}

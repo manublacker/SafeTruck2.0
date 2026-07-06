@@ -16,13 +16,13 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
 import { redeemInvitation, fetchMyAssignedTruck } from '../../src/services/assignedTrips'
 import {
-  setupIndependentAccount, createMyTruck, assignTruckToSelf,
+  setupIndependentAccount, createMyTruck, assignTruckToSelf, fetchMyOwnTrucks,
   confirmSubscription, hasActivePlan, INDEPENDENT_PLAN,
 } from '../../src/services/independent'
 import { startMobileCheckout } from '../../src/services/billing'
@@ -55,9 +55,14 @@ export default function OnboardingScreen() {
   const s = useMemo(() => makeStyles(t), [isDark])
   const router = useRouter()
 
-  const [mode, setMode] = useState<Mode>('choice')
+  // ?flow=independent (desde "Cargar mi camión" del perfil) arranca directo
+  // en el formulario del camión, sin repetir la elección.
+  const { flow } = useLocalSearchParams<{ flow?: string }>()
+  const [mode, setMode] = useState<Mode>(flow === 'independent' ? 'truck' : 'choice')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // Qué camino terminó: define el mensaje de la pantalla final.
+  const [doneKind, setDoneKind] = useState<'company' | 'independent' | null>(null)
 
   // empresa
   const [code, setCode] = useState('')
@@ -93,6 +98,7 @@ export default function OnboardingScreen() {
           axles: 0, is_default: true, created_at: '',
         })
       }
+      setDoneKind('company')
       setMode('done')
     } catch (e: any) {
       setError(e?.message ?? 'No se pudo canjear el código.')
@@ -123,7 +129,16 @@ export default function OnboardingScreen() {
         telefono: profile?.phone ?? null,
       })
       setDriverId(setup.driver_id)
-      setMode('payment')
+
+      // Si ya tiene el plan activo (está retomando el flujo después de haber
+      // pagado), no le mostramos la pantalla de pago: directo a crear y
+      // asignar el camión.
+      const sub = await confirmSubscription(INDEPENDENT_PLAN).catch(() => null)
+      if (hasActivePlan(sub)) {
+        await finishIndependent(setup.driver_id)
+      } else {
+        setMode('payment')
+      }
     } catch (e: any) {
       setError(e?.message ?? 'No se pudo configurar tu cuenta.')
     } finally {
@@ -132,22 +147,52 @@ export default function OnboardingScreen() {
   }
 
   // Con la suscripción activa, crea el camión y se lo asigna a sí mismo.
+  // Re-entrante: si un intento anterior creó el camión pero falló la
+  // asignación (o la app se cerró), reutiliza el camión existente en vez de
+  // crear un duplicado (el plan individual permite uno solo: el segundo
+  // create daría 403 y dejaría al usuario pagado y atrapado).
   async function finishIndependent(driver: number) {
-    const created = await createMyTruck({
+    const own = await fetchMyOwnTrucks().catch(() => [] as Awaited<ReturnType<typeof fetchMyOwnTrucks>>)
+
+    // Elegir el camión a reutilizar con criterio, no el primero de la lista
+    // (un ex-admin puede tener varios de su vieja flota): por patente, después
+    // por nombre, y si no matchea nada, el más reciente (el del intento a
+    // medias, GET /api/trucks ordena por created_at ASC).
+    const formPatente = truck.patente.trim().toUpperCase()
+    const formName = truck.name.trim().toLowerCase()
+    const existing =
+      (formPatente ? own.find(tk => (tk.patente ?? '').toUpperCase() === formPatente) : undefined) ??
+      own.find(tk => tk.name.trim().toLowerCase() === formName) ??
+      own[own.length - 1]
+
+    const chosen = existing ?? {
+      ...(await createMyTruck({
+        name: truck.name.trim(),
+        patente: truck.patente.trim() || null,
+        max_weight_kg: parseNum(truck.max_weight_kg)!,
+        max_height_m: parseNum(truck.max_height_m)!,
+        max_width_m: parseNum(truck.max_width_m)!,
+        max_length_m: parseNum(truck.max_length_m)!,
+      })),
       name: truck.name.trim(),
       patente: truck.patente.trim() || null,
       max_weight_kg: parseNum(truck.max_weight_kg)!,
       max_height_m: parseNum(truck.max_height_m)!,
       max_width_m: parseNum(truck.max_width_m)!,
       max_length_m: parseNum(truck.max_length_m)!,
-    })
-    await assignTruckToSelf(created.id, driver)
+    }
+
+    await assignTruckToSelf(chosen.id, driver)
+    // activeVehicle desde los datos REALES del camión elegido: si se reutiliza
+    // uno existente, sus dimensiones persistidas mandan (el ruteo debe usar
+    // las del camión de verdad, no lo que se retipeó en el formulario).
     setActiveVehicle({
-      id: String(created.id), user_id: '', plate: truck.patente.trim(), name: truck.name.trim(),
-      weight_kg: parseNum(truck.max_weight_kg)!, height_m: parseNum(truck.max_height_m)!,
-      width_m: parseNum(truck.max_width_m)!, length_m: parseNum(truck.max_length_m)!,
+      id: String(chosen.id), user_id: '', plate: chosen.patente ?? '', name: chosen.name,
+      weight_kg: Number(chosen.max_weight_kg), height_m: Number(chosen.max_height_m),
+      width_m: Number(chosen.max_width_m), length_m: Number(chosen.max_length_m),
       axles: 0, is_default: true, created_at: '',
     })
+    setDoneKind('independent')
     setMode('done')
   }
 
@@ -156,7 +201,6 @@ export default function OnboardingScreen() {
     if (driverId == null) return
     setLoading(true)
     setError('')
-    setPaymentPending(false)
     try {
       // Si ya pagó antes (reintento / app cerrada a mitad del flujo), no lo
       // mandamos a pagar de nuevo.
@@ -168,10 +212,31 @@ export default function OnboardingScreen() {
       if (hasActivePlan(sub)) {
         await finishIndependent(driverId)
       } else {
+        // Volvió del checkout sin pago acreditado: puede reintentar el pago
+        // (botón principal) o verificar más tarde si pagó recién (secundario).
         setPaymentPending(true)
       }
     } catch (e: any) {
       setError(e?.message ?? 'No se pudo completar el pago.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Solo consulta si el pago ya figura acreditado, sin abrir MercadoPago.
+  async function handleVerifyPayment() {
+    if (driverId == null) return
+    setLoading(true)
+    setError('')
+    try {
+      const sub = await confirmSubscription(INDEPENDENT_PLAN)
+      if (hasActivePlan(sub)) {
+        await finishIndependent(driverId)
+      } else {
+        setError('Todavía no encontramos tu pago. Si acabás de pagar, esperá un minuto y volvé a verificar.')
+      }
+    } catch (e: any) {
+      setError(e?.message ?? 'No se pudo verificar el pago.')
     } finally {
       setLoading(false)
     }
@@ -324,7 +389,8 @@ export default function OnboardingScreen() {
 
             {paymentPending && (
               <Text style={s.pending}>
-                Todavía no vimos tu pago acreditado. Si ya pagaste, tocá el botón para verificar de nuevo.
+                Todavía no vimos tu pago acreditado. Podés volver a intentar el pago,
+                o si ya pagaste, verificarlo de nuevo.
               </Text>
             )}
             {!!error && <Text style={s.error}>{error}</Text>}
@@ -332,9 +398,15 @@ export default function OnboardingScreen() {
             <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handlePay} disabled={loading}>
               {loading
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={s.btnText}>{paymentPending ? 'Ya pagué, verificar' : 'Pagar con MercadoPago'}</Text>
+                : <Text style={s.btnText}>Pagar con MercadoPago</Text>
               }
             </TouchableOpacity>
+
+            {paymentPending && (
+              <TouchableOpacity style={[s.btnSecondary, loading && s.btnDisabled]} onPress={handleVerifyPayment} disabled={loading}>
+                <Text style={s.btnSecondaryText}>Ya pagué, verificar</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -344,7 +416,7 @@ export default function OnboardingScreen() {
             <View style={s.doneIcon}><Ionicons name="checkmark" size={34} color="#fff" /></View>
             <Text style={[s.title, { textAlign: 'center' }]}>¡Cuenta lista!</Text>
             <Text style={[s.subtitle, { textAlign: 'center' }]}>
-              {driverId != null
+              {doneKind === 'independent'
                 ? 'Tu camión quedó cargado y tu plan está activo. Ya podés calcular rutas y navegar.'
                 : 'Quedaste vinculado a tu empresa. Cuando te asignen un camión y viajes, los vas a ver acá.'}
             </Text>
@@ -409,6 +481,11 @@ function makeStyles(t: Theme) {
     },
 
     btn: { backgroundColor: t.accent, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
+    btnSecondary: {
+      backgroundColor: t.card, borderRadius: 12, padding: 16, alignItems: 'center',
+      marginTop: 10, borderWidth: 1, borderColor: t.border,
+    },
+    btnSecondaryText: { color: t.text, fontSize: 15, fontWeight: '600' },
     btnDisabled: { opacity: 0.6 },
     btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
     link: { marginTop: 20, alignItems: 'center' },

@@ -425,6 +425,17 @@
     align-items: stretch;
   }
 
+  /* Tarjeta informativa (plan Individual): no navega, así que sin cursor de
+     link ni efecto hover de "clickeable". Doble clase para ganarle en
+     especificidad al .landing-plan-card:hover de más abajo. */
+  .landing-plan-card.landing-plan-card--static,
+  .landing-plan-card.landing-plan-card--static:hover {
+    cursor: default;
+    transform: none;
+    border-color: #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+
   .landing-plan-card {
     position: relative;
     border-radius: 1rem;
@@ -488,10 +499,13 @@
   }
 
   .landing-plan-card__price {
-    font-size: 3rem;
+    /* Adaptable: con 4 columnas las cards son más angostas que antes y un
+       precio de 6 cifras a 3rem fijos desbordaba la tarjeta. */
+    font-size: clamp(1.75rem, 1.1rem + 1.3vw, 2.5rem);
     font-weight: 700;
     color: var(--landing-brand-dark);
     line-height: 1;
+    letter-spacing: -0.02em;
   }
 
   .landing-plan-card__period {
@@ -501,6 +515,11 @@
 
   .landing-plan-card__price-row {
     margin-bottom: 1.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    min-width: 0;
   }
 
   .landing-plan-card__features {
@@ -1120,20 +1139,21 @@
   .auth-code-inputs {
     display: flex;
     justify-content: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     margin-bottom: 0.5rem;
+    /* 8 dígitos entran justo en la tarjeta; si la pantalla es muy angosta,
+       que bajen a una segunda fila en vez de desbordar el rectángulo. */
+    flex-wrap: wrap;
   }
 
   .auth-code-input {
-    width: 3.25rem;
-    height: 3.5rem;
+    width: 2.5rem;
+    height: 3rem;
     text-align: center;
-    font-size: 1.5rem;
-    font-weight: 600;
     border-radius: 0.5rem;
     border: 2px solid #e5e7eb;
     font: inherit;
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 600;
     transition: border-color 0.15s;
   }

@@ -30,7 +30,7 @@ export interface AssignedTrip {
 
 const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'https://safetruck20-production.up.railway.app').replace(/\/$/, '')
 
-async function authHeaders(): Promise<Record<string, string>> {
+export async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
   return {
@@ -82,6 +82,8 @@ export interface MyMaintenance {
     proximo_service: string | null
     /** Días hasta el próximo service. Negativo = vencido. null = sin fecha. */
     days_left: number | null
+    max_weight_kg: number | null
+    max_height_m: number | null
   } | null
   last_maintenance: {
     tipo: string

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/Toast";
 import type { Truck } from "@/types/auth";
@@ -7,12 +7,12 @@ import {
   fetchMaintenanceByTruck,
   fetchMaintenanceAlerts,
   createMaintenance,
+  updateMaintenance,
   deleteMaintenance,
   SubscriptionRequiredError,
   type MaintenanceRecord,
   type MaintenanceAlerts,
   type MaintenanceTipo,
-  type MaintenanceTruckAlert,
   type MaintenanceLicenseAlert,
 } from "@/services/api";
 import { reconcileById } from "@/lib/reconcile";
@@ -22,6 +22,8 @@ import ConfirmDialog from "./ConfirmDialog";
 
 const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
 const SERVICE_WARN_DAYS = 30;
+/** Km restantes al próximo service para considerarlo "próximo a vencer". */
+const KM_WARN = 2000;
 
 // Cache a nivel módulo (stale-while-revalidate). Al cambiar de pestaña este
 // componente se DESMONTA (Dashboard usa montaje condicional); sin el cache,
@@ -84,6 +86,13 @@ function tipoMeta(tipo: string) {
 
 // ── Helpers de fecha / formato ───────────────────────────────────────────────
 
+/** Coerción defensiva: Postgres devuelve `numeric` como string. */
+function num(v: number | string | null | undefined): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function daysUntil(isoDate: string | null): number | null {
   if (!isoDate) return null;
   const target = new Date(isoDate);
@@ -117,12 +126,109 @@ function relativeDays(days: number | null): string {
   return `en ${days}d`;
 }
 
-/** Color según urgencia (vencido rojo, próximo ámbar, ok gris). */
+/** Color según urgencia por fecha (usado por licencias). */
 function urgencyColor(days: number | null): string {
   if (days === null) return "#9ca3af";
   if (days < 0) return "#c62828";
   if (days <= SERVICE_WARN_DAYS) return "#f59e0b";
   return "#16a34a";
+}
+
+// ── Clasificación de estado de service (fecha + km) ──────────────────────────
+
+type ServiceUrgency = "vencido" | "proximo" | "al_dia" | "sin_datos";
+
+interface ServiceStatus {
+  urgency: ServiceUrgency;
+  /** Progreso 0..1+ del eje más urgente (>=1 = vencido). */
+  progress: number;
+  basis: "fecha" | "km" | null;
+  daysLeft: number | null;
+  kmLeft: number | null;
+}
+
+const URGENCY_META: Record<ServiceUrgency, { label: string; color: string; order: number }> = {
+  vencido:   { label: "Vencido",   color: "#c62828", order: 0 },
+  proximo:   { label: "Próximo",   color: "#f59e0b", order: 1 },
+  al_dia:    { label: "Al día",    color: "#16a34a", order: 2 },
+  sin_datos: { label: "Sin datos", color: "#9ca3af", order: 3 },
+};
+
+/**
+ * Clasifica un camión combinando el eje FECHA (fecha_service → proximo_service)
+ * y el eje KM (km_al_service → proximo_km del último registro, vs km_actual).
+ * Se queda con el eje más cerca de vencer.
+ */
+function computeServiceStatus(truck: Truck, lastRecord?: MaintenanceRecord): ServiceStatus {
+  // Eje fecha
+  let dateProgress: number | null = null;
+  const daysLeft = daysUntil(truck.proximo_service);
+  if (truck.proximo_service) {
+    const end = new Date(truck.proximo_service).getTime();
+    const start = truck.fecha_service ? new Date(truck.fecha_service).getTime() : null;
+    if (start != null && Number.isFinite(start) && end > start) {
+      dateProgress = (Date.now() - start) / (end - start);
+    } else if (daysLeft != null) {
+      dateProgress = daysLeft <= 0 ? 1 : daysLeft <= SERVICE_WARN_DAYS ? 0.85 : 0.4;
+    }
+  }
+
+  // Eje km
+  let kmProgress: number | null = null;
+  let kmLeft: number | null = null;
+  const target = num(lastRecord?.proximo_km);
+  const cur = num(truck.km_actual);
+  const startKm = num(lastRecord?.km_al_service);
+  if (target != null && cur != null) {
+    kmLeft = target - cur;
+    if (startKm != null && target > startKm) {
+      kmProgress = (cur - startKm) / (target - startKm);
+    } else {
+      kmProgress = kmLeft <= 0 ? 1 : kmLeft <= KM_WARN ? 0.85 : 0.4;
+    }
+  }
+
+  const axes: { p: number; basis: "fecha" | "km" }[] = [];
+  if (dateProgress != null) axes.push({ p: dateProgress, basis: "fecha" });
+  if (kmProgress != null) axes.push({ p: kmProgress, basis: "km" });
+
+  if (axes.length === 0) {
+    return { urgency: "sin_datos", progress: 0, basis: null, daysLeft, kmLeft };
+  }
+  const best = axes.reduce((a, b) => (b.p > a.p ? b : a));
+
+  let urgency: ServiceUrgency;
+  if (best.p >= 1) {
+    urgency = "vencido";
+  } else {
+    const nearDate = daysLeft != null && daysLeft <= SERVICE_WARN_DAYS;
+    const nearKm = kmLeft != null && kmLeft <= KM_WARN;
+    urgency = nearDate || nearKm ? "proximo" : "al_dia";
+  }
+  return { urgency, progress: best.p, basis: best.basis, daysLeft, kmLeft };
+}
+
+/** Texto corto del eje que define la urgencia ("en 12d" / "faltan 1.500 km"). */
+function progressLabel(status: ServiceStatus): string {
+  if (status.basis === "km" && status.kmLeft != null) {
+    return status.kmLeft <= 0
+      ? `excedido ${formatKm(Math.abs(status.kmLeft))}`
+      : `faltan ${formatKm(status.kmLeft)}`;
+  }
+  return relativeDays(status.daysLeft);
+}
+
+interface FleetRow {
+  truck: Truck;
+  status: ServiceStatus;
+  recordCount: number;
+}
+
+function byUrgency(a: FleetRow, b: FleetRow): number {
+  return (
+    URGENCY_META[a.status.urgency].order - URGENCY_META[b.status.urgency].order ||
+    b.status.progress - a.status.progress
+  );
 }
 
 // ── Componente principal ─────────────────────────────────────────────────────
@@ -143,6 +249,14 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
   const [presetTruck, setPresetTruck]   = useState<number | null>(null);
   const [historyTruck, setHistoryTruck] = useState<Truck | null>(null);
 
+  // Filtros de la lista.
+  const [statusFilter, setStatusFilter] = useState<ServiceUrgency | null>(null);
+  const [query, setQuery] = useState("");
+  const [kmMin, setKmMin] = useState("");
+  const [kmMax, setKmMax] = useState("");
+
+  const licenciasRef = useRef<HTMLDivElement | null>(null);
+
   const load = useCallback(async () => {
     setError("");
     setSubscriptionError(false);
@@ -161,9 +275,74 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
 
   useEffect(() => { void load(); }, [load]);
 
+  // Último registro (por fecha) de cada camión → base del eje km.
+  const lastRecordByTruck = useMemo(() => {
+    const map = new Map<number, MaintenanceRecord>();
+    for (const r of records) {
+      const prev = map.get(r.truck_id);
+      if (!prev || (r.fecha ?? "") > (prev.fecha ?? "")) map.set(r.truck_id, r);
+    }
+    return map;
+  }, [records]);
+
+  const countByTruck = useMemo(() => recordCountByTruck(records), [records]);
+
+  const fleet = useMemo<FleetRow[]>(
+    () =>
+      trucks.map((t) => ({
+        truck: t,
+        status: computeServiceStatus(t, lastRecordByTruck.get(t.id)),
+        recordCount: countByTruck.get(t.id) ?? 0,
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trucks, lastRecordByTruck, countByTruck],
+  );
+
+  const counts = useMemo(() => {
+    const c: Record<ServiceUrgency, number> = { vencido: 0, proximo: 0, al_dia: 0, sin_datos: 0 };
+    for (const f of fleet) c[f.status.urgency]++;
+    return c;
+  }, [fleet]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const min = num(kmMin);
+    const max = num(kmMax);
+    return fleet.filter(({ truck, status }) => {
+      if (statusFilter && status.urgency !== statusFilter) return false;
+      if (q && !`${truck.name ?? ""} ${truck.patente ?? ""}`.toLowerCase().includes(q)) return false;
+      const km = num(truck.km_actual);
+      if (min != null && (km == null || km < min)) return false;
+      if (max != null && (km == null || km > max)) return false;
+      return true;
+    });
+  }, [fleet, statusFilter, query, kmMin, kmMax]);
+
+  const attention = useMemo(
+    () => filtered.filter((f) => f.status.urgency === "vencido" || f.status.urgency === "proximo").sort(byUrgency),
+    [filtered],
+  );
+  const rest = useMemo(
+    () => filtered.filter((f) => f.status.urgency === "al_dia" || f.status.urgency === "sin_datos").sort(byUrgency),
+    [filtered],
+  );
+
+  const hasFilters = !!(statusFilter || query || kmMin || kmMax);
+
   function openCreate(truckId?: number) {
     setPresetTruck(truckId ?? null);
     setCreating(true);
+  }
+
+  function toggleFilter(u: ServiceUrgency) {
+    setStatusFilter((prev) => (prev === u ? null : u));
+  }
+
+  function clearFilters() {
+    setStatusFilter(null);
+    setQuery("");
+    setKmMin("");
+    setKmMax("");
   }
 
   function handleSaved() {
@@ -213,6 +392,10 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
     );
   }
 
+  const licenciasCount =
+    (alerts?.licencias.vencidas.length ?? 0) + (alerts?.licencias.por_vencer.length ?? 0);
+  const gastoTotal = records.reduce((sum, m) => sum + (num(m.costo) ?? 0), 0);
+
   return (
     <div className="st-view-root" style={{ padding: 24, height: "100%", background: "#fff", overflowY: "auto" }}>
       {/* Header */}
@@ -221,7 +404,7 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
           Mantenimiento y vencimientos
         </h3>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="st-btn-ghost" onClick={exportCsv}>Exportar CSV</button>
+          <button className="st-btn-secondary" onClick={exportCsv}>Exportar CSV</button>
           <button className="st-btn-primary" onClick={() => openCreate()}>
             <Icons.Plus size={14} /> Cargar mantenimiento
           </button>
@@ -233,31 +416,45 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
 
       {!loading && !error && alerts && (
         <>
-          {/* Semáforo de alertas */}
+          {/* KPIs clickeables (filtran la lista) */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 20 }}>
-            <StatCard label="Service vencido" value={alerts.trucks.vencidos.length} tone="danger" icon={<Icons.Alert size={18} />} />
-            <StatCard label="Próximo a vencer" value={alerts.trucks.proximos.length} tone="warn" icon={<Icons.Clock size={18} />} />
-            <StatCard label="Al día" value={alerts.trucks.al_dia.length} tone="ok" icon={<Icons.Wrench size={18} />} />
-            <StatCard label="Licencias por vencer" value={alerts.licencias.vencidas.length + alerts.licencias.por_vencer.length} tone="warn" icon={<Icons.People size={18} />} />
+            <KpiFilterCard label="Service vencido" value={counts.vencido} tone="danger" icon={<Icons.Alert size={18} />} active={statusFilter === "vencido"} onClick={() => toggleFilter("vencido")} />
+            <KpiFilterCard label="Próximo a vencer" value={counts.proximo} tone="warn" icon={<Icons.Clock size={18} />} active={statusFilter === "proximo"} onClick={() => toggleFilter("proximo")} />
+            <KpiFilterCard label="Al día" value={counts.al_dia} tone="ok" icon={<Icons.Wrench size={18} />} active={statusFilter === "al_dia"} onClick={() => toggleFilter("al_dia")} />
+            <KpiFilterCard label="Licencias por vencer" value={licenciasCount} tone="warn" icon={<Icons.People size={18} />} onClick={() => licenciasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} />
           </div>
 
           {/* Gasto total en mantenimiento (suma el costo de todos los registros) */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", background: "var(--c-surface-2)", border: "1px solid var(--c-border)", borderRadius: 12, padding: "14px 18px", marginBottom: 24 }}>
             <span style={{ fontSize: "0.85rem", color: "var(--c-ink-2)", fontWeight: 600 }}>Gasto total en mantenimiento</span>
             <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--c-ink)" }}>
-              ${records.reduce((sum, m) => sum + (m.costo ?? 0), 0).toLocaleString("es-AR")}
+              ${gastoTotal.toLocaleString("es-AR")}
               <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--c-ink-3)", marginLeft: 8 }}>
                 · {records.length} registro{records.length === 1 ? "" : "s"}
               </span>
             </span>
           </div>
 
+          {/* Buscador + filtros */}
+          {trucks.length > 0 && (
+            <FleetToolbar
+              query={query} onQuery={setQuery}
+              kmMin={kmMin} kmMax={kmMax} onKmMin={setKmMin} onKmMax={setKmMax}
+              hasFilters={hasFilters} onClear={clearFilters}
+            />
+          )}
+
           {/* Camiones que requieren atención */}
-          {(alerts.trucks.vencidos.length > 0 || alerts.trucks.proximos.length > 0) && (
-            <Section title="Camiones que requieren atención">
+          {attention.length > 0 && (
+            <Section title={`Requieren atención (${attention.length})`}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-                {[...alerts.trucks.vencidos, ...alerts.trucks.proximos].map((t) => (
-                  <TruckAlertCard key={t.id} truck={t} onLoad={() => openCreate(t.id)} />
+                {attention.map((row) => (
+                  <TruckAttentionCard
+                    key={row.truck.id}
+                    row={row}
+                    onLoad={() => openCreate(row.truck.id)}
+                    onHistory={() => setHistoryTruck(row.truck)}
+                  />
                 ))}
               </div>
             </Section>
@@ -265,27 +462,34 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
 
           {/* Licencias por vencer */}
           {(alerts.licencias.vencidas.length > 0 || alerts.licencias.por_vencer.length > 0) && (
-            <Section title="Licencias de conducir">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-                {[...alerts.licencias.vencidas, ...alerts.licencias.por_vencer].map((d) => (
-                  <LicenseAlertCard key={d.id} driver={d} />
-                ))}
-              </div>
-            </Section>
+            <div ref={licenciasRef}>
+              <Section title="Licencias de conducir">
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+                  {[...alerts.licencias.vencidas, ...alerts.licencias.por_vencer].map((d) => (
+                    <LicenseAlertCard key={d.id} driver={d} />
+                  ))}
+                </div>
+              </Section>
+            </div>
           )}
 
-          {/* Tabla de camiones */}
-          <Section title="Estado de la flota">
+          {/* Resto de la flota */}
+          <Section title={attention.length > 0 ? "Resto de la flota" : "Estado de la flota"}>
             {trucks.length === 0 ? (
               <EmptyState
                 icon={<Icons.Truck size={26} />}
                 title="No tenés camiones registrados"
                 subtitle="Cargá camiones en la sección Flota para empezar a registrar su mantenimiento."
               />
+            ) : rest.length === 0 ? (
+              <Hint>
+                {hasFilters
+                  ? "Ningún camión coincide con los filtros."
+                  : "El resto de la flota está al día."}
+              </Hint>
             ) : (
               <TrucksMaintenanceTable
-                trucks={trucks}
-                recordsByTruck={recordCountByTruck(records)}
+                rows={rest}
                 onHistory={(t) => setHistoryTruck(t)}
                 onLoad={(t) => openCreate(t.id)}
               />
@@ -307,8 +511,9 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
       {historyTruck && (
         <TruckHistoryPanel
           truck={historyTruck}
+          initialRecords={records.filter((r) => r.truck_id === historyTruck.id)}
           onClose={() => setHistoryTruck(null)}
-          onChanged={() => void load()}
+          onChanged={() => { void load(); void refreshTrucks(); }}
           onAdd={() => { const id = historyTruck.id; setHistoryTruck(null); openCreate(id); }}
         />
       )}
@@ -324,18 +529,22 @@ function recordCountByTruck(records: MaintenanceRecord[]): Map<number, number> {
   return map;
 }
 
-// ── Tarjeta de estadística (semáforo) ────────────────────────────────────────
+// ── KPI clickeable ───────────────────────────────────────────────────────────
 
-function StatCard({
+function KpiFilterCard({
   label,
   value,
   tone,
   icon,
+  active = false,
+  onClick,
 }: {
   label: string;
   value: number;
   tone: "danger" | "warn" | "ok";
   icon: React.ReactNode;
+  active?: boolean;
+  onClick: () => void;
 }) {
   const palette = {
     danger: { bg: "rgba(198,40,40,0.06)", border: "rgba(198,40,40,0.2)", fg: "#c62828" },
@@ -344,35 +553,140 @@ function StatCard({
   }[tone];
 
   return (
-    <div style={{ background: palette.bg, border: `1px solid ${palette.border}`, borderRadius: 14, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        background: palette.bg,
+        border: `1.5px solid ${active ? palette.fg : palette.border}`,
+        borderRadius: 14,
+        padding: "16px 18px",
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        cursor: "pointer",
+        fontFamily: "inherit",
+        textAlign: "left",
+        transition: "border-color 120ms ease, box-shadow 120ms ease",
+        boxShadow: active ? `0 0 0 3px ${palette.bg}` : "none",
+      }}
+    >
       <div style={{ width: 40, height: 40, borderRadius: 12, background: "#fff", color: palette.fg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         {icon}
       </div>
-      <div>
+      <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: "1.6rem", fontWeight: 800, color: palette.fg, lineHeight: 1 }}>{value}</div>
-        <div style={{ fontSize: "0.8rem", color: "var(--c-ink-2)", fontWeight: 600, marginTop: 4 }}>{label}</div>
+        <div style={{ fontSize: "0.8rem", color: "var(--c-ink-2)", fontWeight: 600, marginTop: 4 }}>
+          {label}{active ? " · filtrando" : ""}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ── Buscador + filtros ───────────────────────────────────────────────────────
+
+function FleetToolbar({
+  query, onQuery, kmMin, kmMax, onKmMin, onKmMax, hasFilters, onClear,
+}: {
+  query: string;
+  onQuery: (v: string) => void;
+  kmMin: string;
+  kmMax: string;
+  onKmMin: (v: string) => void;
+  onKmMax: (v: string) => void;
+  hasFilters: boolean;
+  onClear: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+      <input
+        value={query}
+        onChange={(e) => onQuery(e.target.value)}
+        placeholder="Buscar por nombre o patente…"
+        style={{ ...inputStyle, width: 260 }}
+      />
+      <input value={kmMin} onChange={(e) => onKmMin(e.target.value)} type="number" min="0" placeholder="Km mín." style={{ ...inputStyle, width: 110 }} />
+      <input value={kmMax} onChange={(e) => onKmMax(e.target.value)} type="number" min="0" placeholder="Km máx." style={{ ...inputStyle, width: 110 }} />
+      {hasFilters && (
+        <button className="st-btn-secondary" style={{ padding: "8px 12px" }} onClick={onClear}>
+          Limpiar filtros
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Badge + barra de progreso ────────────────────────────────────────────────
+
+function StatusBadge({ urgency }: { urgency: ServiceUrgency }) {
+  const meta = URGENCY_META[urgency];
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.72rem", fontWeight: 700, color: meta.color, background: `${meta.color}14`, border: `1px solid ${meta.color}33`, borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap", height: "fit-content" }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: meta.color }} />
+      {meta.label}
+    </span>
+  );
+}
+
+function ServiceProgressBar({ status, height = 8 }: { status: ServiceStatus; height?: number }) {
+  if (status.urgency === "sin_datos") {
+    return <div style={{ fontSize: "0.78rem", color: "var(--c-ink-3)" }}>Sin datos de próximo service</div>;
+  }
+  const meta = URGENCY_META[status.urgency];
+  const pct = Math.max(0, Math.min(1, status.progress)) * 100;
+  const over = status.progress > 1;
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.76rem", marginBottom: 5 }}>
+        <span style={{ color: "var(--c-ink-2)" }}>{progressLabel(status)}</span>
+        <span style={{ color: meta.color, fontWeight: 700 }}>{Math.round(status.progress * 100)}%</span>
+      </div>
+      <div style={{ height, borderRadius: 99, background: "var(--c-surface-2)", overflow: "hidden" }}>
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            background: meta.color,
+            borderRadius: 99,
+            backgroundImage: over
+              ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.3) 0 6px, transparent 6px 12px)"
+              : undefined,
+          }}
+        />
       </div>
     </div>
   );
 }
 
-// ── Tarjetas de alerta ───────────────────────────────────────────────────────
+// ── Card de camión que requiere atención ─────────────────────────────────────
 
-function TruckAlertCard({ truck, onLoad }: { truck: MaintenanceTruckAlert; onLoad: () => void }) {
-  const color = urgencyColor(truck.days_left);
+function TruckAttentionCard({ row, onLoad, onHistory }: { row: FleetRow; onLoad: () => void; onHistory: () => void }) {
+  const { truck, status, recordCount } = row;
+  const meta = URGENCY_META[status.urgency];
   return (
-    <div style={{ border: `1px solid var(--c-border)`, borderLeft: `3px solid ${color}`, borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ fontWeight: 700, color: "var(--c-ink)", fontSize: "0.95rem" }}>{truck.name}</div>
-        {truck.patente && <span style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.78rem", color: "var(--c-ink-2)" }}>{truck.patente}</span>}
+    <div style={{ border: "1px solid var(--c-border)", borderLeft: `3px solid ${meta.color}`, borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          {truck.patente && (
+            <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.82rem", fontWeight: 700, color: "var(--c-ink)", letterSpacing: 0.3 }}>{truck.patente}</div>
+          )}
+          <div style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--c-ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{truck.name}</div>
+        </div>
+        <StatusBadge urgency={status.urgency} />
       </div>
-      <div style={{ fontSize: "0.82rem", color: "var(--c-ink-2)" }}>
-        Próx. service: <strong style={{ color }}>{formatDate(truck.proximo_service)}</strong>{" "}
-        <span style={{ color, fontWeight: 700 }}>({relativeDays(truck.days_left)})</span>
+      <div style={{ fontSize: "0.8rem", color: "var(--c-ink-2)" }}>
+        Km actual: <strong style={{ color: "var(--c-ink)" }}>{formatKm(truck.km_actual)}</strong>
       </div>
-      <button className="st-btn-secondary" style={{ alignSelf: "flex-start", marginTop: 4 }} onClick={onLoad}>
-        <Icons.Wrench size={13} /> Registrar service
-      </button>
+      <ServiceProgressBar status={status} />
+      <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+        <button className="st-btn-primary" style={{ padding: "7px 12px", fontSize: "0.8rem" }} onClick={onLoad}>
+          <Icons.Plus size={12} /> Service
+        </button>
+        <button className="st-btn-secondary" style={{ padding: "7px 12px", fontSize: "0.8rem" }} onClick={onHistory}>
+          Historial{recordCount ? ` (${recordCount})` : ""}
+        </button>
+      </div>
     </div>
   );
 }
@@ -393,57 +707,82 @@ function LicenseAlertCard({ driver }: { driver: MaintenanceLicenseAlert }) {
   );
 }
 
-// ── Tabla de camiones ────────────────────────────────────────────────────────
+// ── Tabla: resto de la flota ─────────────────────────────────────────────────
 
 function TrucksMaintenanceTable({
-  trucks,
-  recordsByTruck,
+  rows,
   onHistory,
   onLoad,
 }: {
-  trucks: Truck[];
-  recordsByTruck: Map<number, number>;
+  rows: FleetRow[];
   onHistory: (t: Truck) => void;
   onLoad: (t: Truck) => void;
 }) {
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
   return (
     <div style={{ border: "1px solid var(--c-border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", minWidth: 720 }}>
           <thead>
             <tr style={{ background: "var(--c-surface-2)", textAlign: "left", color: "var(--c-ink-2)" }}>
+              <Th>Estado</Th>
               <Th>Camión</Th>
               <Th>Km actual</Th>
-              <Th>Último service</Th>
               <Th>Próximo service</Th>
-              <Th>Registros</Th>
-              <Th>Acciones</Th>
+              <Th>Services</Th>
+              <Th> </Th>
             </tr>
           </thead>
           <tbody>
-            {trucks.map((t) => {
-              const days = daysUntil(t.proximo_service);
-              const color = urgencyColor(days);
+            {rows.map(({ truck: t, status, recordCount }) => {
+              const isHovered = hoveredId === t.id;
+              const sinDatos = status.urgency === "sin_datos";
               return (
-                <tr key={t.id} style={{ borderTop: "1px solid var(--c-border)" }}>
+                <tr
+                  key={t.id}
+                  onClick={() => onHistory(t)}
+                  onMouseEnter={() => setHoveredId(t.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  title="Ver historial de mantenimiento"
+                  style={{
+                    borderTop: "1px solid var(--c-border)",
+                    cursor: "pointer",
+                    background: isHovered ? "var(--c-surface-2)" : "transparent",
+                    transition: "background 120ms ease",
+                  }}
+                >
+                  <Td><StatusBadge urgency={status.urgency} /></Td>
                   <Td>
                     <div style={{ fontWeight: 700, color: "var(--c-ink)" }}>{t.name}</div>
                     {t.patente && <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.76rem", color: "var(--c-ink-3)" }}>{t.patente}</div>}
                   </Td>
                   <Td>{formatKm(t.km_actual)}</Td>
-                  <Td>{formatDate(t.fecha_service)}</Td>
                   <Td>
-                    <span style={{ color, fontWeight: t.proximo_service ? 700 : 400 }}>{formatDate(t.proximo_service)}</span>
-                    {t.proximo_service && <span style={{ color, fontSize: "0.76rem", marginLeft: 6 }}>({relativeDays(days)})</span>}
+                    <div style={{ minWidth: 150 }}>
+                      <ServiceProgressBar status={status} height={6} />
+                    </div>
                   </Td>
-                  <Td>{recordsByTruck.get(t.id) ?? 0}</Td>
+                  <Td>{recordCount}</Td>
                   <Td>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button className="st-btn-secondary" style={{ padding: "6px 10px" }} onClick={() => onHistory(t)}>Historial</button>
-                      <button className="st-btn-secondary" style={{ padding: "6px 10px" }} onClick={() => onLoad(t)}>
+                    {sinDatos ? (
+                      <button
+                        className="st-btn-secondary"
+                        style={{ padding: "6px 10px", whiteSpace: "nowrap" }}
+                        onClick={(e) => { e.stopPropagation(); onLoad(t); }}
+                      >
+                        Cargar datos
+                      </button>
+                    ) : (
+                      <button
+                        className="st-btn-secondary"
+                        title="Cargar service"
+                        aria-label="Cargar service"
+                        style={{ padding: "6px 10px" }}
+                        onClick={(e) => { e.stopPropagation(); onLoad(t); }}
+                      >
                         <Icons.Plus size={12} />
                       </button>
-                    </div>
+                    )}
                   </Td>
                 </tr>
               );
@@ -465,27 +804,50 @@ function Td({ children }: { children: React.ReactNode }) {
 
 // ── Panel deslizante: historial de un camión ─────────────────────────────────
 
+/** Intervalo respecto al service anterior del mismo tipo ("+15.000 km · +6 meses"). */
+function serviceInterval(current: MaintenanceRecord, previous?: MaintenanceRecord): string | null {
+  if (!previous) return null;
+  const parts: string[] = [];
+  const curKm = num(current.km_al_service);
+  const prevKm = num(previous.km_al_service);
+  if (curKm != null && prevKm != null && curKm > prevKm) {
+    parts.push(`+${(curKm - prevKm).toLocaleString("es-AR")} km`);
+  }
+  const d1 = current.fecha ? new Date(current.fecha).getTime() : NaN;
+  const d0 = previous.fecha ? new Date(previous.fecha).getTime() : NaN;
+  if (Number.isFinite(d1) && Number.isFinite(d0) && d1 > d0) {
+    const days = Math.round((d1 - d0) / MILLIS_PER_DAY);
+    parts.push(days >= 60 ? `+${Math.round(days / 30)} meses` : `+${days} días`);
+  }
+  return parts.length ? parts.join(" · ") : null;
+}
+
 function TruckHistoryPanel({
   truck,
+  initialRecords,
   onClose,
   onChanged,
   onAdd,
 }: {
   truck: Truck;
+  initialRecords: MaintenanceRecord[];
   onClose: () => void;
   onChanged: () => void;
   onAdd: () => void;
 }) {
   const { showToast } = useToast();
-  const [records, setRecords] = useState<MaintenanceRecord[] | null>(null);
+  // Arrancamos con los registros ya cacheados en la vista (filtrados por camión)
+  // para mostrarlos al instante; el fetch por camión revalida en segundo plano.
+  const [records, setRecords] = useState<MaintenanceRecord[] | null>(initialRecords);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [editRecord, setEditRecord] = useState<MaintenanceRecord | null>(null);
 
   const load = useCallback(async () => {
     try {
       setRecords(await fetchMaintenanceByTruck(truck.id));
     } catch {
-      setRecords([]);
+      // Si falla la revalidación, conservamos lo que ya se mostraba.
     }
   }, [truck.id]);
 
@@ -504,6 +866,12 @@ function TruckHistoryPanel({
     }
   }
 
+  // Orden descendente por fecha para mostrar y para calcular intervalos.
+  const sorted = useMemo(
+    () => (records ? [...records].sort((a, b) => (b.fecha ?? "").localeCompare(a.fecha ?? "")) : null),
+    [records],
+  );
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", justifyContent: "flex-end" }} onClick={onClose}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(15,27,45,0.35)", backdropFilter: "blur(2px)" }} />
@@ -521,16 +889,18 @@ function TruckHistoryPanel({
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-          {records === null && <Hint>Cargando historial…</Hint>}
-          {records !== null && records.length === 0 && (
+          {sorted === null && <Hint>Cargando historial…</Hint>}
+          {sorted !== null && sorted.length === 0 && (
             <div style={{ textAlign: "center", color: "var(--c-ink-3)", padding: "40px 0", fontSize: "0.9rem" }}>
               Todavía no hay registros de mantenimiento para este camión.
             </div>
           )}
-          {records !== null && records.length > 0 && (
+          {sorted !== null && sorted.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {records.map((m) => {
+              {sorted.map((m, i) => {
                 const meta = tipoMeta(m.tipo);
+                const prevSameTipo = sorted.slice(i + 1).find((r) => r.tipo === m.tipo);
+                const interval = serviceInterval(m, prevSameTipo);
                 return (
                   <div key={m.id} style={{ border: "1px solid var(--c-border)", borderRadius: 12, padding: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
@@ -543,15 +913,29 @@ function TruckHistoryPanel({
                       {m.taller && <span style={{ gridColumn: "1 / -1" }}>Taller: <strong style={{ color: "var(--c-ink)" }}>{m.taller}</strong></span>}
                       {m.proximo_fecha && <span style={{ gridColumn: "1 / -1" }}>Próx.: <strong style={{ color: "var(--c-ink)" }}>{formatDate(m.proximo_fecha)}</strong></span>}
                     </div>
+                    {interval && (
+                      <div style={{ marginTop: 8, fontSize: "0.78rem", color: "var(--c-ink-3)" }}>
+                        Intervalo desde el anterior: <strong style={{ color: "var(--c-ink-2)" }}>{interval}</strong>
+                      </div>
+                    )}
                     {m.notas && <div style={{ marginTop: 8, fontSize: "0.82rem", color: "var(--c-ink-2)", fontStyle: "italic" }}>{m.notas}</div>}
-                    <button
-                      className="st-btn-danger"
-                      style={{ marginTop: 10, padding: "6px 12px", fontSize: "0.8rem" }}
-                      disabled={deletingId === m.id}
-                      onClick={() => setConfirmId(m.id)}
-                    >
-                      {deletingId === m.id ? "Eliminando…" : "Eliminar"}
-                    </button>
+                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                      <button
+                        className="st-btn-secondary"
+                        style={{ padding: "6px 12px", fontSize: "0.8rem" }}
+                        onClick={() => setEditRecord(m)}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        className="st-btn-danger"
+                        style={{ padding: "6px 12px", fontSize: "0.8rem" }}
+                        disabled={deletingId === m.id}
+                        onClick={() => setConfirmId(m.id)}
+                      >
+                        {deletingId === m.id ? "Eliminando…" : "Eliminar"}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -560,6 +944,18 @@ function TruckHistoryPanel({
         </div>
       </div>
       <style>{`@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+
+      {editRecord && (
+        <MaintenanceModal
+          trucks={[truck]}
+          presetTruck={truck.id}
+          editRecord={editRecord}
+          onSaved={() => { setEditRecord(null); void load(); onChanged(); }}
+          onClose={() => setEditRecord(null)}
+          onSubscriptionRequired={() => setEditRecord(null)}
+        />
+      )}
+
       {confirmId !== null && (
         <div onClick={(e) => e.stopPropagation()}>
           <ConfirmDialog
@@ -576,33 +972,42 @@ function TruckHistoryPanel({
   );
 }
 
-// ── Modal: cargar mantenimiento ──────────────────────────────────────────────
+// ── Modal: cargar / editar mantenimiento ─────────────────────────────────────
 
 function MaintenanceModal({
   trucks,
   presetTruck,
+  editRecord,
   onSaved,
   onClose,
   onSubscriptionRequired,
 }: {
   trucks: Truck[];
   presetTruck: number | null;
+  editRecord?: MaintenanceRecord;
   onSaved: () => void;
   onClose: () => void;
   onSubscriptionRequired: () => void;
 }) {
   const { showToast } = useToast();
+  const isEdit = !!editRecord;
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // Tope para frenar años basura (ej. 4444) en los date pickers.
+  const maxDateIso = useMemo(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 10);
+    return d.toISOString().slice(0, 10);
+  }, []);
 
-  const [truckId, setTruckId]           = useState<number | "">(presetTruck ?? (trucks[0]?.id ?? ""));
-  const [tipo, setTipo]                 = useState<MaintenanceTipo>("service");
-  const [fecha, setFecha]               = useState(todayIso);
-  const [km, setKm]                     = useState("");
-  const [costo, setCosto]               = useState("");
-  const [taller, setTaller]             = useState("");
-  const [notas, setNotas]               = useState("");
-  const [proximoFecha, setProximoFecha] = useState("");
-  const [proximoKm, setProximoKm]       = useState("");
+  const [truckId, setTruckId]           = useState<number | "">(editRecord?.truck_id ?? presetTruck ?? (trucks[0]?.id ?? ""));
+  const [tipo, setTipo]                 = useState<MaintenanceTipo>((editRecord?.tipo as MaintenanceTipo) ?? "service");
+  const [fecha, setFecha]               = useState(editRecord?.fecha?.slice(0, 10) ?? todayIso);
+  const [km, setKm]                     = useState(editRecord?.km_al_service != null ? String(editRecord.km_al_service) : "");
+  const [costo, setCosto]               = useState(editRecord?.costo != null ? String(editRecord.costo) : "");
+  const [taller, setTaller]             = useState(editRecord?.taller ?? "");
+  const [notas, setNotas]               = useState(editRecord?.notas ?? "");
+  const [proximoFecha, setProximoFecha] = useState(editRecord?.proximo_fecha?.slice(0, 10) ?? "");
+  const [proximoKm, setProximoKm]       = useState(editRecord?.proximo_km != null ? String(editRecord.proximo_km) : "");
   const [saving, setSaving]             = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -612,7 +1017,7 @@ function MaintenanceModal({
 
     setSaving(true);
     try {
-      await createMaintenance({
+      const payload = {
         truck_id: Number(truckId),
         tipo,
         fecha,
@@ -622,8 +1027,10 @@ function MaintenanceModal({
         notas: notas.trim() || null,
         proximo_fecha: proximoFecha || null,
         proximo_km: proximoKm ? Number(proximoKm) : null,
-      });
-      showToast("Mantenimiento registrado.", "success");
+      };
+      if (isEdit && editRecord) await updateMaintenance(editRecord.id, payload);
+      else await createMaintenance(payload);
+      showToast(isEdit ? "Cambios guardados." : "Mantenimiento registrado.", "success");
       onSaved();
     } catch (err) {
       if (err instanceof SubscriptionRequiredError) { onSubscriptionRequired(); return; }
@@ -636,10 +1043,12 @@ function MaintenanceModal({
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,27,45,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit} style={{ background: "#fff", borderRadius: 16, padding: "26px 28px", width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px -12px rgba(15,27,45,0.28)" }}>
-        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--c-ink)", marginBottom: 18 }}>Cargar mantenimiento</div>
+        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--c-ink)", marginBottom: 18 }}>
+          {isEdit ? "Editar mantenimiento" : "Cargar mantenimiento"}
+        </div>
 
         <Field label="Camión">
-          <select value={truckId} onChange={(e) => setTruckId(e.target.value ? Number(e.target.value) : "")} style={inputStyle} required>
+          <select value={truckId} onChange={(e) => setTruckId(e.target.value ? Number(e.target.value) : "")} style={inputStyle} required disabled={isEdit}>
             <option value="" disabled>Seleccioná un camión…</option>
             {trucks.map((t) => (
               <option key={t.id} value={t.id}>{t.name}{t.patente ? ` · ${t.patente}` : ""}</option>
@@ -654,7 +1063,7 @@ function MaintenanceModal({
             </select>
           </Field>
           <Field label="Fecha">
-            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={inputStyle} required />
+            <input type="date" value={fecha} max={maxDateIso} onChange={(e) => setFecha(e.target.value)} style={inputStyle} required />
           </Field>
         </div>
 
@@ -673,7 +1082,7 @@ function MaintenanceModal({
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Próximo service (fecha)">
-            <input type="date" value={proximoFecha} onChange={(e) => setProximoFecha(e.target.value)} style={inputStyle} />
+            <input type="date" value={proximoFecha} max={maxDateIso} onChange={(e) => setProximoFecha(e.target.value)} style={inputStyle} />
           </Field>
           <Field label="Próximo service (km)">
             <input type="number" min="0" value={proximoKm} onChange={(e) => setProximoKm(e.target.value)} style={inputStyle} placeholder="Ej: 130000" />
@@ -686,7 +1095,9 @@ function MaintenanceModal({
 
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
           <button type="button" className="st-btn-secondary" onClick={onClose}>Cancelar</button>
-          <button type="submit" className="st-btn-primary" disabled={saving}>{saving ? "Guardando…" : "Guardar"}</button>
+          <button type="submit" className="st-btn-primary" disabled={saving}>
+            {saving ? "Guardando…" : isEdit ? "Guardar cambios" : "Guardar"}
+          </button>
         </div>
       </form>
     </div>

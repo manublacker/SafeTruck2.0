@@ -12,7 +12,7 @@ const PLANS = [
   {
     slug: "individual",
     name: "Individual",
-    price: "$14.900",
+    price: "$64.900",
     period: "ARS / mes",
     features: [
       "Para camioneros independientes",
@@ -25,7 +25,7 @@ const PLANS = [
   {
     slug: "starter",
     name: "Starter",
-    price: "$43.500",
+    price: "$143.500",
     period: "ARS / mes",
     features: [
       "Hasta 5 camiones",
@@ -38,7 +38,7 @@ const PLANS = [
   {
     slug: "pro",
     name: "Pro",
-    price: "$118.500",
+    price: "$218.500",
     period: "ARS / mes",
     badge: "Más popular",
     features: [
@@ -53,7 +53,7 @@ const PLANS = [
   {
     slug: "enterprise",
     name: "Enterprise",
-    price: "$298.500",
+    price: "$398.500",
     period: "ARS / mes",
     features: [
       "Camiones ilimitados",
@@ -194,7 +194,12 @@ export default function PlansView() {
           gap: 16,
         }}
       >
-        {PLANS.map((plan) => {
+        {PLANS.filter(
+          // El plan Individual se contrata desde la app móvil; acá solo se
+          // muestra si ya es el plan actual (para que el independiente vea su
+          // estado y pueda renovar), no se le ofrece a las empresas.
+          (plan) => plan.slug !== "individual" || currentPlan === "individual"
+        ).map((plan) => {
           const isCurrent = currentPlan === plan.slug;
           const isLoading = upgrading === plan.slug;
           const highlighted = isCurrent || !!plan.badge;

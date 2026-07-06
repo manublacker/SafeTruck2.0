@@ -20,6 +20,7 @@ import {
 } from '../../src/services/assignedTrips'
 import { confirmSubscription, hasActivePlan, INDEPENDENT_PLAN, type SubscriptionRow } from '../../src/services/independent'
 import { startMobileCheckout, fetchMobileSubscription } from '../../src/services/billing'
+import { OTA_TAG } from '../../src/constants/version'
 
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -93,6 +94,9 @@ export default function ProfileScreen() {
   // 'independent' = paga su propio plan (fuente: user_metadata.role, lo setea el backend en el onboarding)
   const [isIndependent, setIsIndependent] = useState(false)
   const [subscription, setSubscription] = useState<SubscriptionRow | null>(null)
+  // Respaldo si profiles.email no está seteado (ej. conductores invitados, cuya
+  // fila de profiles no se crea con email — ver src/backend/routes/invitations.ts).
+  const [authEmail, setAuthEmail] = useState<string | null>(null)
   const [paying, setPaying] = useState(false)
   const [profileLoading, setProfileLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -140,9 +144,12 @@ export default function ProfileScreen() {
     if (!opts?.silent) setProfileLoading(true)
 
     // El rol vive en user_metadata (lo escribe el backend en el onboarding).
-    const { data: sess } = await supabase.auth.getSession()
-    const independent = sess.session?.user?.user_metadata?.role === 'independent'
+    // getUser() lo trae fresco del servidor: la sesión cacheada puede tener el
+    // rol viejo si la cuenta se volvió independiente después del login.
+    const { data: fresh } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }))
+    const independent = fresh.user?.user_metadata?.role === 'independent'
     setIsIndependent(independent)
+    setAuthEmail(fresh.user?.email ?? null)
     if (independent) fetchMobileSubscription().then(setSubscription).catch(() => {})
 
     const [dp, at] = await Promise.allSettled([
@@ -340,6 +347,15 @@ export default function ProfileScreen() {
                       ? 'Tu empresa aún no te asignó un camión.'
                       : 'Sin camión: primero configurá tu cuenta.'}
                 </Text>
+                {isIndependent && (
+                  <TouchableOpacity
+                    onPress={() => router.push('/auth/onboarding?flow=independent')}
+                    activeOpacity={0.85}
+                    style={{ backgroundColor: t.accent, borderRadius: 10, paddingVertical: 11, alignItems: 'center', marginTop: 12 }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13.5 }}>Cargar mi camión</Text>
+                  </TouchableOpacity>
+                )}
               </Card>
             )}
           </View>
@@ -376,7 +392,7 @@ export default function ProfileScreen() {
           <SectionLabel>Datos de contacto</SectionLabel>
           <Card style={{ marginBottom: 22 }} t={t}>
             <DataRow label="Teléfono" value={currentPhone} onPress={() => openEdit('phone')} t={t} />
-            <DataRow label="Email" value={profile?.email ?? null} isLast t={t} />
+            <DataRow label="Email" value={profile?.email ?? authEmail} isLast t={t} />
           </Card>
 
           {/* ── Cuenta ──────────────────────────────────────────────── */}
@@ -389,7 +405,7 @@ export default function ProfileScreen() {
           </Card>
 
           <Text style={{ textAlign: 'center', fontSize: 11, color: '#9AA3AD', fontVariantNumeric: 'tabular-nums', letterSpacing: 0.4, paddingBottom: 8 }}>
-            SafeTruck · versión 1.0.0
+            SafeTruck · versión 1.0.0 · {OTA_TAG}
           </Text>
         </>
       )}

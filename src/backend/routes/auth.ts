@@ -118,15 +118,36 @@ router.post("/independent-setup", authMiddleware, async (req: Request, res: Resp
   try {
     // Si ya está vinculado a una empresa ajena, no puede volverse independiente
     // sin desvincularse antes (decisión explícita, no silenciosa).
+    // Nota: en producción drivers.app_user_id es TEXT y user_id es UUID, así
+    // que casteamos explícitamente; sin el cast Postgres no puede tipar $1
+    // ("operator does not exist: uuid <> text").
     const companyLink = await pool.query(
       `SELECT id FROM drivers
-       WHERE app_user_id = $1 AND user_id <> $1 AND is_active = true
+       WHERE app_user_id::text = $1 AND user_id::text <> $1 AND is_active = true
        LIMIT 1`,
       [user.id]
     );
     if (companyLink.rowCount) {
       res.status(409).json({
         error: "Tu cuenta ya está vinculada a una empresa. Pedile al administrador que te desvincule para usar SafeTruck como independiente.",
+      });
+      return;
+    }
+
+    // Una cuenta ADMIN que administra conductores no puede auto-convertirse en
+    // independiente (perdería el sentido de su flota). Los conductores propios
+    // se detectan por user_id = admin con app_user_id distinto (o sin cuenta).
+    const ownsFleet = await pool.query(
+      `SELECT 1 FROM drivers
+       WHERE user_id::text = $1
+         AND (app_user_id IS NULL OR app_user_id::text <> $1)
+         AND is_active = true
+       LIMIT 1`,
+      [user.id]
+    );
+    if (ownsFleet.rowCount) {
+      res.status(409).json({
+        error: "Tu cuenta administra una flota de empresa. Usá el panel web; la cuenta independiente es para camioneros sin empresa.",
       });
       return;
     }
@@ -142,8 +163,13 @@ router.post("/independent-setup", authMiddleware, async (req: Request, res: Resp
     );
 
     const driverId = await withTransaction(async (client) => {
+      // Lock consultivo por usuario: dos setups concurrentes (doble tap) harían
+      // check-then-insert en paralelo y crearían dos filas (no hay unique en
+      // drivers). El lock serializa; se libera solo al terminar la transacción.
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [user.id]);
+
       const existing = await client.query<{ id: number }>(
-        "SELECT id FROM drivers WHERE user_id = $1 AND app_user_id = $1 LIMIT 1",
+        "SELECT id FROM drivers WHERE user_id::text = $1 AND app_user_id::text = $1 LIMIT 1",
         [user.id]
       );
       if (existing.rowCount) {
@@ -158,7 +184,7 @@ router.post("/independent-setup", authMiddleware, async (req: Request, res: Resp
       }
       const inserted = await client.query<{ id: number }>(
         `INSERT INTO drivers (user_id, nombre, telefono, estado, is_active, app_user_id)
-         VALUES ($1, $2, $3, 'Activo', true, $1)
+         VALUES ($1::uuid, $2, $3, 'Activo', true, $1::text)
          RETURNING id`,
         [user.id, fullName, telefono]
       );
@@ -169,11 +195,26 @@ router.post("/independent-setup", authMiddleware, async (req: Request, res: Resp
     // distingan la cuenta sin heurísticas. No bloqueante: el vínculo en drivers
     // ya quedó creado, que es lo que hace funcionar al resto del sistema.
     // profiles.role requiere la migración 004 en Supabase.
-    const [profileRes, metaRes] = await Promise.allSettled([
-      supabase
+    // Update primero e insert solo si no había fila: un upsert pisaría el
+    // full_name editado por el usuario, y un insert de {id, role} solo viola
+    // el NOT NULL de full_name.
+    const markProfile = async () => {
+      const { data: updated, error: updErr } = await supabase
         .from("profiles")
-        .upsert({ id: user.id, role: "independent" }, { onConflict: "id" })
-        .then(({ error }) => { if (error) throw error; }),
+        .update({ role: "independent" })
+        .eq("id", user.id)
+        .select("id");
+      if (updErr) throw updErr;
+      if (!updated?.length) {
+        const { error: insErr } = await supabase
+          .from("profiles")
+          .insert({ id: user.id, full_name: fullName, email: user.email, role: "independent" });
+        if (insErr) throw insErr;
+      }
+    };
+
+    const [profileRes, metaRes] = await Promise.allSettled([
+      markProfile(),
       supabase.auth.admin.updateUserById(user.id, {
         user_metadata: { ...meta, role: "independent" },
       }).then(({ error }) => { if (error) throw error; }),

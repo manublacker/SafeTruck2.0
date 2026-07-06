@@ -29,6 +29,46 @@ const ALLOWED_TIPOS = new Set([
   "otro",
 ]);
 
+/**
+ * Rehace el espejo de mantenimiento en `trucks` (fecha_service / proximo_service
+ * / km_actual) a partir del registro activo más reciente del camión. Si ya no
+ * queda ninguno, limpia fecha_service y proximo_service. El POST espeja estos
+ * campos al cargar un service; este helper mantiene la consistencia cuando se
+ * edita (PATCH) o elimina (DELETE) un registro, para que "Estado de la flota"
+ * no muestre datos fantasma.
+ */
+async function resyncTruckServiceMirror(truckId: number, userId: string): Promise<void> {
+  await pool.query(
+    `UPDATE trucks t
+       SET fecha_service   = last.fecha,
+           proximo_service = last.proximo_fecha,
+           km_actual       = last.km_al_service,
+           updated_at      = NOW()
+     FROM (
+       SELECT fecha, proximo_fecha, km_al_service
+       FROM maintenance_records
+       WHERE truck_id = $1 AND user_id = $2 AND is_active = true
+       ORDER BY fecha DESC, created_at DESC
+       LIMIT 1
+     ) AS last
+     WHERE t.id = $1 AND t.user_id = $2`,
+    [truckId, userId]
+  );
+
+  // Si no quedó ningún registro activo, el subquery no matchea (no hace UPDATE)
+  // → limpiamos los campos espejados a mano.
+  await pool.query(
+    `UPDATE trucks
+       SET fecha_service = NULL, proximo_service = NULL, updated_at = NOW()
+     WHERE id = $1 AND user_id = $2
+       AND NOT EXISTS (
+         SELECT 1 FROM maintenance_records
+         WHERE truck_id = $1 AND user_id = $2 AND is_active = true
+       )`,
+    [truckId, userId]
+  );
+}
+
 const UPDATABLE_FIELDS = [
   "tipo",
   "fecha",
@@ -336,8 +376,8 @@ router.patch("/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    const owner = await pool.query<{ id: number }>(
-      "SELECT id FROM maintenance_records WHERE id = $1 AND user_id = $2 AND is_active = true",
+    const owner = await pool.query<{ id: number; truck_id: number }>(
+      "SELECT id, truck_id FROM maintenance_records WHERE id = $1 AND user_id = $2 AND is_active = true",
       [recordId, userId]
     );
     if (!owner.rowCount) {
@@ -354,6 +394,10 @@ router.patch("/:id", async (req: Request, res: Response) => {
        WHERE id = $${fields.length + 1} AND user_id = $${fields.length + 2}`,
       values
     );
+
+    // Editar fecha/proximo_fecha/km puede cambiar cuál es el "último service" o
+    // sus valores → rehacemos el espejo en trucks (mismo motivo que en DELETE).
+    await resyncTruckServiceMirror(owner.rows[0].truck_id, userId);
 
     const updated = await pool.query<MaintenanceRow>(
       `${MAINT_BASE_SELECT} WHERE m.id = $1 AND m.user_id = $2`,
@@ -380,15 +424,22 @@ router.delete("/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await pool.query(
+    const result = await pool.query<{ truck_id: number }>(
       `UPDATE maintenance_records SET is_active = false, updated_at = NOW()
-       WHERE id = $1 AND user_id = $2 AND is_active = true`,
+       WHERE id = $1 AND user_id = $2 AND is_active = true
+       RETURNING truck_id`,
       [recordId, userId]
     );
     if (!result.rowCount) {
       res.status(404).json({ error: "Registro no encontrado." });
       return;
     }
+
+    // El POST espeja fecha_service/proximo_service/km_actual en trucks. Al borrar
+    // hay que rehacer ese espejo para que "Estado de la flota" no siga mostrando
+    // el service eliminado.
+    await resyncTruckServiceMirror(result.rows[0].truck_id, userId);
+
     res.status(204).send();
   } catch (err) {
     console.error("Error en DELETE /api/maintenance/:id:", err);

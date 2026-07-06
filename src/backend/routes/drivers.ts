@@ -48,6 +48,9 @@ interface DriverRow {
   estado: string;
   is_active: boolean;
   created_at: string;
+  // Solo lo trae el JOIN de GET /api/drivers; los INSERT/UPDATE que reusan
+  // DRIVER_COLUMNS en su RETURNING no lo incluyen.
+  email?: string | null;
 }
 
 const DRIVER_COLUMNS = `
@@ -69,10 +72,21 @@ router.get("/", async (req: Request, res: Response) => {
   const userId = req.user!.id;
 
   try {
+    // Email del conductor: lo carga él mismo al registrarse con el link/código
+    // de invitación (POST /api/invitations/complete), queda en `users` (Aiven)
+    // vinculado por app_user_id. Ojo: NO confundir con `d.user_id`, que es el
+    // dueño/empresa. LEFT JOIN porque un conductor invitado que todavía no
+    // canjeó el código no tiene app_user_id (ni cuenta) todavía.
+    // users.id es uuid y drivers.app_user_id es text: hay que castear uno de los
+    // dos o Postgres tira "operator does not exist: uuid = text" y el endpoint
+    // entero cae con 500 (y el front, que traga el error, muestra 0 conductores).
     const result = await pool.query<DriverRow>(
-      `SELECT ${DRIVER_COLUMNS} FROM drivers
-       WHERE user_id = $1 AND is_active = true
-       ORDER BY created_at ASC`,
+      `SELECT d.id, d.user_id, d.app_user_id, d.nombre, d.telefono, d.estado,
+              d.is_active, d.created_at, u.email
+       FROM drivers d
+       LEFT JOIN users u ON u.id::text = d.app_user_id
+       WHERE d.user_id = $1 AND d.is_active = true
+       ORDER BY d.created_at ASC`,
       [userId]
     );
     res.json(result.rows);
@@ -189,8 +203,11 @@ router.get('/me/maintenance', async (req: Request, res: Response) => {
       fecha_service: string | null
       proximo_service: string | null
       days_left: number | null
+      max_weight_kg: number | null
+      max_height_m: number | null
     }>(
       `SELECT t.id, t.name, t.patente, t.km_actual, t.fecha_service, t.proximo_service,
+              t.max_weight_kg, t.max_height_m,
               CASE WHEN t.proximo_service IS NULL THEN NULL
                    ELSE (t.proximo_service::date - CURRENT_DATE) END AS days_left
        FROM truck_drivers td

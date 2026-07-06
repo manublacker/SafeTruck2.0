@@ -15,6 +15,7 @@ interface Props {
 export default function AssignDriverModal({ truck, drivers, onDone, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const activeDrivers = drivers.filter((d) => d.estado === DRIVER_ESTADO_ACTIVO);
   const currentDriverId = truck.driver?.id ?? null;
@@ -72,33 +73,36 @@ export default function AssignDriverModal({ truck, drivers, onDone, onClose }: P
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             {activeDrivers.map((d) => {
               const isCurrent = d.id === currentDriverId;
+              const isHovered = hoveredId === d.id && !busy && !isCurrent;
               return (
                 <li key={d.id}>
                   <button
                     type="button"
                     disabled={busy || isCurrent}
                     onClick={() => handleAssign(d.id)}
+                    onMouseEnter={() => setHoveredId(d.id)}
+                    onMouseLeave={() => setHoveredId(null)}
                     style={{
                       width: "100%",
                       textAlign: "left",
                       padding: "12px 14px",
                       borderRadius: 10,
-                      border: `1px solid ${isCurrent ? "#e53935" : "#e0e0e0"}`,
-                      background: isCurrent ? "rgba(229,57,53,0.05)" : "#fff",
+                      border: `1px solid ${isCurrent ? "#e53935" : isHovered ? "#e53935" : "#e0e0e0"}`,
+                      background: isCurrent
+                        ? "rgba(229,57,53,0.05)"
+                        : isHovered
+                          ? "rgba(229,57,53,0.08)"
+                          : "#fff",
                       cursor: busy || isCurrent ? "default" : "pointer",
                       fontFamily: "inherit",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
                       gap: 12,
+                      transition: "background 120ms ease, border-color 120ms ease",
                     }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 700, color: "#0d0d0d" }}>{d.nombre}</div>
-                      <div style={{ fontSize: "0.82rem", color: "#6b7280" }}>
-                        {d.telefono ?? "—"}
-                      </div>
-                    </div>
+                    <div style={{ fontWeight: 700, color: "#0d0d0d" }}>{d.nombre}</div>
                     {isCurrent && (
                       <span
                         style={{

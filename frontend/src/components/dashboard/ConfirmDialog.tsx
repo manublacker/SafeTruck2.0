@@ -38,7 +38,10 @@ export default function ConfirmDialog({
     <div
       onClick={onCancel}
       style={{
-        position: "fixed", inset: 0, zIndex: 1000,
+        // z-index por encima de .st-modal-backdrop (1000): este diálogo puede
+        // abrirse con otro modal (ej. TripDetailModal) todavía abierto detrás,
+        // y con el mismo z-index ganaba el que está más abajo en el DOM.
+        position: "fixed", inset: 0, zIndex: 1100,
         background: "rgba(15,27,45,0.45)", backdropFilter: "blur(2px)",
         display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
         animation: "st-confirm-fade .15s ease",

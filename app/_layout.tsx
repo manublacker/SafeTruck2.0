@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as Notifications from 'expo-notifications'
+import * as Updates from 'expo-updates'
 import { Platform, View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView } from 'react-native'
 import { supabase } from '../src/services/supabase'
 import { useStore } from '../src/store/useStore'
@@ -94,6 +95,23 @@ export default function RootLayout() {
   const isDark     = useStore(s => s.isDark)
   const [ready, setReady]               = useState(false)
   const [needsCompletion, setNeedsCompletion] = useState(false)
+
+  // Update OTA en un solo arranque: por defecto expo-updates baja el update en
+  // segundo plano y recién lo aplica en el PRÓXIMO arranque en frío (hacían
+  // falta dos cierres completos). Acá lo chequeamos, bajamos y recargamos al
+  // instante. En dev (expo start) no aplica.
+  useEffect(() => {
+    if (__DEV__) return
+    ;(async () => {
+      try {
+        const check = await Updates.checkForUpdateAsync()
+        if (check.isAvailable) {
+          await Updates.fetchUpdateAsync()
+          await Updates.reloadAsync()
+        }
+      } catch { /* sin red o updates deshabilitados: seguimos con el bundle actual */ }
+    })()
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {

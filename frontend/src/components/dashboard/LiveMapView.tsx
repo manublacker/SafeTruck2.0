@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useAuth } from "@/contexts/AuthContext";
+import { authHeaders } from "@/services/api";
 import { searchLocations, geocodeLocation, type GeoSuggestion } from "@/services/geocoding";
 import { ACTIVE_TILE } from "@/lib/mapTiles";
 
@@ -206,7 +207,7 @@ export default function LiveMapView() {
       ]);
       const res = await fetch(`${BASE_URL}/route`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           origin:      { lat: o.lat, lng: o.lon },
           destination: { lat: d.lat, lng: d.lon },
