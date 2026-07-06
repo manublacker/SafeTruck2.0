@@ -247,12 +247,17 @@ export default function LiveMapContainer({ onNavigate, tripToShow, onTripShown }
       setDestinationPin(coordsToPin(trip.destination_lat, trip.destination_lon, trip.destination_label ?? "Destino"));
     }
 
-    // 2) Recálculo en vivo con las specs actuales del camión del viaje.
+    // 2) Recálculo en vivo con las specs actuales del camión del viaje. Solo
+    // tiene sentido para viajes que todavía pueden circular (pending/accepted/
+    // in_progress): un viaje completed/cancelled ya sucedió, y recalcular con
+    // datos de HOY pisaría el coloreado real guardado con uno distinto (u
+    // "unknown" uniforme si el camión ya no matchea o cambió la calle).
+    const isHistorical = trip.status === "completed" || trip.status === "cancelled";
     const truck = trucks.find((t) => t.id === trip.truck_id);
     const hasCoords =
       trip.origin_lat != null && trip.origin_lon != null &&
       trip.destination_lat != null && trip.destination_lon != null;
-    if (!truck || !hasCoords) return;
+    if (isHistorical || !truck || !hasCoords) return;
 
     void calculateRoute({
       originLabel:      trip.origin_label ?? "",

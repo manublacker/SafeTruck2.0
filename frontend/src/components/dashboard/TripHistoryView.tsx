@@ -110,7 +110,6 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
     return () => window.clearInterval(id);
   }, [loadTrips]);
 
-  const reset = () => { setFilterDriver(""); setFilterStatus(""); setFilterSource(""); setFrom(""); setTo(""); };
 
   // Pide confirmación (modal lindo) antes de borrar.
   const handleDelete = (trip: AssignedTrip) => setConfirmDelete(trip);
@@ -263,11 +262,6 @@ export default function TripHistoryView({ statuses, emptyTitle, emptySubtitle, o
             {/* "Hasta" no puede ser anterior a "Desde". */}
             <input type="date" className="st-input" style={flushPad} value={to} min={from || undefined} onChange={(e) => { const v = e.target.value; if (from && v && v < from) return; setTo(v); }} />
           </div>
-          {(filterDriver || filterStatus || filterSource || from || to) && (
-            <button className="st-btn-ghost" onClick={reset}>
-              Restablecer
-            </button>
-          )}
         </div>
         <div className="st-filters-actions" style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <button

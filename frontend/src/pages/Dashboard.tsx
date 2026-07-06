@@ -14,7 +14,7 @@ import type { AssignedTrip } from "@/services/api";
 
 import "@/styles/admin.css";
 
-const VALID_PAGES: AdminPage[] = ["map", "fleet", "maintenance", "active-trips", "trips", "account"];
+const VALID_PAGES: AdminPage[] = ["map", "fleet", "maintenance", "active-trips", "account"];
 
 const TITLE: Record<AdminPage, string> = {
   map:            "Live Map",
@@ -22,8 +22,7 @@ const TITLE: Record<AdminPage, string> = {
   "fleet-trucks": "Flota",
   "fleet-drivers":"Flota",
   maintenance:    "Mantenimiento",
-  "active-trips": "Viajes pendientes y en curso",
-  trips:          "Historial de viajes",
+  "active-trips": "Viajes",
   account:        "Mi cuenta",
   plans:          "Planes y suscripción",
 };
@@ -114,20 +113,11 @@ export default function Dashboard() {
           {page === "maintenance"    && <MaintenanceView onNavigate={handleSetPage} />}
           {page === "active-trips" && (
             <TripHistoryView
-              statuses={["pending", "accepted", "in_progress"]}
-              emptyTitle="No hay viajes pendientes ni en curso"
-              emptySubtitle="Los viajes que asignes o que estén en camino van a aparecer acá."
+              statuses={["pending", "accepted", "in_progress", "completed", "cancelled"]}
+              emptyTitle="Todavía no hay viajes"
+              emptySubtitle="Los viajes que asignes o que hagan tus conductores van a aparecer acá, incluido el historial de finalizados."
               onViewTrip={handleViewTrip}
-              showSourceFilter={false}
               allowDelete
-            />
-          )}
-          {page === "trips" && (
-            <TripHistoryView
-              statuses={["completed", "cancelled"]}
-              emptyTitle="Todavía no hay viajes finalizados"
-              emptySubtitle="Acá vas a ver los viajes completados y cancelados, con su duración."
-              onViewTrip={handleViewTrip}
             />
           )}
           {page === "account" && <AccountView onNavigate={setPage} billingSuccess={billingSuccess} />}
