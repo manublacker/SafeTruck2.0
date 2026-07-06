@@ -306,6 +306,7 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
       {historyTruck && (
         <TruckHistoryPanel
           truck={historyTruck}
+          initialRecords={records.filter((r) => r.truck_id === historyTruck.id)}
           onClose={() => setHistoryTruck(null)}
           onChanged={() => void load()}
           onAdd={() => { const id = historyTruck.id; setHistoryTruck(null); openCreate(id); }}
@@ -469,17 +470,21 @@ function Td({ children }: { children: React.ReactNode }) {
 
 function TruckHistoryPanel({
   truck,
+  initialRecords,
   onClose,
   onChanged,
   onAdd,
 }: {
   truck: Truck;
+  initialRecords: MaintenanceRecord[];
   onClose: () => void;
   onChanged: () => void;
   onAdd: () => void;
 }) {
   const { showToast } = useToast();
-  const [records, setRecords] = useState<MaintenanceRecord[] | null>(null);
+  // Arrancamos con los registros ya cacheados en la vista (filtrados por camión)
+  // para mostrarlos al instante; el fetch por camión revalida en segundo plano.
+  const [records, setRecords] = useState<MaintenanceRecord[] | null>(initialRecords);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
 
@@ -487,7 +492,7 @@ function TruckHistoryPanel({
     try {
       setRecords(await fetchMaintenanceByTruck(truck.id));
     } catch {
-      setRecords([]);
+      // Si falla la revalidación, conservamos lo que ya se mostraba.
     }
   }, [truck.id]);
 
