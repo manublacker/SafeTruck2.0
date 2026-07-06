@@ -30,13 +30,13 @@ const steps: { n: string; icon: LucideIcon; title: string; desc: string }[] = [
 ];
 
 const plans: { name: string; price: string; feats: string[]; cta: string; featured?: boolean }[] = [
-  { name: "STARTER", price: "$43.500", cta: "Elegir Starter", feats: [
+  { name: "STARTER", price: "$143.500", cta: "Elegir Starter", feats: [
     "Hasta 5 camiones", "Tracking en tiempo real", "App mobile para choferes", "Historial 7 días", "Soporte por email",
   ] },
-  { name: "PRO", price: "$118.500", cta: "Elegir Pro", featured: true, feats: [
+  { name: "PRO", price: "$218.500", cta: "Elegir Pro", featured: true, feats: [
     "Hasta 20 camiones", "Todo lo de Starter", "Historial 30 días", "Alertas personalizadas", "Panel multi-usuario (3 admins)", "Soporte prioritario",
   ] },
-  { name: "ENTERPRISE", price: "$298.500", cta: "Contactar ventas", feats: [
+  { name: "ENTERPRISE", price: "$398.500", cta: "Contactar ventas", feats: [
     "Camiones ilimitados", "Todo lo de Pro", "Historial 1 año", "API de integración", "Reportes avanzados", "Manager de cuenta dedicado", "SLA garantizado",
   ] },
 ];

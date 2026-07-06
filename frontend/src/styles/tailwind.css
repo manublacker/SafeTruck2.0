@@ -499,10 +499,13 @@
   }
 
   .landing-plan-card__price {
-    font-size: 3rem;
+    /* Adaptable: con 4 columnas las cards son más angostas que antes y un
+       precio de 6 cifras a 3rem fijos desbordaba la tarjeta. */
+    font-size: clamp(1.75rem, 1.1rem + 1.3vw, 2.5rem);
     font-weight: 700;
     color: var(--landing-brand-dark);
     line-height: 1;
+    letter-spacing: -0.02em;
   }
 
   .landing-plan-card__period {
@@ -512,6 +515,11 @@
 
   .landing-plan-card__price-row {
     margin-bottom: 1.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    min-width: 0;
   }
 
   .landing-plan-card__features {
