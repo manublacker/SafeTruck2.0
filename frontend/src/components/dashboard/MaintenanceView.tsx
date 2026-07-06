@@ -30,9 +30,6 @@ const KM_WARN = 2000;
  * camión no aparece con una fecha absurda ni se clasifica por ella.
  */
 const SERVICE_HORIZON_DAYS = 3660;
-/** Intervalo sugerido para el próximo service al marcar uno como realizado. */
-const SERVICE_INTERVAL_KM = 10000;
-const SERVICE_INTERVAL_MONTHS = 6;
 
 // Cache a nivel módulo (stale-while-revalidate). Al cambiar de pestaña este
 // componente se DESMONTA (Dashboard usa montaje condicional); sin el cache,
@@ -235,30 +232,6 @@ interface FleetRow {
   recordCount: number;
 }
 
-/** Valores para precargar el modal de mantenimiento (ej. "marcar realizado"). */
-interface MaintenancePrefill {
-  tipo?: MaintenanceTipo;
-  fecha?: string;
-  km?: string;
-  proximoFecha?: string;
-  proximoKm?: string;
-}
-
-/** Prefill sugerido para un service recién realizado (hoy + km actual + próximo). */
-function serviceDonePrefill(truck: Truck): MaintenancePrefill {
-  const today = new Date();
-  const next = new Date(today);
-  next.setMonth(next.getMonth() + SERVICE_INTERVAL_MONTHS);
-  const km = num(truck.km_actual);
-  return {
-    tipo: "service",
-    fecha: today.toISOString().slice(0, 10),
-    km: km != null ? String(km) : "",
-    proximoKm: km != null ? String(km + SERVICE_INTERVAL_KM) : "",
-    proximoFecha: next.toISOString().slice(0, 10),
-  };
-}
-
 function byUrgency(a: FleetRow, b: FleetRow): number {
   return (
     URGENCY_META[a.status.urgency].order - URGENCY_META[b.status.urgency].order ||
@@ -282,7 +255,6 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
 
   const [creating, setCreating]         = useState(false);
   const [presetTruck, setPresetTruck]   = useState<number | null>(null);
-  const [prefill, setPrefill]           = useState<MaintenancePrefill | null>(null);
   const [historyTruck, setHistoryTruck] = useState<Truck | null>(null);
 
   // Filtro por estado (se activa desde los KPIs).
@@ -342,21 +314,9 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
     [fleet, statusFilter],
   );
 
-  function openCreate(truckId?: number, pre?: MaintenancePrefill) {
+  function openCreate(truckId?: number) {
     setPresetTruck(truckId ?? null);
-    setPrefill(pre ?? null);
     setCreating(true);
-  }
-
-  function closeCreate() {
-    setCreating(false);
-    setPresetTruck(null);
-    setPrefill(null);
-  }
-
-  /** Abre el modal precargado como "service recién realizado". */
-  function markServiceDone(t: Truck) {
-    openCreate(t.id, serviceDonePrefill(t));
   }
 
   function toggleFilter(u: ServiceUrgency) {
@@ -366,7 +326,6 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
   function handleSaved() {
     setCreating(false);
     setPresetTruck(null);
-    setPrefill(null);
     void load();
     // Crear un registro pisa fecha_service/proximo_service/km_actual en trucks
     // (ver POST /api/maintenance) → hay que refrescar el chunk del AuthContext.
@@ -482,7 +441,6 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
                 rows={sortedFleet}
                 onHistory={(t) => setHistoryTruck(t)}
                 onLoad={(t) => openCreate(t.id)}
-                onMarkDone={(t) => markServiceDone(t)}
               />
             )}
           </Section>
@@ -493,11 +451,10 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
         <MaintenanceModal
           trucks={trucks}
           presetTruck={presetTruck}
-          prefill={prefill ?? undefined}
           records={records}
           onSaved={handleSaved}
-          onClose={closeCreate}
-          onSubscriptionRequired={() => { closeCreate(); onNavigate("plans"); }}
+          onClose={() => { setCreating(false); setPresetTruck(null); }}
+          onSubscriptionRequired={() => { setCreating(false); onNavigate("plans"); }}
         />
       )}
 
@@ -508,7 +465,6 @@ export default function MaintenanceView({ onNavigate }: { onNavigate: (page: Adm
           onClose={() => setHistoryTruck(null)}
           onChanged={() => { void load(); void refreshTrucks(); }}
           onAdd={() => { const id = historyTruck.id; setHistoryTruck(null); openCreate(id); }}
-          onMarkDone={() => { const t = historyTruck; setHistoryTruck(null); markServiceDone(t); }}
         />
       )}
     </div>
@@ -642,12 +598,10 @@ function TrucksMaintenanceTable({
   rows,
   onHistory,
   onLoad,
-  onMarkDone,
 }: {
   rows: FleetRow[];
   onHistory: (t: Truck) => void;
   onLoad: (t: Truck) => void;
-  onMarkDone: (t: Truck) => void;
 }) {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   return (
@@ -706,11 +660,12 @@ function TrucksMaintenanceTable({
                     ) : (
                       <button
                         className="st-btn-secondary"
-                        title="Marcar service realizado"
-                        style={{ padding: "6px 10px", whiteSpace: "nowrap" }}
-                        onClick={(e) => { e.stopPropagation(); onMarkDone(t); }}
+                        title="Cargar service"
+                        aria-label="Cargar service"
+                        style={{ padding: "6px 10px" }}
+                        onClick={(e) => { e.stopPropagation(); onLoad(t); }}
                       >
-                        ✓ Service
+                        <Icons.Plus size={12} />
                       </button>
                     )}
                   </Td>
@@ -758,14 +713,12 @@ function TruckHistoryPanel({
   onClose,
   onChanged,
   onAdd,
-  onMarkDone,
 }: {
   truck: Truck;
   initialRecords: MaintenanceRecord[];
   onClose: () => void;
   onChanged: () => void;
   onAdd: () => void;
-  onMarkDone: () => void;
 }) {
   const { showToast } = useToast();
   // Arrancamos con los registros ya cacheados en la vista (filtrados por camión)
@@ -816,12 +769,9 @@ function TruckHistoryPanel({
           </div>
           <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--c-ink)" }}>{truck.name}</div>
           {truck.patente && <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.85rem", color: "var(--c-ink-2)", marginTop: 4 }}>{truck.patente}</div>}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
-            <button className="st-btn-primary" onClick={onMarkDone}>✓ Realizado</button>
-            <button className="st-btn-secondary" onClick={onAdd}>
-              <Icons.Plus size={13} /> Cargar mantenimiento
-            </button>
-          </div>
+          <button className="st-btn-primary" style={{ marginTop: 14 }} onClick={onAdd}>
+            <Icons.Plus size={13} /> Cargar mantenimiento
+          </button>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
@@ -922,7 +872,6 @@ function MaintenanceModal({
   trucks,
   presetTruck,
   editRecord,
-  prefill,
   records,
   onSaved,
   onClose,
@@ -931,7 +880,6 @@ function MaintenanceModal({
   trucks: Truck[];
   presetTruck: number | null;
   editRecord?: MaintenanceRecord;
-  prefill?: MaintenancePrefill;
   records?: MaintenanceRecord[];
   onSaved: () => void;
   onClose: () => void;
@@ -948,14 +896,14 @@ function MaintenanceModal({
   }, []);
 
   const [truckId, setTruckId]           = useState<number | "">(editRecord?.truck_id ?? presetTruck ?? (trucks[0]?.id ?? ""));
-  const [tipo, setTipo]                 = useState<MaintenanceTipo>((editRecord?.tipo as MaintenanceTipo) ?? prefill?.tipo ?? "service");
-  const [fecha, setFecha]               = useState(editRecord?.fecha?.slice(0, 10) ?? prefill?.fecha ?? todayIso);
-  const [km, setKm]                     = useState(editRecord?.km_al_service != null ? String(editRecord.km_al_service) : (prefill?.km ?? ""));
+  const [tipo, setTipo]                 = useState<MaintenanceTipo>((editRecord?.tipo as MaintenanceTipo) ?? "service");
+  const [fecha, setFecha]               = useState(editRecord?.fecha?.slice(0, 10) ?? todayIso);
+  const [km, setKm]                     = useState(editRecord?.km_al_service != null ? String(editRecord.km_al_service) : "");
   const [costo, setCosto]               = useState(editRecord?.costo != null ? String(editRecord.costo) : "");
   const [taller, setTaller]             = useState(editRecord?.taller ?? "");
   const [notas, setNotas]               = useState(editRecord?.notas ?? "");
-  const [proximoFecha, setProximoFecha] = useState(editRecord?.proximo_fecha?.slice(0, 10) ?? prefill?.proximoFecha ?? "");
-  const [proximoKm, setProximoKm]       = useState(editRecord?.proximo_km != null ? String(editRecord.proximo_km) : (prefill?.proximoKm ?? ""));
+  const [proximoFecha, setProximoFecha] = useState(editRecord?.proximo_fecha?.slice(0, 10) ?? "");
+  const [proximoKm, setProximoKm]       = useState(editRecord?.proximo_km != null ? String(editRecord.proximo_km) : "");
   const [saving, setSaving]             = useState(false);
 
   // Piso de km: el mayor km ya registrado para el camión (excluyendo el que se
@@ -1009,7 +957,7 @@ function MaintenanceModal({
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,27,45,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit} style={{ background: "#fff", borderRadius: 16, padding: "26px 28px", width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px -12px rgba(15,27,45,0.28)" }}>
         <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--c-ink)", marginBottom: 18 }}>
-          {isEdit ? "Editar mantenimiento" : prefill ? "Registrar service realizado" : "Cargar mantenimiento"}
+          {isEdit ? "Editar mantenimiento" : "Cargar mantenimiento"}
         </div>
 
         <Field label="Camión">
