@@ -45,7 +45,7 @@ export default function Join() {
       const check = await fetch(`${API_URL}/api/invitations/validate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, email: email.trim().toLowerCase() }),
       });
       if (!check.ok) {
         const d = await check.json().catch(() => ({}));
@@ -213,6 +213,14 @@ export default function Join() {
             ) : step === "code" ? (
               // ── Verificación por código ──────────────────────────────────
               <>
+                <button
+                  onClick={() => { setStep("form"); setOtp(["", "", "", "", "", "", "", ""]); setError(""); }}
+                  className="auth-link"
+                  style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", padding: 0, marginBottom: "0.75rem", display: "inline-block" }}
+                >
+                  ← Cambiar email
+                </button>
+
                 <h1 className="auth-title">Verificá tu email</h1>
                 <p className="auth-subtitle">
                   Te enviamos un código de 8 dígitos a <strong>{email}</strong>.

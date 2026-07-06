@@ -146,11 +146,15 @@ router.post('/redeem', authMiddleware, async (req: Request, res: Response) => {
   }
 })
 
-// POST /validate — Chequeo liviano del código ANTES de mandar el OTP, para no
-// crear una cuenta de auth (vía signUp) contra una invitación inválida/vencida.
+// POST /validate — Chequeo liviano ANTES de mandar el OTP, para (a) no crear una
+// cuenta de auth contra una invitación inválida/vencida y (b) avisar si el email
+// ya tiene cuenta (Supabase, por seguridad, NO manda el código si el mail ya
+// está confirmado y devuelve un "éxito" falso: sin este chequeo el conductor
+// terminaba en la pantalla de código esperando un mail que nunca llega).
 // Público: lo llama la web /unirse en el paso 1, antes del signUp de Supabase.
 router.post('/validate', async (req: Request, res: Response) => {
   const rawCode = String(req.body?.code ?? '').toUpperCase().trim()
+  const email = String(req.body?.email ?? '').trim().toLowerCase()
   if (!rawCode) return res.status(400).json({ error: 'Falta el código de invitación.' })
   try {
     const r = await pool.query(
@@ -159,6 +163,20 @@ router.post('/validate', async (req: Request, res: Response) => {
       [rawCode]
     )
     if (!r.rowCount) return res.status(404).json({ error: 'Código de invitación inválido o vencido.' })
+
+    if (email) {
+      // pool apunta a la base de Supabase (DATABASE_URL), así que podemos mirar
+      // auth.users directo. Solo bloqueamos si el mail YA está confirmado; si
+      // existe sin confirmar, dejamos seguir (el signUp reenvía el código).
+      const u = await pool.query(
+        `SELECT email_confirmed_at FROM auth.users WHERE lower(email) = $1 LIMIT 1`,
+        [email]
+      )
+      if (u.rowCount && u.rows[0].email_confirmed_at) {
+        return res.status(409).json({ error: 'Ese email ya tiene una cuenta. Ingresá directamente desde la app SafeTruck.' })
+      }
+    }
+
     return res.json({ valid: true, hint_name: r.rows[0].hint_name ?? null })
   } catch (err: any) {
     return res.status(500).json({ error: err.message })

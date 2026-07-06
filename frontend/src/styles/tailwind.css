@@ -1139,20 +1139,21 @@
   .auth-code-inputs {
     display: flex;
     justify-content: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     margin-bottom: 0.5rem;
+    /* 8 dígitos entran justo en la tarjeta; si la pantalla es muy angosta,
+       que bajen a una segunda fila en vez de desbordar el rectángulo. */
+    flex-wrap: wrap;
   }
 
   .auth-code-input {
-    width: 3.25rem;
-    height: 3.5rem;
+    width: 2.5rem;
+    height: 3rem;
     text-align: center;
-    font-size: 1.5rem;
-    font-weight: 600;
     border-radius: 0.5rem;
     border: 2px solid #e5e7eb;
     font: inherit;
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 600;
     transition: border-color 0.15s;
   }
