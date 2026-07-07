@@ -163,7 +163,10 @@ export default function RegisterScreen() {
         {step === 1 && (
           <View>
             <Text style={s.title}>Creá tu cuenta</Text>
-            <Text style={s.subtitle}>Para conductores SafeTruck.</Text>
+            <Text style={s.subtitle}>
+              Para camioneros independientes. Si manejás para una empresa,
+              registrate desde el link de invitación que te manda tu administrador.
+            </Text>
 
             <TextInput
               style={s.input} placeholder="Tu nombre o alias"

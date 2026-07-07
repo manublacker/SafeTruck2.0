@@ -1,33 +1,33 @@
 /**
- * Onboarding post-registro: el conductor elige cómo va a usar SafeTruck.
+ * Onboarding post-registro del camionero INDEPENDIENTE: carga su camión, paga
+ * el plan individual con MercadoPago y queda operativo sin empresa.
  *
- *  - "Trabajo para una empresa" → canjea el código de invitación que le dio
- *    su administrador (POST /api/invitations/redeem).
- *  - "Soy independiente"        → carga su camión, paga el plan individual con
- *    MercadoPago y queda operativo sin empresa.
+ * El registro desde la app es solo para independientes. Los conductores de
+ * empresa NO se registran acá: entran por el link de invitación que les manda
+ * su administrador desde el panel web (/unirse), que crea la cuenta ya
+ * vinculada a la empresa.
  *
- * También se llega desde Perfil cuando la cuenta todavía no está vinculada.
- * El flujo independiente es re-entrante: si el pago quedó hecho pero el camión
- * no se llegó a crear (app cerrada en el medio), volver a entrar retoma donde
- * quedó (el setup es idempotente y el confirm detecta el plan ya activo).
+ * También se llega desde Perfil cuando la cuenta todavía no está configurada.
+ * El flujo es re-entrante: si el pago quedó hecho pero el camión no se llegó a
+ * crear (app cerrada en el medio), volver a entrar retoma donde quedó (el
+ * setup es idempotente y el confirm detecta el plan ya activo).
  */
 import { useMemo, useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native'
-import { useRouter, useLocalSearchParams } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useStore } from '../../src/store/useStore'
 import { getTheme, Theme } from '../../src/theme'
-import { redeemInvitation, fetchMyAssignedTruck } from '../../src/services/assignedTrips'
 import {
   setupIndependentAccount, createMyTruck, assignTruckToSelf, fetchMyOwnTrucks,
   confirmSubscription, hasActivePlan, INDEPENDENT_PLAN,
 } from '../../src/services/independent'
 import { startMobileCheckout } from '../../src/services/billing'
 
-type Mode = 'choice' | 'company' | 'truck' | 'payment' | 'done'
+type Mode = 'truck' | 'payment' | 'done'
 
 interface TruckForm {
   name: string
@@ -55,19 +55,10 @@ export default function OnboardingScreen() {
   const s = useMemo(() => makeStyles(t), [isDark])
   const router = useRouter()
 
-  // ?flow=independent (desde "Cargar mi camión" del perfil) arranca directo
-  // en el formulario del camión, sin repetir la elección.
-  const { flow } = useLocalSearchParams<{ flow?: string }>()
-  const [mode, setMode] = useState<Mode>(flow === 'independent' ? 'truck' : 'choice')
+  const [mode, setMode] = useState<Mode>('truck')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  // Qué camino terminó: define el mensaje de la pantalla final.
-  const [doneKind, setDoneKind] = useState<'company' | 'independent' | null>(null)
 
-  // empresa
-  const [code, setCode] = useState('')
-
-  // independiente
   const [truck, setTruck] = useState<TruckForm>(EMPTY_TRUCK)
   const [truckErrors, setTruckErrors] = useState<Partial<Record<keyof TruckForm, string>>>({})
   const [driverId, setDriverId] = useState<number | null>(null)
@@ -80,34 +71,7 @@ export default function OnboardingScreen() {
     setTruckErrors(p => ({ ...p, [key]: undefined }))
   }
 
-  // ── Empresa: canjear código ────────────────────────────────────────────────
-  async function handleRedeem() {
-    const clean = code.trim().toUpperCase()
-    if (clean.length < 6) { setError('Ingresá el código que te pasó tu empresa.'); return }
-    setLoading(true)
-    setError('')
-    try {
-      await redeemInvitation(clean)
-      // El camión puede venir ya asignado por la empresa: lo cargamos al toque.
-      const at = await fetchMyAssignedTruck().catch(() => null)
-      if (at) {
-        setActiveVehicle({
-          id: String(at.id), user_id: '', plate: at.patente ?? '', name: at.name,
-          weight_kg: at.max_weight_kg, height_m: at.max_height_m,
-          width_m: at.max_width_m, length_m: at.max_length_m,
-          axles: 0, is_default: true, created_at: '',
-        })
-      }
-      setDoneKind('company')
-      setMode('done')
-    } catch (e: any) {
-      setError(e?.message ?? 'No se pudo canjear el código.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // ── Independiente paso 1: validar camión y crear el auto-vínculo ──────────
+  // ── Paso 1: validar camión y crear el auto-vínculo ─────────────────────────
   function validateTruck(): boolean {
     const next: typeof truckErrors = {}
     if (!truck.name.trim()) next.name = 'Ingresá un nombre para tu camión'
@@ -192,11 +156,10 @@ export default function OnboardingScreen() {
       width_m: Number(chosen.max_width_m), length_m: Number(chosen.max_length_m),
       axles: 0, is_default: true, created_at: '',
     })
-    setDoneKind('independent')
     setMode('done')
   }
 
-  // ── Independiente paso 2: pago ─────────────────────────────────────────────
+  // ── Paso 2: pago ───────────────────────────────────────────────────────────
   async function handlePay() {
     if (driverId == null) return
     setLoading(true)
@@ -246,72 +209,16 @@ export default function OnboardingScreen() {
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
 
-        {mode !== 'choice' && mode !== 'done' && (
+        {mode === 'payment' && (
           <TouchableOpacity
             style={s.backLink}
-            onPress={() => { setError(''); setMode(mode === 'payment' ? 'truck' : 'choice') }}
+            onPress={() => { setError(''); setMode('truck') }}
           >
             <Text style={s.backText}>← Volver</Text>
           </TouchableOpacity>
         )}
 
-        {/* ── Elección ──────────────────────────────────────────────────── */}
-        {mode === 'choice' && (
-          <View>
-            <Text style={s.title}>¿Cómo vas a usar SafeTruck?</Text>
-            <Text style={s.subtitle}>Podés cambiarlo más adelante desde tu perfil.</Text>
-
-            <TouchableOpacity style={s.optionCard} activeOpacity={0.85} onPress={() => { setError(''); setMode('company') }}>
-              <View style={s.optionIcon}><Ionicons name="business" size={22} color={t.accent} /></View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.optionTitle}>Trabajo para una empresa</Text>
-                <Text style={s.optionDesc}>Tu empresa te dio un código de invitación. Tu plan lo paga la empresa.</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={t.textSoft} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={s.optionCard} activeOpacity={0.85} onPress={() => { setError(''); setMode('truck') }}>
-              <View style={s.optionIcon}><Ionicons name="person" size={22} color={t.accent} /></View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.optionTitle}>Soy independiente</Text>
-                <Text style={s.optionDesc}>Manejás tu propio camión. Pagás tu plan individual y usás la app sin empresa.</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={t.textSoft} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={s.link} onPress={goToApp}>
-              <Text style={s.linkText}>Lo decido más tarde</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ── Empresa: código ───────────────────────────────────────────── */}
-        {mode === 'company' && (
-          <View>
-            <Text style={s.title}>Código de invitación</Text>
-            <Text style={s.subtitle}>Pedile a tu empresa el código de 8 caracteres y escribilo acá.</Text>
-
-            <TextInput
-              style={s.codeInput}
-              value={code}
-              onChangeText={v => { setCode(v.toUpperCase()); setError('') }}
-              placeholder="ABCD1234"
-              placeholderTextColor={t.textSoft}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              maxLength={8}
-              textAlign="center"
-              autoFocus
-            />
-            {!!error && <Text style={s.error}>{error}</Text>}
-
-            <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleRedeem} disabled={loading}>
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Vincularme</Text>}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ── Independiente: camión ─────────────────────────────────────── */}
+        {/* ── Camión ────────────────────────────────────────────────────── */}
         {mode === 'truck' && (
           <View>
             <Text style={s.title}>Tu camión</Text>
@@ -373,10 +280,20 @@ export default function OnboardingScreen() {
             <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleTruckNext} disabled={loading}>
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Siguiente</Text>}
             </TouchableOpacity>
+
+            <TouchableOpacity style={s.link} onPress={goToApp}>
+              <Text style={s.linkText}>Lo hago después</Text>
+            </TouchableOpacity>
+
+            {/* Los conductores de empresa no se registran por acá */}
+            <Text style={s.companyHint}>
+              ¿Manejás para una empresa? No necesitás pagar un plan: registrate
+              desde el link de invitación que te manda tu administrador.
+            </Text>
           </View>
         )}
 
-        {/* ── Independiente: pago ───────────────────────────────────────── */}
+        {/* ── Pago ──────────────────────────────────────────────────────── */}
         {mode === 'payment' && (
           <View>
             <Text style={s.title}>Plan Individual</Text>
@@ -416,9 +333,7 @@ export default function OnboardingScreen() {
             <View style={s.doneIcon}><Ionicons name="checkmark" size={34} color="#fff" /></View>
             <Text style={[s.title, { textAlign: 'center' }]}>¡Cuenta lista!</Text>
             <Text style={[s.subtitle, { textAlign: 'center' }]}>
-              {doneKind === 'independent'
-                ? 'Tu camión quedó cargado y tu plan está activo. Ya podés calcular rutas y navegar.'
-                : 'Quedaste vinculado a tu empresa. Cuando te asignen un camión y viajes, los vas a ver acá.'}
+              Tu camión quedó cargado y tu plan está activo. Ya podés calcular rutas y navegar.
             </Text>
             <TouchableOpacity style={[s.btn, { alignSelf: 'stretch' }]} onPress={goToApp}>
               <Text style={s.btnText}>Empezar</Text>
@@ -441,30 +356,16 @@ function makeStyles(t: Theme) {
     backLink: { marginBottom: 12 },
     backText: { color: t.accent, fontSize: 14 },
 
-    optionCard: {
-      flexDirection: 'row', alignItems: 'center', gap: 14,
-      backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.border,
-      padding: 16, marginBottom: 12,
-    },
-    optionIcon: {
-      width: 44, height: 44, borderRadius: 10, backgroundColor: t.accentSoft,
-      alignItems: 'center', justifyContent: 'center',
-    },
-    optionTitle: { fontSize: 15.5, fontWeight: '700', color: t.text, marginBottom: 3 },
-    optionDesc: { fontSize: 12.5, color: t.textMuted, lineHeight: 17 },
-
     input: {
       backgroundColor: t.card, color: t.text, borderRadius: 12,
       padding: 16, marginBottom: 8, fontSize: 16,
       borderWidth: 1, borderColor: t.border,
     },
-    codeInput: {
-      backgroundColor: t.card, color: t.text, borderRadius: 16,
-      borderWidth: 1.5, borderColor: t.accent,
-      paddingVertical: 20, fontSize: 26, fontWeight: '800',
-      letterSpacing: 8, marginBottom: 12,
-    },
     dimsRow: { flexDirection: 'row', gap: 8 },
+    companyHint: {
+      color: t.textSoft, fontSize: 12.5, lineHeight: 18,
+      textAlign: 'center', marginTop: 20,
+    },
     error: { color: t.danger, fontSize: 13, marginBottom: 8 },
     pending: { color: t.textMuted, fontSize: 13, marginBottom: 8, lineHeight: 18 },
 

@@ -293,8 +293,9 @@ export default function ProfileScreen() {
               <SectionLabel>Configurá tu cuenta</SectionLabel>
               <Card style={{ padding: 16 }} t={t}>
                 <Text style={{ fontSize: 13, color: t.textMuted, lineHeight: 19, marginBottom: 14 }}>
-                  Tu cuenta todavía no está vinculada a una empresa ni configurada como independiente.
-                  Elegí cómo vas a usar SafeTruck para empezar a calcular rutas.
+                  Tu cuenta todavía no está configurada. Cargá tu camión y activá tu
+                  plan individual para empezar a calcular rutas. Si manejás para una
+                  empresa, pedile a tu administrador el link de invitación.
                 </Text>
                 <TouchableOpacity
                   onPress={() => router.push('/auth/onboarding')}
@@ -349,7 +350,7 @@ export default function ProfileScreen() {
                 </Text>
                 {isIndependent && (
                   <TouchableOpacity
-                    onPress={() => router.push('/auth/onboarding?flow=independent')}
+                    onPress={() => router.push('/auth/onboarding')}
                     activeOpacity={0.85}
                     style={{ backgroundColor: t.accent, borderRadius: 10, paddingVertical: 11, alignItems: 'center', marginTop: 12 }}
                   >

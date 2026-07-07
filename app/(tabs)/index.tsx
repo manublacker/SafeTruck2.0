@@ -1816,7 +1816,7 @@ export default function MapScreen() {
           style={[s.banner, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
         >
           <Ionicons name="information-circle-outline" size={15} color={t.warning} />
-          <Text style={s.bannerText}>Tu cuenta no está configurada. Tocá acá para vincularte a una empresa o usar SafeTruck como independiente.</Text>
+          <Text style={s.bannerText}>Tu cuenta no está configurada. Tocá acá para cargar tu camión y activar tu plan.</Text>
         </TouchableOpacity>
       ) : (truckChecked && !activeVehicle && (
         <TouchableOpacity
