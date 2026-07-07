@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SafeTruck — Modelo C4 y OKRs</title>
+<style>
+  :root {
+    --paper: #f7f8fa;
+    --surface: #ffffff;
+    --ink: #17222e;
+    --muted: #5b6a7a;
+    --line: #d8dee6;
+    --person: #08427b;
+    --person-ink: #ffffff;
+    --system: #1168bd;
+    --system-ink: #ffffff;
+    --container: #438dd5;
+    --container-ink: #ffffff;
+    --component: #85bbf0;
+    --component-ink: #0d1e33;
+    --external: #8a93a0;
+    --external-ink: #ffffff;
+    --db: #2e6da4;
+    --accent: #c47c1b;
+    --code-bg: #101820;
+    --code-ink: #d7e0ea;
+    --focus-bg: #eef3f9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0f141a;
+      --surface: #161d26;
+      --ink: #e6ebf1;
+      --muted: #93a1b0;
+      --line: #2a3542;
+      --person: #0a5aa8;
+      --system: #1d7ad3;
+      --container: #3d84c9;
+      --component: #6ea6dd;
+      --component-ink: #0a1522;
+      --external: #55606c;
+      --accent: #e09a3a;
+      --code-bg: #0b1017;
+      --code-ink: #cfd9e4;
+      --focus-bg: #1b2530;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0f141a; --surface: #161d26; --ink: #e6ebf1; --muted: #93a1b0;
+    --line: #2a3542; --person: #0a5aa8; --system: #1d7ad3; --container: #3d84c9;
+    --component: #6ea6dd; --component-ink: #0a1522; --external: #55606c;
+    --accent: #e09a3a; --code-bg: #0b1017; --code-ink: #cfd9e4; --focus-bg: #1b2530;
+  }
+  :root[data-theme="light"] {
+    --paper: #f7f8fa; --surface: #ffffff; --ink: #17222e; --muted: #5b6a7a;
+    --line: #d8dee6; --person: #08427b; --system: #1168bd; --container: #438dd5;
+    --component: #85bbf0; --component-ink: #0d1e33; --external: #8a93a0;
+    --accent: #c47c1b; --code-bg: #101820; --code-ink: #d7e0ea; --focus-bg: #eef3f9;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0 1.25rem 5rem;
+  }
+  main { max-width: 62rem; margin: 0 auto; }
+
+  header.top { padding: 3rem 0 1rem; border-bottom: 2px solid var(--ink); }
+  .eyebrow {
+    text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.72rem;
+    font-weight: 600; color: var(--accent);
+  }
+  h1 { font-size: clamp(1.7rem, 4vw, 2.4rem); margin: 0.3rem 0 0.4rem; text-wrap: balance; }
+  .lede { color: var(--muted); max-width: 46rem; margin: 0; }
+
+  section.level { margin-top: 3.2rem; }
+  .level-head { display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; }
+  .level-tag {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    background: var(--ink); color: var(--paper); padding: 0.2rem 0.55rem; border-radius: 3px;
+  }
+  h2 { font-size: 1.35rem; margin: 0; }
+  .level-desc { color: var(--muted); margin: 0.5rem 0 1.4rem; max-width: 46rem; }
+
+  /* ── diagram scaffolding ─────────────────────────── */
+  .diagram {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+    padding: 1.5rem; overflow-x: auto;
+  }
+  .diagram-inner { min-width: 640px; display: flex; flex-direction: column; gap: 0; }
+  .row { display: grid; gap: 0.9rem; }
+  .row.cols-2 { grid-template-columns: 1fr 1fr; }
+  .row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .row.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .row.center { justify-items: center; }
+
+  .box {
+    border-radius: 6px; padding: 0.7rem 0.9rem 0.8rem; min-width: 0;
+    box-shadow: 0 1px 3px rgba(10, 20, 35, 0.18);
+  }
+  .box .kind {
+    display: block; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.09em;
+    opacity: 0.75; margin-bottom: 0.15rem;
+  }
+  .box .name { display: block; font-weight: 700; font-size: 0.92rem; line-height: 1.25; }
+  .box .tech { display: block; font-size: 0.72rem; opacity: 0.85; margin-top: 0.1rem; font-style: italic; }
+  .box .desc { display: block; font-size: 0.76rem; margin-top: 0.35rem; opacity: 0.92; }
+
+  .box.person { background: var(--person); color: var(--person-ink); border-radius: 14px 14px 6px 6px; }
+  .box.system { background: var(--system); color: var(--system-ink); }
+  .box.container { background: var(--container); color: var(--container-ink); }
+  .box.component { background: var(--component); color: var(--component-ink); }
+  .box.external { background: var(--external); color: var(--external-ink); }
+  .box.db { background: var(--db); color: #fff; border-radius: 6px 6px 18px 18px; }
+  :root[data-theme="dark"] .box, :root .box { }
+
+  .flow {
+    display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
+    padding: 0.55rem 0; color: var(--muted); font-size: 0.74rem; text-align: center;
+  }
+  .flow .arrow { font-size: 1rem; line-height: 1; color: var(--accent); }
+  .flow .lbl { max-width: 40rem; }
+
+  .lane {
+    border: 1.5px dashed var(--line); border-radius: 8px; padding: 1rem;
+    margin-top: 0.4rem;
+  }
+  .lane > .lane-title {
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.11em;
+    color: var(--muted); font-weight: 700; margin: 0 0 0.7rem;
+  }
+
+  /* legend */
+  .legend { display: flex; gap: 1.1rem; flex-wrap: wrap; margin-top: 1rem; font-size: 0.74rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .sw { width: 0.85rem; height: 0.85rem; border-radius: 3px; display: inline-block; }
+
+  /* relations table */
+  .rels { margin-top: 1.2rem; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+  th, td { text-align: left; padding: 0.45rem 0.8rem 0.45rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
+  td.arrowcell { color: var(--accent); white-space: nowrap; }
+  code.inline { background: var(--focus-bg); padding: 0.05rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+
+  /* mermaid code */
+  details.mermaid { margin-top: 1.1rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  details.mermaid summary {
+    cursor: pointer; padding: 0.65rem 1rem; font-size: 0.8rem; font-weight: 600;
+    color: var(--muted); user-select: none;
+  }
+  details.mermaid summary::marker { color: var(--accent); }
+  .codewrap { position: relative; }
+  pre {
+    margin: 0; background: var(--code-bg); color: var(--code-ink);
+    padding: 1rem 1.1rem; overflow-x: auto; font-size: 0.74rem; line-height: 1.5;
+    border-radius: 0 0 6px 6px;
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  button.copy {
+    position: absolute; top: 0.55rem; right: 0.6rem; font: inherit; font-size: 0.68rem;
+    background: rgba(255,255,255,0.1); color: var(--code-ink); border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 4px; padding: 0.2rem 0.6rem; cursor: pointer;
+  }
+  button.copy:hover, button.copy:focus-visible { background: rgba(255,255,255,0.22); outline: none; }
+
+  /* ── OKRs ─────────────────────────────────────────── */
+  .okr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.4rem; }
+  @media (max-width: 720px) { .okr-grid { grid-template-columns: 1fr; } }
+  .okr {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+    padding: 1.1rem 1.2rem 1.2rem; display: flex; flex-direction: column; gap: 0.6rem;
+  }
+  .okr .obj-tag {
+    align-self: flex-start; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.11em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .okr h3 { margin: 0; font-size: 1.02rem; line-height: 1.3; text-wrap: balance; }
+  .okr .why { margin: 0; font-size: 0.8rem; color: var(--muted); font-style: italic; }
+  .okr ul.krs { list-style: none; margin: 0.2rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+  .okr ul.krs li {
+    display: grid; grid-template-columns: auto 1fr; gap: 0.55rem; align-items: baseline;
+    font-size: 0.82rem;
+  }
+  .okr .kr-n {
+    font-size: 0.64rem; font-weight: 700; letter-spacing: 0.06em; color: var(--paper);
+    background: var(--muted); border-radius: 3px; padding: 0.1rem 0.35rem; white-space: nowrap;
+  }
+  .okr .measure { color: var(--muted); font-size: 0.9em; }
+  .okr-note {
+    margin-top: 1.1rem; padding: 0.85rem 1.1rem; background: var(--focus-bg);
+    border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0;
+    font-size: 0.82rem; color: var(--ink);
+  }
+
+  footer.note {
+    margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--line);
+    font-size: 0.78rem; color: var(--muted);
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<main>
+<header class="top">
+  <span class="eyebrow">SafeTruck · Presentación final · Arquitectura</span>
+  <h1>Modelo C4 y OKRs del proyecto</h1>
+  <p class="lede">Tres niveles de zoom sobre el mismo sistema, según el stack real del repositorio, más los OKRs propuestos para el trimestre. Cada diagrama incluye su código Mermaid (C4) listo para copiar a la presentación.</p>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--person)"></span> Persona</span>
+    <span><span class="sw" style="background:var(--system)"></span> Sistema propio</span>
+    <span><span class="sw" style="background:var(--container)"></span> Contenedor</span>
+    <span><span class="sw" style="background:var(--component)"></span> Componente</span>
+    <span><span class="sw" style="background:var(--db)"></span> Base de datos</span>
+    <span><span class="sw" style="background:var(--external)"></span> Sistema externo</span>
+  </div>
+</header>
+
+<!-- ═══════════════ NIVEL 1 ═══════════════ -->
+<section class="level">
+  <div class="level-head"><span class="level-tag">Nivel 1</span><h2>Diagrama de Contexto</h2></div>
+  <p class="level-desc">Quién usa SafeTruck y con qué sistemas externos conversa. A este nivel, SafeTruck es una sola caja.</p>
+
+  <div class="diagram"><div class="diagram-inner">
+    <div class="row cols-3">
+      <div class="box person"><span class="kind">Persona</span><span class="name">Administrador de flota</span><span class="desc">Gestiona camiones, conductores, mantenimientos y viajes asignados desde el dashboard web.</span></div>
+      <div class="box person"><span class="kind">Persona</span><span class="name">Conductor</span><span class="desc">Recibe viajes, navega rutas aptas para su camión y reporta incidentes desde la app móvil.</span></div>
+      <div class="box person"><span class="kind">Persona</span><span class="name">Conductor independiente</span><span class="desc">"Empresa de uno": administra su propio camión y calcula rutas con su propia suscripción.</span></div>
+    </div>
+
+    <div class="flow"><span class="arrow">▼</span><span class="lbl">Usa (HTTPS / WSS)</span></div>
+
+    <div class="row center">
+      <div class="box system" style="max-width: 30rem;"><span class="kind">Sistema de software</span><span class="name">SafeTruck</span><span class="desc">Plataforma de gestión de flotas y ruteo para camiones: calcula rutas que respetan las dimensiones y peso del vehículo, evita calles denunciadas, y da seguimiento en tiempo real.</span></div>
+    </div>
+
+    <div class="flow"><span class="arrow">▼</span><span class="lbl">Consume</span></div>
+
+    <div class="row cols-4">
+      <div class="box external"><span class="kind">Sistema externo</span><span class="name">Supabase</span><span class="desc">Autenticación de usuarios (JWT) y persistencia de flota.</span></div>
+      <div class="box external"><span class="kind">Sistema externo</span><span class="name">Mercado Pago</span><span class="desc">Suscripciones y pagos de los planes.</span></div>
+      <div class="box external"><span class="kind">Sistema externo</span><span class="name">Nominatim / OSM</span><span class="desc">Geocodificación de direcciones y datos viales.</span></div>
+      <div class="box external"><span class="kind">Sistema externo</span><span class="name">Expo Push Service</span><span class="desc">Notificaciones push a los dispositivos de los conductores.</span></div>
+    </div>
+  </div></div>
+
+  <details class="mermaid"><summary>Código Mermaid (C4Context) — copiar para la presentación</summary>
+  <div class="codewrap"><button class="copy" type="button">Copiar</button><pre>C4Context
+  title Diagrama de Contexto - SafeTruck
+
+  Person(admin, "Administrador de flota", "Gestiona camiones, conductores y viajes desde el dashboard web")
+  Person(driver, "Conductor", "Navega rutas aptas para su camión y reporta incidentes desde la app móvil")
+  Person(indep, "Conductor independiente", "Empresa de uno: administra su camión con su propia suscripción")
+
+  System(safetruck, "SafeTruck", "Plataforma de gestión de flotas y ruteo para camiones: rutas según dimensiones/peso, calles denunciadas y seguimiento en tiempo real")
+
+  System_Ext(supabase, "Supabase", "Autenticación (JWT) y base de datos de flota")
+  System_Ext(mp, "Mercado Pago", "Suscripciones y pagos")
+  System_Ext(osm, "Nominatim / OpenStreetMap", "Geocodificación y datos viales")
+  System_Ext(expo, "Expo Push Service", "Notificaciones push")
+
+  Rel(admin, safetruck, "Usa", "HTTPS")
+  Rel(driver, safetruck, "Usa", "HTTPS / WSS")
+  Rel(indep, safetruck, "Usa", "HTTPS")
+  Rel(safetruck, supabase, "Autentica y persiste flota", "HTTPS")
+  Rel(safetruck, mp, "Cobra suscripciones / recibe webhooks", "HTTPS")
+  Rel(safetruck, osm, "Geocodifica direcciones", "HTTPS")
+  Rel(safetruck, expo, "Envía notificaciones", "HTTPS")</pre></div>
+  </details>
+</section>
+
+<!-- ═══════════════ NIVEL 2 ═══════════════ -->
+<section class="level">
+  <div class="level-head"><span class="level-tag">Nivel 2</span><h2>Diagrama de Contenedores</h2></div>
+  <p class="level-desc">Zoom dentro de SafeTruck: las piezas desplegables por separado y las dos bases de datos, con su tecnología y dónde corren.</p>
+
+  <div class="diagram"><div class="diagram-inner">
+    <div class="row cols-3">
+      <div class="box person"><span class="kind">Persona</span><span class="name">Administrador de flota</span></div>
+      <div class="box person"><span class="kind">Persona</span><span class="name">Conductor</span></div>
+      <div class="box person"><span class="kind">Persona</span><span class="name">Conductor independiente</span></div>
+    </div>
+
+    <div class="flow"><span class="arrow">▼</span></div>
+
+    <div class="lane"><p class="lane-title">SafeTruck — límite del sistema</p>
+      <div class="row cols-2">
+        <div class="box container"><span class="kind">Contenedor</span><span class="name">Dashboard web</span><span class="tech">React 18 + Vite, Tailwind, Leaflet · Vercel</span><span class="desc">Panel del administrador: flota, conductores, mantenimientos, mapa en vivo con posiciones de los camiones.</span></div>
+        <div class="box container"><span class="kind">Contenedor</span><span class="name">App móvil</span><span class="tech">React Native + Expo (expo-router, zustand, react-native-maps) · Android/iOS</span><span class="desc">Onboarding, navegación de rutas, envío de posición GPS, reporte de incidentes, notificaciones.</span></div>
+      </div>
+
+      <div class="flow"><span class="arrow">▼</span><span class="lbl">JSON/HTTPS (REST) + WebSocket (posiciones en vivo)</span></div>
+
+      <div class="row center">
+        <div class="box container" style="max-width: 32rem;"><span class="kind">Contenedor</span><span class="name">API SafeTruck</span><span class="tech">Node.js + Express + TypeScript, ws · Railway</span><span class="desc">API REST de dominio (flota, viajes, billing, incidentes), motor de ruteo A* con grafo en memoria y hub de tiempo real por WebSocket.</span></div>
+      </div>
+
+      <div class="flow"><span class="arrow">▼</span><span class="lbl">SQL (pg) / REST</span></div>
+
+      <div class="row cols-2">
+        <div class="box db"><span class="kind">Base de datos</span><span class="name">Supabase (PostgreSQL + Auth)</span><span class="desc">Usuarios y sesiones, camiones, conductores, viajes asignados, invitaciones, suscripciones y denuncias (capa visual).</span></div>
+        <div class="box db"><span class="kind">Base de datos</span><span class="name">Aiven (PostgreSQL)</span><span class="desc">Grafo vial derivado de OSM para el ruteo, con restricciones y pesos de calles denunciadas.</span></div>
+      </div>
+    </div>
+
+    <div class="flow"><span class="arrow">▼</span><span class="lbl">HTTPS</span></div>
+
+    <div class="row cols-3">
+      <div class="box external"><span class="kind">Sistema externo</span><span class="name">Mercado Pago</span><span class="desc">Checkout y webhooks de suscripción.</span></div>
+      <div class="box external"><span class="kind">Sistema externo</span><span class="name">Nominatim</span><span class="desc">Búsqueda y geocodificación de direcciones.</span></div>
+      <div class="box external"><span class="kind">Sistema externo</span><span class="name">Expo Push Service</span><span class="desc">Entrega de notificaciones push.</span></div>
+    </div>
+  </div></div>
+
+  <div class="rels">
+    <table>
+      <thead><tr><th>Origen</th><th></th><th>Destino</th><th>Descripción</th></tr></thead>
+      <tbody>
+        <tr><td>App móvil</td><td class="arrowcell">→</td><td>API</td><td>REST para viajes, ruteo e incidentes; envía posición GPS a <code class="inline">/api/locations</code>.</td></tr>
+        <tr><td>App móvil / Dashboard</td><td class="arrowcell">→</td><td>Supabase</td><td>Autenticación directa con <code class="inline">supabase-js</code> (el JWT luego viaja a la API).</td></tr>
+        <tr><td>Dashboard web</td><td class="arrowcell">⇄</td><td>API (WebSocket)</td><td>Recibe posiciones en vivo desde el hub de tiempo real.</td></tr>
+        <tr><td>API</td><td class="arrowcell">→</td><td>Supabase</td><td>Dominio de flota: camiones, conductores, viajes, invitaciones, suscripciones.</td></tr>
+        <tr><td>API</td><td class="arrowcell">→</td><td>Aiven</td><td>Carga el grafo vial en memoria al iniciar y actualiza pesos por denuncias.</td></tr>
+        <tr><td>API</td><td class="arrowcell">⇄</td><td>Mercado Pago</td><td>Crea suscripciones; recibe webhooks de estado de pago.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <details class="mermaid"><summary>Código Mermaid (C4Container) — copiar para la presentación</summary>
+  <div class="codewrap"><button class="copy" type="button">Copiar</button><pre>C4Container
+  title Diagrama de Contenedores - SafeTruck
+
+  Person(admin, "Administrador de flota")
+  Person(driver, "Conductor")
+
+  System_Boundary(st, "SafeTruck") {
+    Container(web, "Dashboard web", "React 18 + Vite, Leaflet, Tailwind (Vercel)", "Gestión de flota y mapa en vivo")
+    Container(mobile, "App móvil", "React Native + Expo (Android/iOS)", "Navegación de rutas, GPS, incidentes, push")
+    Container(api, "API SafeTruck", "Node.js + Express + TS, ws (Railway)", "REST de dominio, motor de ruteo A*, hub WebSocket")
+    ContainerDb(supa, "Supabase", "PostgreSQL + Auth", "Usuarios, flota, viajes, suscripciones, denuncias (visual)")
+    ContainerDb(aiven, "Aiven", "PostgreSQL", "Grafo vial OSM para ruteo + pesos de denuncias")
+  }
+
+  System_Ext(mp, "Mercado Pago", "Suscripciones")
+  System_Ext(osm, "Nominatim", "Geocodificación")
+  System_Ext(expo, "Expo Push Service", "Notificaciones")
+
+  Rel(admin, web, "Usa", "HTTPS")
+  Rel(driver, mobile, "Usa")
+  Rel(web, api, "REST + WebSocket", "JSON/HTTPS, WSS")
+  Rel(mobile, api, "REST, envía GPS", "JSON/HTTPS")
+  Rel(mobile, supa, "Autentica", "supabase-js")
+  Rel(web, supa, "Autentica", "supabase-js")
+  Rel(api, supa, "Lee/escribe dominio de flota", "SQL/REST")
+  Rel(api, aiven, "Carga grafo y actualiza pesos", "SQL")
+  Rel(api, mp, "Suscripciones + webhooks", "HTTPS")
+  Rel(api, osm, "Geocodifica", "HTTPS")
+  Rel(api, expo, "Envía push", "HTTPS")</pre></div>
+  </details>
+</section>
+
+<!-- ═══════════════ NIVEL 3 ═══════════════ -->
+<section class="level">
+  <div class="level-head"><span class="level-tag">Nivel 3</span><h2>Diagrama de Componentes — API SafeTruck</h2></div>
+  <p class="level-desc">Zoom dentro del contenedor más rico: la API. Los componentes se corresponden con módulos reales de <code class="inline">src/backend/</code>.</p>
+
+  <div class="diagram"><div class="diagram-inner">
+    <div class="row cols-2">
+      <div class="box container" style="opacity:.92"><span class="kind">Contenedor</span><span class="name">App móvil / Dashboard web</span><span class="desc">Clientes REST + WebSocket.</span></div>
+      <div class="box component"><span class="kind">Componentes · Middleware</span><span class="name">authMiddleware · requireActiveSubscription</span><span class="tech">middleware/</span><span class="desc">Valida el JWT de Supabase y exige plan activo (propio o de la empresa que invitó) para las rutas protegidas.</span></div>
+    </div>
+
+    <div class="flow"><span class="arrow">▼</span></div>
+
+    <div class="lane"><p class="lane-title">API SafeTruck — routers de dominio (Express)</p>
+      <div class="row cols-4">
+        <div class="box component"><span class="kind">Componente</span><span class="name">Flota</span><span class="tech">trucks, drivers, truck-drivers, maintenance</span><span class="desc">ABM de camiones y conductores, vínculos y mantenimientos.</span></div>
+        <div class="box component"><span class="kind">Componente</span><span class="name">Viajes</span><span class="tech">assigned-trips, invitations, users, auth</span><span class="desc">Asignación de viajes, invitaciones conductor↔empresa, cuentas.</span></div>
+        <div class="box component"><span class="kind">Componente</span><span class="name">Billing</span><span class="tech">billing</span><span class="desc">Planes y suscripciones vía Mercado Pago (checkout + webhooks).</span></div>
+        <div class="box component"><span class="kind">Componente</span><span class="name">Incidentes y reportes</span><span class="tech">incidents, reports</span><span class="desc">Denuncias de calles con doble escritura: Supabase (visual) y Aiven (peso en el ruteo).</span></div>
+      </div>
+    </div>
+
+    <div class="lane"><p class="lane-title">API SafeTruck — motor de ruteo y tiempo real</p>
+      <div class="row cols-4">
+        <div class="box component"><span class="kind">Componente</span><span class="name">Ruteo</span><span class="tech">routes/route → router.ts</span><span class="desc">Orquesta el cálculo de ruta según dimensiones y peso del camión.</span></div>
+        <div class="box component"><span class="kind">Componente</span><span class="name">Algoritmo A*</span><span class="tech">algorithm/astar.ts + graphCache.ts</span><span class="desc">Búsqueda sobre el grafo vial cacheado en memoria al iniciar el servidor.</span></div>
+        <div class="box component"><span class="kind">Componente</span><span class="name">Búsqueda</span><span class="tech">routes/search</span><span class="desc">Geocodificación de direcciones contra Nominatim.</span></div>
+        <div class="box component"><span class="kind">Componente</span><span class="name">Hub de tiempo real</span><span class="tech">realtime/hub.ts (ws) + locations, push-tokens</span><span class="desc">Recibe GPS de la app, lo difunde por WebSocket al dashboard y dispara push vía Expo.</span></div>
+      </div>
+    </div>
+
+    <div class="flow"><span class="arrow">▼</span><span class="lbl">Clientes de datos: <b>db.ts</b> (pg → Supabase) · <b>supabaseClient.ts</b> (Auth admin) · pool Aiven (grafo)</span></div>
+
+    <div class="row cols-4">
+      <div class="box db"><span class="kind">BD</span><span class="name">Supabase</span><span class="desc">Flota, viajes, suscripciones.</span></div>
+      <div class="box db"><span class="kind">BD</span><span class="name">Aiven</span><span class="desc">Grafo vial + pesos.</span></div>
+      <div class="box external"><span class="kind">Externo</span><span class="name">Mercado Pago</span></div>
+      <div class="box external"><span class="kind">Externo</span><span class="name">Nominatim · Expo Push</span></div>
+    </div>
+  </div></div>
+
+  <details class="mermaid"><summary>Código Mermaid (C4Component) — copiar para la presentación</summary>
+  <div class="codewrap"><button class="copy" type="button">Copiar</button><pre>C4Component
+  title Diagrama de Componentes - API SafeTruck
+
+  Container(clients, "App móvil / Dashboard web", "Expo RN / React+Vite", "Clientes REST + WebSocket")
+
+  Container_Boundary(api, "API SafeTruck (Node.js + Express)") {
+    Component(mw, "Middleware de auth y suscripción", "authMiddleware, requireActiveSubscription", "Valida JWT de Supabase y exige plan activo")
+    Component(fleet, "Routers de flota", "trucks, drivers, truck-drivers, maintenance", "ABM de camiones, conductores y mantenimientos")
+    Component(trips, "Routers de viajes y cuentas", "assigned-trips, invitations, users, auth", "Asignación de viajes e invitaciones empresa-conductor")
+    Component(billing, "Billing", "routes/billing", "Suscripciones vía Mercado Pago: checkout y webhooks")
+    Component(incidents, "Incidentes y reportes", "incidents, reports", "Denuncias con doble escritura: Supabase (visual) + Aiven (peso)")
+    Component(routing, "Motor de ruteo", "routes/route, router.ts, astar.ts, graphCache.ts", "Rutas A* según dimensiones/peso sobre grafo en memoria")
+    Component(search, "Búsqueda", "routes/search", "Geocodificación vía Nominatim")
+    Component(rt, "Hub de tiempo real", "realtime/hub.ts (ws), locations, push-tokens", "Difunde posiciones GPS por WebSocket y dispara push")
+  }
+
+  ContainerDb(supa, "Supabase", "PostgreSQL + Auth")
+  ContainerDb(aiven, "Aiven", "PostgreSQL (grafo vial)")
+  System_Ext(mp, "Mercado Pago")
+  System_Ext(osm, "Nominatim")
+  System_Ext(expo, "Expo Push Service")
+
+  Rel(clients, mw, "HTTPS/WSS")
+  Rel(mw, fleet, "Autoriza")
+  Rel(mw, routing, "Autoriza (plan activo)")
+  Rel(fleet, supa, "SQL")
+  Rel(trips, supa, "SQL")
+  Rel(billing, mp, "HTTPS")
+  Rel(billing, supa, "Estado de suscripción")
+  Rel(incidents, supa, "Escritura visual")
+  Rel(incidents, aiven, "Actualiza pesos")
+  Rel(routing, aiven, "Carga grafo al iniciar")
+  Rel(search, osm, "HTTPS")
+  Rel(rt, clients, "WebSocket: posiciones en vivo")
+  Rel(rt, expo, "Push")</pre></div>
+  </details>
+</section>
+
+<!-- ═══════════════ OKRs ═══════════════ -->
+<section class="level">
+  <div class="level-head"><span class="level-tag">OKRs</span><h2>Objetivos y Key Results — Q3 2026</h2></div>
+  <p class="level-desc">Un <b>Objetivo</b> es cualitativo y aspiracional (el "hacia dónde"); los <b>Key Results</b> son 2–4 métricas medibles que prueban que se logró. No son tareas: "implementar billing" es una tarea, "X% convierte a plan pago" es un KR. Todos los KRs de abajo son instrumentables con la infraestructura que ya existe en el sistema.</p>
+
+  <div class="okr-grid">
+    <article class="okr">
+      <span class="obj-tag">Objetivo 1 · Producto</span>
+      <h3>Validar que SafeTruck resuelve el problema real del ruteo de camiones</h3>
+      <p class="why">El corazón del producto es el motor A* que respeta dimensiones, peso y calles denunciadas. Si eso no genera confianza, no hay producto.</p>
+      <ul class="krs">
+        <li><span class="kr-n">KR 1.1</span><span>90% de las rutas calculadas se completan sin desvío del trazado sugerido. <span class="measure">Medible con el GPS que la app ya envía a /api/locations.</span></span></li>
+        <li><span class="kr-n">KR 1.2</span><span>Tiempo de cálculo de ruta p95 &lt; 3 segundos. <span class="measure">El grafo en memoria lo hace viable; hoy no se mide.</span></span></li>
+        <li><span class="kr-n">KR 1.3</span><span>Cero incidentes por restricciones de altura/peso en rutas sugeridas durante el trimestre.</span></li>
+      </ul>
+    </article>
+
+    <article class="okr">
+      <span class="obj-tag">Objetivo 2 · Negocio</span>
+      <h3>Convertir SafeTruck en un negocio sostenible por suscripciones</h3>
+      <p class="why">El billing con Mercado Pago y los planes de la landing ya están construidos; falta demostrar tracción.</p>
+      <ul class="krs">
+        <li><span class="kr-n">KR 2.1</span><span>10 empresas de flota activas con suscripción paga al cierre del trimestre.</span></li>
+        <li><span class="kr-n">KR 2.2</span><span>25 conductores independientes ("empresa de uno") con plan activo. <span class="measure">La feature nueva justifica su propio KR.</span></span></li>
+        <li><span class="kr-n">KR 2.3</span><span>Churn mensual de suscripciones &lt; 5%. <span class="measure">Medible desde los webhooks de Mercado Pago que persisten estado en Supabase.</span></span></li>
+      </ul>
+    </article>
+
+    <article class="okr">
+      <span class="obj-tag">Objetivo 3 · Comunidad</span>
+      <h3>Lograr que la comunidad de conductores alimente el mapa de denuncias</h3>
+      <p class="why">Las denuncias con doble escritura (Supabase visual + peso en Aiven) solo valen con volumen: es el efecto de red del producto.</p>
+      <ul class="krs">
+        <li><span class="kr-n">KR 3.1</span><span>200 denuncias de calles válidas cargadas por usuarios reales en el trimestre.</span></li>
+        <li><span class="kr-n">KR 3.2</span><span>30% de los conductores activos reporta al menos un incidente por mes.</span></li>
+        <li><span class="kr-n">KR 3.3</span><span>100% de las denuncias que superan el umbral impactan el ruteo en menos de 24 horas.</span></li>
+      </ul>
+    </article>
+
+    <article class="okr">
+      <span class="obj-tag">Objetivo 4 · Operación</span>
+      <h3>Operar la plataforma con confiabilidad de producto real</h3>
+      <p class="why">Deja de ser un proyecto de facultad cuando aguanta uso real: API en Railway, tiempo real por WebSocket, dos bases de datos.</p>
+      <ul class="krs">
+        <li><span class="kr-n">KR 4.1</span><span>Disponibilidad de la API ≥ 99,5%. <span class="measure">Monitoreo externo sobre /api/health, que ya existe.</span></span></li>
+        <li><span class="kr-n">KR 4.2</span><span>Latencia GPS móvil → mapa del dashboard (WebSocket) &lt; 5 segundos en el p95.</span></li>
+        <li><span class="kr-n">KR 4.3</span><span>Cobertura de tests del backend ≥ 60% con CI que bloquee merges rotos. <span class="measure">Jest ya está configurado; falta la disciplina.</span></span></li>
+      </ul>
+    </article>
+  </div>
+
+  <div class="okr-note">
+    <b>Narrativa de priorización:</b> el orden importa — el Objetivo 1 valida el producto, el 2 valida el negocio, y el 3 y 4 preparan la escala. Es una historia de madurez, no cuatro frentes simultáneos con igual peso.
+  </div>
+</section>
+
+<footer class="note">
+  <p>Correspondencia con el repositorio: la app móvil vive en <code class="inline">app/</code> + <code class="inline">src/</code> (Expo Router), el dashboard en <code class="inline">frontend/</code>, y la API en <code class="inline">src/backend/</code>. Los diagramas Mermaid se renderizan en <a href="https://mermaid.live" style="color:var(--accent)">mermaid.live</a>, Notion, GitHub o cualquier herramienta con soporte Mermaid — exportá como SVG/PNG para las diapositivas.</p>
+</footer>
+</main>
+
+<script>
+  document.querySelectorAll('button.copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var pre = btn.parentElement.querySelector('pre');
+      navigator.clipboard.writeText(pre.textContent).then(function () {
+        var prev = btn.textContent;
+        btn.textContent = 'Copiado ✓';
+        setTimeout(function () { btn.textContent = prev; }, 1600);
+      });
+    });
+  });
+</script>
+
+</body>
+</html>
